@@ -5,15 +5,20 @@ from ui.utils import sound
 
 
 class UserInterface:
-    def __init__(self, screen, resolution=(800,480),
+    def __init__(self, screen, resolution=(1024, 768),
                  ui_placement_mode=False, fps=60, dev_mode=False, audio=True,
                  audio_params=(22050, -8, 1, 1024)):
         # init system
         pygame.display.init()
         pygame.font.init()
         sound.init(audio_params)
+        pygame.mouse.set_visible(True)
+        pygame.mixer.quit()
+        #cursor = pygame.cursors.diamond
+        cursor = ((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
+        pygame.mouse.set_cursor(*cursor)
 
-        self.screenSurface = pygame.display.set_mode(resolution) #, pygame.FULLSCREEN)
+        self.screenSurface = pygame.display.set_mode(resolution, pygame.FULLSCREEN) #, pygame.FULLSCREEN)
         self.fpsClock = pygame.time.Clock()
         self.fps = fps
         pygame.display.set_caption("LCARS")
@@ -37,7 +42,8 @@ class UserInterface:
         pygame.display.update()
     
     def handleEvents(self):
-        for event in pygame.event.get():
+        #for event in pygame.event.get():
+        for event in  [pygame.event.wait()]:
             if (event.type == pygame.QUIT) or \
                 (event.type == KEYUP and event.key == K_ESCAPE):
                 pygame.quit()
@@ -57,7 +63,7 @@ class UserInterface:
                 self.all_sprites.empty()
                 newScreen.setup(self.all_sprites)
                 self.screen = newScreen
-                break
+                #break
     
     def isRunning(self):
         pygame.display.get_init()
@@ -66,3 +72,4 @@ class UserInterface:
         self.update()
         self.handleEvents()
         self.fpsClock.tick(self.fps)
+        pygame.time.wait(1)
