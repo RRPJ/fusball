@@ -1,5 +1,6 @@
 from datetime import datetime
-
+from functools import partial
+import random
 from ui.widgets.background import LcarsBackgroundImage, LcarsImage
 from ui.widgets.gifimage import LcarsGifImage
 from ui.widgets.lcars_widgets import *
@@ -10,76 +11,47 @@ from datasources.network import get_ip_address_string
 
 class ScreenMain(LcarsScreen):
     def setup(self, all_sprites):
-        all_sprites.add(LcarsBackgroundImage("assets/lcars_screen_1b.png"),
-                        layer=0)
+        # background image
+        all_sprites.add(LcarsBackgroundImage("assets/bg_main.png"), layer=0)
 
-        # panel text
-        all_sprites.add(LcarsText(colours.BLACK, (15, 44), "LCARS 105"),
-                        layer=1)
-                        
-        all_sprites.add(LcarsText(colours.ORANGE, (0, 135), "HOME AUTOMATION", 2),
-                        layer=1)
-        all_sprites.add(LcarsBlockMedium(colours.RED_BROWN, (145, 16), "LIGHTS"),
-                        layer=1)
-        all_sprites.add(LcarsBlockSmall(colours.ORANGE, (211, 16), "CAMERAS"),
-                        layer=1)
-        all_sprites.add(LcarsBlockLarge(colours.BEIGE, (249, 16), "ENERGY"),
-                        layer=1)
+        # interface buttons
+        all_sprites.add(LcarsButton2(colours.RED_BROWN, (4, 708), (140,40), "Power",       self.powerHandler), layer=1)
+        all_sprites.add(LcarsButton2(colours.RED_BROWN, (4, 192), (140,80), "Enter Match", self.enterMatchHandler, ), layer=1)
+        all_sprites.add(LcarsButton2(colours.PURPLE   , (4, 144), (140,44), "System Log",  self.logHandler), layer=1)
+        all_sprites.add(LcarsButton2(colours.RED_BROWN, (4, 92), (140,48),  "Ranking",     ), layer=1)
+        all_sprites.add(LcarsButton2(colours.ORANGE   , (4, 40), (140,48),  "About",       self.aboutHandler), layer=1)
+        all_sprites.add(LcarsButton2(colours.BLUE     , (320, 92), (156,48), "View All",   self.allRankingHandler), layer=1)
 
-        self.ip_address = LcarsText(colours.BLACK, (444, 520),
-                                    get_ip_address_string())
-        all_sprites.add(self.ip_address, layer=1)
 
-        # info text
-        all_sprites.add(LcarsText(colours.WHITE, (192, 174), "EVENT LOG:", 1.5),
-                        layer=3)
-        all_sprites.add(LcarsText(colours.BLUE, (244, 174), "2 ALARM ZONES TRIGGERED", 1.5),
-                        layer=3)
-        all_sprites.add(LcarsText(colours.BLUE, (286, 174), "14.3 kWh USED YESTERDAY", 1.5),
-                        layer=3)
-        all_sprites.add(LcarsText(colours.BLUE, (330, 174), "1.3 Tb DATA USED THIS MONTH", 1.5),
-                        layer=3)
-        self.info_text = all_sprites.get_sprites_from_layer(3)
+        # user buttons:
+        for i in range(10):
+            # name field
+            colour = colours.RED_BROWN if i==0 else colours.GREY_BLUE
+            all_sprites.add(LcarsButton2(colour, (316, 496-36*i), (188,32), "Player name", partial(self.playerClickedHandler, i)))
+            # mu field
+            all_sprites.add(LcarsButton2(colour, (508, 496-36*i), (68,32), "sig", partial(self.playerClickedHandler, i)))
+            # sigma field
+            colour = random.choice([colours.PEACH, colours.BEIGE, colours.WHITE, colours.BLUE])
+            all_sprites.add(LcarsButton2(colour, (580, 496-36*i), (92,32), "mu", partial(self.playerClickedHandler, i)))
+
+        # rank numbers:
+        for i in range(3):
+            all_sprites.add(LcarsText((0,0,0), (245+36*i, 300), str(i+1), 20/19))
+        
+        #self.ip_address = LcarsText(colours.BLACK, (444, 520), get_ip_address_string())
+        #all_sprites.add(self.ip_address, layer=1)
 
         # date display
-        self.stardate = LcarsText(colours.BLUE, (12, 380), "STAR DATE 2311.05 17:54:32", 1.5)
+        self.stardate = LcarsText((153,153,153), (292-24-5,4), "2311.05 17:54:32", 1.65, otherfont=True)
         self.lastClockUpdate = 0
         all_sprites.add(self.stardate, layer=1)
 
-        # buttons
-        all_sprites.add(LcarsButton(colours.RED_BROWN, (6, 662), "LOGOUT", self.logoutHandler),
-                        layer=4)
-        all_sprites.add(LcarsButton(colours.BEIGE, (107, 127), "SENSORS", self.sensorsHandler),
-                        layer=4)
-        all_sprites.add(LcarsButton(colours.PURPLE, (107, 262), "GAUGES", self.gaugesHandler),
-                        layer=4)
-        all_sprites.add(LcarsButton(colours.PEACH, (107, 398), "WEATHER", self.weatherHandler),
-                        layer=4)
-        all_sprites.add(LcarsButton(colours.PEACH, (108, 536), "HOME", self.homeHandler),
-                        layer=4)
-
-        # gadgets
-        all_sprites.add(LcarsGifImage("assets/gadgets/fwscan.gif", (277, 556), 100), layer=1)
-
-        self.sensor_gadget = LcarsGifImage("assets/gadgets/lcars_anim2.gif", (235, 150), 100)
-        self.sensor_gadget.visible = False
-        all_sprites.add(self.sensor_gadget, layer=2)
-
-        self.dashboard = LcarsImage("assets/gadgets/dashboard.png", (187, 232))
-        self.dashboard.visible = False
-        all_sprites.add(self.dashboard, layer=2)
-
-        self.weather = LcarsImage("assets/weather.jpg", (188, 122))
-        self.weather.visible = False
-        all_sprites.add(self.weather, layer=2)
-
-        #all_sprites.add(LcarsMoveToMouse(colours.WHITE), layer=1)
         self.beep1 = Sound("assets/audio/panel/201.wav")
         Sound("assets/audio/panel/220.wav").play()
 
     def update(self, screenSurface, fpsClock):
         if pygame.time.get_ticks() - self.lastClockUpdate > 1000:
-            self.stardate.setText("STAR DATE {}".format(datetime.now().strftime("%d%m.%y %H:%M:%S")))
+            self.stardate.setText(datetime.now().strftime("%d%m.%y %H:%M:%S"))
             self.lastClockUpdate = pygame.time.get_ticks()
         LcarsScreen.update(self, screenSurface, fpsClock)
 
@@ -99,6 +71,28 @@ class ScreenMain(LcarsScreen):
         for sprite in self.info_text:
             sprite.visible = True
 
+
+
+
+    def playerClickedHandler(self, number, item, event, clock):
+        print("player {} clicked".format(number))
+        
+    def powerHandler(self, item, event, clock):
+        pass
+
+    def enterMatchHandler(self, item, event, clock):
+        pass
+
+    def logHandler(self, item, event, clock):
+        pass
+
+    def allRankingHandler(self, item, event, clock):
+        pass
+
+    def aboutHandler(self, item, event, clock):
+        pass
+
+    
     def gaugesHandler(self, item, event, clock):
         self.hideInfoText()
         self.sensor_gadget.visible = False
