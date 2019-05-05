@@ -46,30 +46,53 @@ class LcarsTab(LcarsWidget):
         self.image = image
         self.applyColour(colour)
 
+
+#class LcarsRectButton(LcarsWidget):
+#    """ Rectangle, square corners, customizable size button """
+#    def __init__(self, colour, pos, text, handler=None, 
+
+        
+
+
 class LcarsButton(LcarsWidget):
     """Button - either rounded or rectangular if rectSize is spcified"""
 
     def __init__(self, colour, pos, text, handler=None, rectSize=None):
+        self.bgcolor = colour
         if rectSize == None:
-            image = pygame.image.load("assets/button.png").convert_alpha()
+            image = pygame.image.load("assets/button.png")
             size = (image.get_rect().width, image.get_rect().height)
         else:
             size = rectSize
-            image = pygame.Surface(rectSize).convert_alpha()
+            image = pygame.Surface(rectSize)
             image.fill(colour)
-
+        
         self.colour = colour
+        self.text = text
         self.image = image
-        font = Font("assets/swiss911.ttf", 19)
-        textImage = font.render(text, False, colours.BLACK)
+        font = Font("assets/swiss911.ttf", 20)
+        textImage = font.render(text, True, (0,0,0))
+
         image.blit(textImage, 
                 (image.get_rect().width - textImage.get_rect().width - 10,
                     image.get_rect().height - textImage.get_rect().height - 5))
-    
+
+
         LcarsWidget.__init__(self, colour, pos, size, handler)
-        self.applyColour(colour)
+        if rectSize == None:
+            self.applyColour(colour)
+        
         self.highlighted = False
         self.beep = Sound("assets/audio/panel/202.wav")
+
+    def applyColour(self, colour):
+        # just re-render
+        self.image.fill(colour)
+        font = Font("assets/swiss911.ttf", 20)
+        textImage = font.render(self.text, True, (0,0,0))
+        self.image.blit(textImage, 
+                (self.image.get_rect().width - textImage.get_rect().width - 10,
+                    self.image.get_rect().height - textImage.get_rect().height - 5))
 
     def handleEvent(self, event, clock):
         if (event.type == MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos) and self.visible == True):
@@ -81,14 +104,31 @@ class LcarsButton(LcarsWidget):
             self.applyColour(self.colour)
            
         return LcarsWidget.handleEvent(self, event, clock)
+
+
+
+class LcarsButton2(LcarsButton):
+    """wrapper that align to lower left and has y coordinate flipped"""
+    def __init__(self, colour, pos, size, text, handler=None):
+        x = pos[0]
+        y = pos[1] + size[1]
+        #x = x - size[0]/2
+        #y = y - size[1]/2
+        y = 768 - y
+        LcarsButton.__init__(self, colour, (y, x), text, handler, size)
+
+
         
 class LcarsText(LcarsWidget):
     """Text that can be placed anywhere"""
 
-    def __init__(self, colour, pos, message, size=1.0, background=None, handler=None):
+    def __init__(self, colour, pos, message, size=1.0, background=None, handler=None, otherfont=False):
         self.colour = colour
         self.background = background
-        self.font = Font("assets/swiss911.ttf", int(19.0 * size))
+        if otherfont:
+            self.font = Font("assets/swiss2.ttf", int(19.0 * size))
+        else:
+            self.font = Font("assets/swiss911.ttf", int(19.0 * size))
         
         self.renderText(message)
         # center the text if needed 
