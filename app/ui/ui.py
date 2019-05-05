@@ -14,8 +14,8 @@ class UserInterface:
         sound.init(audio_params)
         pygame.mouse.set_visible(True)
         pygame.mixer.quit()
-        #cursor = pygame.cursors.diamond
-        cursor = ((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
+        cursor = pygame.cursors.diamond
+        #cursor = ((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
         pygame.mouse.set_cursor(*cursor)
 
         self.screenSurface = pygame.display.set_mode(resolution, pygame.FULLSCREEN) #, pygame.FULLSCREEN)
@@ -72,4 +72,4 @@ class UserInterface:
         self.update()
         self.handleEvents()
         self.fpsClock.tick(self.fps)
-        pygame.time.wait(1)
+        #pygame.time.wait(1)

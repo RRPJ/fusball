@@ -51,36 +51,123 @@ class LcarsTab(LcarsWidget):
 #    """ Rectangle, square corners, customizable size button """
 #    def __init__(self, colour, pos, text, handler=None, 
 
+
+#W = 36
+#H = 32
+W = 48
+H = 40
+buttonmap = [
+    ['1','2','3','4','5','6','7','8','9','0'],
+    ['q','w','e','r','t','y','u','i','o','p'],
+    ['a','s','d','f','g','h','j','k','l', ''],
+    ['z','x','c','v','b','n','m', '', '', '']]
+        
+class LcarsKeyboard(LcarsWidget):
+    def __init__(self, pos, handler=None):
+        self.pos = pos
+        self.buttondown = ''
+        #self.offsets = [40, 56, 64, 76]
+        self.offsets = [50, 74, 82, 94]
+        self.repaint()
+        LcarsWidget.__init__(self, (0,0,0), pos, (600,200), handler)
+
+
+    def repaint(self):
+        image = pygame.Surface((600,200)).convert_alpha()
+        # top row
+        for i in range(10):
+            image.fill(colours.BEIGE, (self.offsets[0]+(W+4)*i, 0*(H+4), W, H))
+        for i in range(10):
+            image.fill(colours.BEIGE, (self.offsets[1]+(W+4)*i, 1*(H+4), W, H))
+        for i in range(9):
+            image.fill(colours.BEIGE, (self.offsets[2]+(W+4)*i, 2*(H+4), W, H))
+        for i in range(7):
+            image.fill(colours.BEIGE, (self.offsets[3]+(W+4)*i, 3*(H+4), W, H))
+
+        # draw the highlight
+        if self.buttondown != '':
+            hoffset = self.offsets[self.row]
+            image.fill(colours.WHITE, (hoffset+(W+4)*self.col, self.row*(H+4), W, H))
+            # for debugging:
+            #image.fill((255,0,0), (self.relpos[0], 0, 1, 1000))
+            #image.fill((255,0,0), (0, self.relpos[1], 1000, 1))
+            
+
+        # decorations:
+        halfH = int(H/2)
+        pygame.draw.circle(image, colours.ORANGE, (halfH, 0*(H+4)+halfH), halfH)
+        pygame.draw.circle(image, colours.ORANGE, (halfH, 1*(H+4)+halfH), halfH)
+        pygame.draw.circle(image, colours.ORANGE, (halfH, 2*(H+4)+halfH), halfH)
+        pygame.draw.circle(image, colours.ORANGE, (halfH, 3*(H+4)+halfH), halfH)
+        image.fill(colours.ORANGE, (halfH, 0*(H+4), self.offsets[0]-halfH-4, H))
+        image.fill(colours.ORANGE, (halfH, 1*(H+4), self.offsets[1]-halfH-4, H))
+        image.fill(colours.ORANGE, (halfH, 2*(H+4), self.offsets[2]-halfH-4, H))
+        image.fill(colours.ORANGE, (halfH, 3*(H+4), self.offsets[3]-halfH-4, H))
+
+        # draw glyphs:
+        font = Font("assets/swiss911.ttf", 20)
+        for row in range(4):
+            for col in range(10):
+                textImage = font.render(buttonmap[row][col].upper(), True, (0,0,0))
+                image.blit(textImage,
+                           (self.offsets[row] + (W+4)*col + 4, (H+4)*row)
+                )
+
+        # remember for later
+        self.image = image
+
+    def handleEvent(self, event, clock):
+        if (event.type == MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos)):
+            relx = event.pos[0] - self.pos[1]
+            rely = event.pos[1] - self.pos[0]
+            # subtract row offsets
+            self.buttondown = ''
+            
+            self.row = int(rely / (H+4))
+            self.col = int((relx-self.offsets[self.row]) / (W+4))
+            # test for vertical border hit:
+            if rely % (H+4) >= H:
+                return
+            # test for horizontal border hit:
+            if (relx-self.offsets[self.row]) % (W+4) >= W:
+                return
+            # test for hit before first column:
+            if relx-self.offsets[self.row] < 0:
+                return
+
+            
+            if self.col < 10:
+                self.buttondown = buttonmap[self.row][self.col]
+
+            self.relpos = (relx, rely)
+            self.repaint()
+            
+            if self.buttondown != '':
+                self.handler(self, self.buttondown, clock)
+                
+                
+            
+                
+            
+            #self.beep.play()
+
+        if (event.type == MOUSEBUTTONUP):
+            self.buttondown = ''
+            self.repaint()
+           
         
 
 
 class LcarsButton(LcarsWidget):
-    """Button - either rounded or rectangular if rectSize is spcified"""
-
-    def __init__(self, colour, pos, text, handler=None, rectSize=None):
-        self.bgcolor = colour
-        if rectSize == None:
-            image = pygame.image.load("assets/button.png")
-            size = (image.get_rect().width, image.get_rect().height)
-        else:
-            size = rectSize
-            image = pygame.Surface(rectSize)
-            image.fill(colour)
-        
+    def __init__(self, colour, pos, size, text, handler=None, glyph=False, glyphoffset=(0,0)):
+        self.image = pygame.Surface(size)
         self.colour = colour
         self.text = text
-        self.image = image
-        font = Font("assets/swiss911.ttf", 20)
-        textImage = font.render(text, True, (0,0,0))
+        self.glyph = glyph
+        self.glyphoffset = glyphoffset
 
-        image.blit(textImage, 
-                (image.get_rect().width - textImage.get_rect().width - 10,
-                    image.get_rect().height - textImage.get_rect().height - 5))
-
-
+        self.applyColour(colour)
         LcarsWidget.__init__(self, colour, pos, size, handler)
-        if rectSize == None:
-            self.applyColour(colour)
         
         self.highlighted = False
         self.beep = Sound("assets/audio/panel/202.wav")
@@ -88,11 +175,19 @@ class LcarsButton(LcarsWidget):
     def applyColour(self, colour):
         # just re-render
         self.image.fill(colour)
-        font = Font("assets/swiss911.ttf", 20)
-        textImage = font.render(self.text, True, (0,0,0))
-        self.image.blit(textImage, 
-                (self.image.get_rect().width - textImage.get_rect().width - 10,
-                    self.image.get_rect().height - textImage.get_rect().height - 5))
+        if self.glyph:
+            glyphimage = pygame.image.load("assets/"+self.text+".png")
+            x = int(self.image.get_rect().width/2 - glyphimage.get_rect().width/2 + self.glyphoffset[0])
+            y = int(self.image.get_rect().height/2- glyphimage.get_rect().height/2 + self.glyphoffset[1])
+            #print("button size: {}\nglyph size: {}\noffset: {}\nblit at: {}".format(self.image.get_rect(), glyphimage.get_rect(), self.glyphoffset, (x,y)))
+            self.image.blit(glyphimage, (x, y))
+
+        else:
+            font = Font("assets/swiss911.ttf", 20)
+            textImage = font.render(self.text, True, (0,0,0))
+            self.image.blit(textImage, 
+                            (self.image.get_rect().width  - textImage.get_rect().width  - 10,
+                             self.image.get_rect().height - textImage.get_rect().height - 5))
 
     def handleEvent(self, event, clock):
         if (event.type == MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos) and self.visible == True):
@@ -109,13 +204,13 @@ class LcarsButton(LcarsWidget):
 
 class LcarsButton2(LcarsButton):
     """wrapper that align to lower left and has y coordinate flipped"""
-    def __init__(self, colour, pos, size, text, handler=None):
+    def __init__(self, colour, pos, size, text, handler=None, glyph=False, glyphoffset=(0,0)):
         x = pos[0]
         y = pos[1] + size[1]
         #x = x - size[0]/2
         #y = y - size[1]/2
         y = 768 - y
-        LcarsButton.__init__(self, colour, (y, x), text, handler, size)
+        LcarsButton.__init__(self, colour, (y, x), size, text, handler, glyph, glyphoffset)
 
 
         
