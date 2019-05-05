@@ -30,16 +30,16 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="0.70710678"
-     inkscape:cx="580.71009"
-     inkscape:cy="373.78138"
+     inkscape:cx="548.91603"
+     inkscape:cy="474.28348"
      inkscape:document-units="px"
-     inkscape:current-layer="layer1"
+     inkscape:current-layer="layer4"
      showgrid="true"
      units="px"
      inkscape:snap-bbox="true"
      inkscape:bbox-nodes="true"
      inkscape:snap-page="false"
-     inkscape:window-width="1643"
+     inkscape:window-width="1512"
      inkscape:window-height="1049"
      inkscape:window-x="1920"
      inkscape:window-y="17"
@@ -799,13 +799,25 @@
        id="rect954-0-4"
        d="M 64.558318,193.28332 H 114.30001 V 201.74999 L 64.558318,201.74998 Z"
        style="display:inline;opacity:1;fill:#c46161;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:0.8313002;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+    <text
+       transform="translate(-7.4083269,-107.55834)"
+       id="text4865-3-4"
+       y="215.41737"
+       x="150.51485"
+       style="display:inline;opacity:1;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444447px;line-height:7.25;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458335"
+       xml:space="preserve"><tspan
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444447px;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';fill:#000000;fill-opacity:1;stroke-width:0.26458335"
+         y="215.41737"
+         x="150.51485"
+         id="tspan4863-3-8"
+         sodipodi:role="line">CALCULATED ODDS:</tspan></text>
   </g>
   <g
      inkscape:label="dynamic components"
      inkscape:groupmode="layer"
      id="layer1"
      transform="translate(0,-93.799984)"
-     style="display:inline;opacity:0.49593496">
+     style="display:none;opacity:0.49599998">
     <rect
        style="display:inline;opacity:1;fill:#cd6666;fill-opacity:0.99578091;fill-rule:evenodd;stroke:none;stroke-width:0.8954367;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        id="rect896"
@@ -837,19 +849,7 @@
          sodipodi:role="line" /></text>
     <g
        id="g7531"
-       transform="translate(-7.4083268,-13.758352)"
-       style="">
-      <text
-         id="text4865-3-4"
-         y="215.41737"
-         x="150.51485"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444447px;line-height:7.25;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';letter-spacing:0px;word-spacing:0px;display:inline;opacity:1;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458335"
-         xml:space="preserve"><tspan
-           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444447px;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';fill:#000000;fill-opacity:1;stroke-width:0.26458335"
-           y="215.41737"
-           x="150.51485"
-           id="tspan4863-3-8"
-           sodipodi:role="line">CALCULATED ODDS:</tspan></text>
+       transform="translate(-7.4083268,-13.758352)">
       <text
          id="text4865"
          y="199.77528"
@@ -1017,8 +1017,7 @@
     </g>
     <g
        id="g6596"
-       transform="matrix(1.3360157,0,0,1.2243311,-92.591367,-13.263163)"
-       style="">
+       transform="matrix(1.3360157,0,0,1.2243311,-92.591367,-13.263163)">
       <path
          sodipodi:nodetypes="sccsss"
          inkscape:connector-curvature="0"
@@ -1055,8 +1054,7 @@
          style="display:inline;opacity:1;fill:#c46161;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:1.28880155;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
          transform="translate(0,93.799984)" />
       <g
-         id="g5958"
-         style="">
+         id="g5958">
         <rect
            style="opacity:1;fill:#ffcc99;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:0.70710695;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
            id="rect5887"
@@ -1078,8 +1076,7 @@
       </g>
       <g
          transform="translate(0.37796255,2.8111326e-6)"
-         id="g5963"
-         style="">
+         id="g5963">
         <rect
            style="display:inline;opacity:1;fill:#ffcc99;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:0.70710695;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
            id="rect5887-6"
@@ -1101,8 +1098,7 @@
       </g>
       <g
          transform="translate(0.3779683,2.8111326e-6)"
-         id="g5968"
-         style="">
+         id="g5968">
         <rect
            style="display:inline;opacity:1;fill:#ffcc99;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:0.70710695;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
            id="rect5887-9"
@@ -1928,8 +1924,7 @@
          sodipodi:role="line">Start Match</tspan></text>
     <g
        id="g7921"
-       transform="translate(-8.6892301,-6.3499961)"
-       style="">
+       transform="translate(-8.6892301,-6.3499961)">
       <path
          style="display:inline;opacity:1;fill:#c46161;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:0.8313002;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
          d="M 29.85587,265.25 H 79.597562 V 273.71667 L 29.85587,273.71666 Z"
