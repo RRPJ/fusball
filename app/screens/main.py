@@ -81,7 +81,8 @@ class ScreenMain(LcarsScreen):
         pass
 
     def enterMatchHandler(self, item, event, clock):
-        pass
+        from screens.entermatch import ScreenEnterMatch
+        self.loadScreen(ScreenEnterMatch())
 
     def logHandler(self, item, event, clock):
         pass
