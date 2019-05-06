@@ -1,6 +1,7 @@
 from datetime import datetime
 from functools import partial
 import random
+from string import capwords
 from ui.widgets.background import LcarsBackgroundImage, LcarsImage
 from ui.widgets.gifimage import LcarsGifImage
 from ui.widgets.lcars_widgets import *
@@ -64,27 +65,24 @@ class ScreenEnterMatch(LcarsScreen):
         if event.type == pygame.MOUSEBUTTONUP:
             return False
 
-    def capitalizeWord(self, inp):
-        words = inp.split()
-        def capfirst(word):
-            if len(word)==0:
-                return ''
-            else:
-                return word[0].upper() + word[1:]
-        words = [capfirst(w) for w in words]
-        return " ".join(words)
-    
+
     def keyboardHandler(self, item, event, clock):
         print("keyboard event forwarded to match screen: {}".format(event))
         if type(event)==str:
-            self.searchString = self.searchString + event
+            if event == 'bkspc':
+                self.searchString = self.searchString[:-1]
+            elif event == 'enter':
+                # todo: figure out what this does
+                pass
+            else:
+                self.searchString = self.searchString + event
         else:
             if item.text == "clear":
                 self.searchString = ""
             
-            
+        
         self.placeholder.visible = len(self.searchString)==0
-        self.searchText.renderText(self.capitalizeWord(self.searchString))
+        self.searchText.renderText(capwords(self.searchString, " "))
         self.carret.rect.left = 284 + self.searchText.image.get_size()[0]
         
 

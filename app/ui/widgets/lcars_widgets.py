@@ -73,7 +73,8 @@ class LcarsKeyboard(LcarsWidget):
 
 
     def repaint(self):
-        image = pygame.Surface((600,200)).convert_alpha()
+        maxx = 2*self.offsets[1]+10*(W+4)-4
+        image = pygame.Surface((maxx, 4*H+3*4)).convert_alpha()
         # top row
         for i in range(10):
             image.fill(colours.BEIGE, (self.offsets[0]+(W+4)*i, 0*(H+4), W, H))
@@ -91,9 +92,9 @@ class LcarsKeyboard(LcarsWidget):
             # for debugging:
             #image.fill((255,0,0), (self.relpos[0], 0, 1, 1000))
             #image.fill((255,0,0), (0, self.relpos[1], 1000, 1))
-            
 
-        # decorations:
+
+        # decorations on the left:
         halfH = int(H/2)
         pygame.draw.circle(image, colours.ORANGE, (halfH, 0*(H+4)+halfH), halfH)
         pygame.draw.circle(image, colours.ORANGE, (halfH, 1*(H+4)+halfH), halfH)
@@ -103,6 +104,27 @@ class LcarsKeyboard(LcarsWidget):
         image.fill(colours.ORANGE, (halfH, 1*(H+4), self.offsets[1]-halfH-4, H))
         image.fill(colours.ORANGE, (halfH, 2*(H+4), self.offsets[2]-halfH-4, H))
         image.fill(colours.ORANGE, (halfH, 3*(H+4), self.offsets[3]-halfH-4, H))
+        
+        # backspace
+        c = colours.WHITE if self.buttondown == 'bkspc' else colours.RED_BROWN
+        pygame.draw.circle(image, c, (maxx-halfH, 0*(H+4)+halfH), halfH)
+        image.fill(c, (self.offsets[0]+10*(W+4), 0, maxx-self.offsets[0]-10*(W+4)-halfH, H))
+        # enter
+        c = colours.WHITE if self.buttondown == 'enter' else colours.RED_BROWN
+        pygame.draw.circle(image, c, (maxx-halfH, 1*(H+4)+halfH), halfH)
+        pygame.draw.circle(image, c, (maxx-halfH, 2*(H+4)+halfH), halfH)
+        image.fill(c, (self.offsets[1]+10*(W+4), H+4, maxx-self.offsets[1]-10*(W+4)-halfH, H+4))
+        image.fill(c, (self.offsets[2]+9*(W+4), 2*(H+4), maxx-self.offsets[2]-9*(W+4)-halfH, H))
+        image.fill(c, (self.offsets[1]+10*(W+4), H+4+halfH, maxx-self.offsets[1]-10*(W+4), H+4))
+        # space
+        c = colours.WHITE if self.buttondown == ' ' else colours.RED_BROWN
+        image.fill(c, (self.offsets[3]+7*(W+4), 3*(H+4), int(2.5*W), H))
+
+        # decorations on the right:
+        pygame.draw.circle(image, colours.ORANGE, (maxx-halfH, 3*(H+4)+halfH), halfH)
+        image.fill(colours.ORANGE, (self.offsets[3]+7*(W+4)+int(2.5*W+4), 3*(H+4), maxx-self.offsets[3]-7*(W+4)-int(2.5*W+4)-halfH, H))
+        
+        
 
         # draw glyphs:
         font = Font("assets/swiss911.ttf", 20)
@@ -112,6 +134,22 @@ class LcarsKeyboard(LcarsWidget):
                 image.blit(textImage,
                            (self.offsets[row] + (W+4)*col + 4, (H+4)*row)
                 )
+        # special glyphs
+        font = Font("assets/swiss911.ttf", 24)
+        textImage = font.render("Space", True, (0,0,0))
+        image.blit(textImage, (self.offsets[3]+7*(W+4)+int(1.25*W-textImage.get_size()[0]/2), 3*(H+4)+int(H/2-textImage.get_size()[1]/2)))
+        textImage = font.render("Enter", True, (0,0,0))
+        enterleft = self.offsets[2]+9*(W+4)
+        image.blit(textImage, (
+            (enterleft+maxx)/2-int(textImage.get_size()[0]/2),
+            2*(H+4)+int(H/2-textImage.get_size()[1]/2)
+        ))
+        glyphimage = pygame.image.load("assets/backspace.png")
+        bkspcleft = self.offsets[0]+10*(W+4)
+        image.blit(glyphimage, (
+            (bkspcleft+maxx)/2-int(glyphimage.get_rect().width/2),
+            int(H/2-glyphimage.get_rect().height/2)
+        ))
 
         # remember for later
         self.image = image
@@ -125,6 +163,18 @@ class LcarsKeyboard(LcarsWidget):
             
             self.row = int(rely / (H+4))
             self.col = int((relx-self.offsets[self.row]) / (W+4))
+
+            # test for 'special' buttons
+            if self.row == 0 and rely < H and self.col >= 10:
+                self.buttondown = 'bkspc'
+            if self.row == 3 and self.col >= 7 and rely < self.offsets[3] + 7*(W+4)+int(2.5*W):
+                self.buttondown = ' '
+            if self.row == 1 and self.col >= 10:
+                self.buttondown = 'enter'
+            if self.row == 2 and rely % (H+4) < H and self.col >= 9:
+                self.buttondown = 'enter'
+
+            # now we only need to handle 'normal' buttons
             # test for vertical border hit:
             if rely % (H+4) >= H:
                 return
@@ -135,8 +185,10 @@ class LcarsKeyboard(LcarsWidget):
             if relx-self.offsets[self.row] < 0:
                 return
 
-            
-            if self.col < 10:
+            if (self.row == 0 and self.col < 10) or \
+               (self.row == 1 and self.col < 10) or \
+               (self.row == 2 and self.col < 9) or \
+               (self.row == 3 and self.col < 7):
                 self.buttondown = buttonmap[self.row][self.col]
 
             self.relpos = (relx, rely)
