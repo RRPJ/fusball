@@ -6,8 +6,9 @@ from ui.widgets.background import LcarsBackgroundImage, LcarsImage
 from ui.widgets.gifimage import LcarsGifImage
 from ui.widgets.lcars_widgets import *
 from ui.widgets.screen import LcarsScreen
-
 from datasources.network import get_ip_address_string
+import shelve
+from fuzzywuzzy import process
 
 
 class ScreenEnterMatch(LcarsScreen):
@@ -23,8 +24,8 @@ class ScreenEnterMatch(LcarsScreen):
 
         # the small buttons for rearranging players:
         all_sprites.add(LcarsButton2(colours.RED_BROWN, (324, 348), (32,32), "clear", glyph=True, handler=self.swapHandler))
-        all_sprites.add(LcarsButton2(colours.BEIGE, (288, 348), (32,32), "leftright", glyph=True, handler=self.swapHandler))
-        all_sprites.add(LcarsButton2(colours.BEIGE, (252, 348), (32,32), "leftright", glyph=True, handler=self.swapHandler))
+        all_sprites.add(LcarsButton2(colours.BEIGE, (288, 348), (32,32), "leftright", glyph=True, handler=self.swapHandler, glyphoffset=(0,5)))
+        all_sprites.add(LcarsButton2(colours.BEIGE, (252, 348), (32,32), "leftright", glyph=True, handler=self.swapHandler, glyphoffset=(0,-5)))
         all_sprites.add(LcarsButton2(colours.BLUE, (216, 348), (32,32), "diag1", glyph=True, handler=self.swapHandler))
         all_sprites.add(LcarsButton2(colours.BLUE, (180, 348), (32,32), "diag2", glyph=True, handler=self.swapHandler))
         all_sprites.add(LcarsButton2(colours.BEIGE, (144, 348), (32,32), "rotateleft", glyph=True, handler=self.swapHandler))
@@ -46,8 +47,12 @@ class ScreenEnterMatch(LcarsScreen):
         all_sprites.add(self.carret)
 
         # placeholders for names:
+        self.matchedNamed = []
         for i in range(6):
-            all_sprites.add(LcarsButton2((127,127,127), (52, 200-36*i), (188, 32), ""))
+            newbutton = LcarsButton2((127,127,127), (52, 200-36*i), (188, 32), "", handler=partial(self.playerClicked, i))
+            newbutton.addPlayer = False
+            self.matchedNamed.append(newbutton)
+            all_sprites.add(newbutton)
 
         self.searchString = ""
         
@@ -65,9 +70,21 @@ class ScreenEnterMatch(LcarsScreen):
         if event.type == pygame.MOUSEBUTTONUP:
             return False
 
-
+    def playerClicked(self, index, item, event, clock):
+        print("player {} clicked: {}".format(index, item.text))
+        if item.addPlayer:
+            print("adding")
+            players = shelve.open("playerdb")
+            players[item.text] = {'mu': 25, 'sigma': 25/3}
+            players.close()
+        else:
+            print("choosing")
+        
+        
+        
     def keyboardHandler(self, item, event, clock):
         print("keyboard event forwarded to match screen: {}".format(event))
+        # update the input field with the new text:
         if type(event)==str:
             if event == 'bkspc':
                 self.searchString = self.searchString[:-1]
@@ -79,7 +96,24 @@ class ScreenEnterMatch(LcarsScreen):
         else:
             if item.text == "clear":
                 self.searchString = ""
+        
+        # list selectable players
+        players = shelve.open('playerdb')
+        if len(players) > 0:
+            candidates = process.extract(self.searchString, players.keys())
+            print(candidates)
+
+        if self.searchString not in players.keys() and len(self.searchString)>0:
+            self.matchedNamed[-1].setText("Add "+capwords(self.searchString))
+            self.matchedNamed[-1].setColor(colours.RED_BROWN)
+            self.matchedNamed[-1].addPlayer = True
+        else:
+            self.matchedNamed[-1].setText("")
+            self.matchedNamed[-1].setColor((127,127,127))
+            self.matchedNamed[-1].addPlayer = False
             
+            
+        
         
         self.placeholder.visible = len(self.searchString)==0
         self.searchText.renderText(capwords(self.searchString, " "))

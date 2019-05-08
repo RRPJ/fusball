@@ -213,20 +213,31 @@ class LcarsKeyboard(LcarsWidget):
 class LcarsButton(LcarsWidget):
     def __init__(self, colour, pos, size, text, handler=None, glyph=False, glyphoffset=(0,0)):
         self.image = pygame.Surface(size)
-        self.colour = colour
+        self.normalcolour = colour
+        self.highlightcolour = colours.WHITE
+        self.highlighted = False
         self.text = text
         self.glyph = glyph
         self.glyphoffset = glyphoffset
 
-        self.applyColour(colour)
+        self.rerender()
         LcarsWidget.__init__(self, colour, pos, size, handler)
         
         self.highlighted = False
         self.beep = Sound("assets/audio/panel/202.wav")
 
-    def applyColour(self, colour):
+    def setText(self, text):
+        self.text = text
+        self.rerender()
+
+    def setColor(self, colour, highlightcolour=colours.WHITE):
+        self.normalcolour = colour
+        self.highlightcolour = highlightcolour
+        self.rerender()
+        
+    def rerender(self):
         # just re-render
-        self.image.fill(colour)
+        self.image.fill(self.highlightcolour if self.highlighted else self.normalcolour)
         if self.glyph:
             glyphimage = pygame.image.load("assets/"+self.text+".png")
             x = int(self.image.get_rect().width/2 - glyphimage.get_rect().width/2 + self.glyphoffset[0])
@@ -243,12 +254,14 @@ class LcarsButton(LcarsWidget):
 
     def handleEvent(self, event, clock):
         if (event.type == MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos) and self.visible == True):
-            self.applyColour(colours.WHITE)
             self.highlighted = True
             self.beep.play()
+            self.rerender()
 
         if (event.type == MOUSEBUTTONUP and self.highlighted and self.visible == True):
-            self.applyColour(self.colour)
+            self.highlighted = False
+            self.rerender()
+
            
         return LcarsWidget.handleEvent(self, event, clock)
 
