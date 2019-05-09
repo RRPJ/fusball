@@ -47,11 +47,11 @@ class ScreenEnterMatch(LcarsScreen):
         all_sprites.add(self.carret)
 
         # placeholders for names:
-        self.matchedNamed = []
+        self.matchedNames = []
         for i in range(6):
             newbutton = LcarsButton2((127,127,127), (52, 200-36*i), (188, 32), "", handler=partial(self.playerClicked, i))
             newbutton.addPlayer = False
-            self.matchedNamed.append(newbutton)
+            self.matchedNames.append(newbutton)
             all_sprites.add(newbutton)
 
         self.searchString = ""
@@ -75,12 +75,34 @@ class ScreenEnterMatch(LcarsScreen):
         if item.addPlayer:
             print("adding")
             players = shelve.open("playerdb")
-            players[item.text] = {'mu': 25, 'sigma': 25/3}
+            players[self.searchString] = {'mu': 25, 'sigma': 25/3}
             players.close()
+            self.updatePlayerSelection()
         else:
             print("choosing")
         
-        
+    def updatePlayerSelection(self):
+        players = shelve.open('playerdb')
+        candidates = []
+        if len(players) > 0:
+            candidates = process.extractBests(self.searchString, players.keys(), score_cutoff=50, limit=6)
+        print(candidates)
+        players.close()
+        for i in range(6):
+            # skip the add player button
+            if self.matchedNames[i].addPlayer:
+                continue
+            if i >= len(candidates):
+                # reset remaining fields if there are not many candidates
+                self.matchedNames[i].setText('')
+                self.matchedNames[i].setColor((127,127,127), (127,127,127))
+            else:
+                # add fields
+                print(candidates[i])
+                self.matchedNames[i].setText(capwords(candidates[i][0]))
+                self.matchedNames[i].setColor(colours.BEIGE, colours.WHITE)
+                
+
         
     def keyboardHandler(self, item, event, clock):
         print("keyboard event forwarded to match screen: {}".format(event))
@@ -96,21 +118,18 @@ class ScreenEnterMatch(LcarsScreen):
         else:
             if item.text == "clear":
                 self.searchString = ""
-        
-        # list selectable players
-        players = shelve.open('playerdb')
-        if len(players) > 0:
-            candidates = process.extract(self.searchString, players.keys())
-            print(candidates)
 
-        if self.searchString not in players.keys() and len(self.searchString)>0:
-            self.matchedNamed[-1].setText("Add "+capwords(self.searchString))
-            self.matchedNamed[-1].setColor(colours.RED_BROWN)
-            self.matchedNamed[-1].addPlayer = True
+        players = shelve.open('playerdb')
+        if self.searchString not in players.keys() and len(self.searchString)>3:
+            self.matchedNames[-1].setText("Add "+capwords(self.searchString))
+            self.matchedNames[-1].setColor(colours.RED_BROWN)
+            self.matchedNames[-1].addPlayer = True
         else:
-            self.matchedNamed[-1].setText("")
-            self.matchedNamed[-1].setColor((127,127,127))
-            self.matchedNamed[-1].addPlayer = False
+            self.matchedNames[-1].addPlayer = False
+        players.close()
+
+        # update list of selectable players
+        self.updatePlayerSelection()
             
             
         
