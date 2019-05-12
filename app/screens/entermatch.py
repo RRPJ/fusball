@@ -11,6 +11,7 @@ import shelve
 from fuzzywuzzy import process
 import trueskill
 import math
+import re
 import itertools
 
 # source: https://github.com/sublee/trueskill/issues/1#issuecomment-149762508
@@ -254,7 +255,11 @@ class ScreenEnterMatch(LcarsScreen):
         # update the input field with the new text:
         if type(event)==str:
             if event == 'bkspc':
-                self.searchString = self.searchString[:-1]
+                match  = re.search('0x[0-9][0-9]$', self.searchString)
+                if match != None:
+                    self.searchString = self.searchString[:-4] + chr(int(match.group(), 16))
+                else:
+                    self.searchString = self.searchString[:-1]
             elif event == 'enter':
                 # todo: figure out what this does
                 pass
@@ -289,6 +294,8 @@ class ScreenEnterMatch(LcarsScreen):
         self.loadScreen(ScreenMain())
                         
     def startHandler(self, item, event, clock):
+        from screens.enteroutcome import ScreenEnterOutcome
+        self.loadScreen(ScreenEnterOutcome())
         print("starting match")
         
 
