@@ -208,7 +208,47 @@ class LcarsKeyboard(LcarsWidget):
             self.repaint()
            
         
+class LcarsInputFocus(LcarsWidget):
+    def __init__(self, pos, mirror, transparent=False, handler=None):
+        self.anchor = pos
+        self.mirror = mirror
+        self.handler = handler
+        self.limage = pygame.image.load('assets/playerfocus.png')
+        self.rimage = pygame.transform.flip(self.limage, True, False)
+        self.timage = pygame.Surface(self.limage.get_size(),  pygame.SRCALPHA, 32)
+        self.timage.convert_alpha()
+        self.timage.fill((0,0,0,0))
+        self.transparent = transparent
+        self.mirror = mirror
+        self.repaint()
+        LcarsWidget.__init__(self, colours.WHITE, self.pos, self.image.get_size(), handler)
 
+    def setMirror(self, mirror):
+        self.mirror = mirror
+        self.repaint()
+
+    def setTransparent(self, transparent):
+        self.transparent = transparent
+        self.repaint()
+    
+    def repaint(self):
+        if self.transparent:
+            self.image = self.timage
+        elif self.mirror:
+            self.image = self.rimage
+        else:
+            self.image = self.limage
+            
+        if self.mirror:
+            self.pos = (self.anchor[0]-16, self.anchor[1]+16)
+        else:
+            self.pos = (self.anchor[0]-16, self.anchor[1]-16)
+
+    
+    def handleEvent(self, event, clock):
+        return LcarsWidget.handleEvent(self, event, clock)
+        
+        
 
 class LcarsButton(LcarsWidget):
     def __init__(self, colour, pos, size, text, handler=None, glyph=False, glyphoffset=(0,0)):
@@ -285,6 +325,7 @@ class LcarsText(LcarsWidget):
     def __init__(self, colour, pos, message, size=1.0, background=None, handler=None, otherfont=False):
         self.colour = colour
         self.background = background
+        self.message = message
         if otherfont:
             self.font = Font("assets/swiss2.ttf", int(19.0 * size))
         else:
@@ -297,15 +338,18 @@ class LcarsText(LcarsWidget):
             
         LcarsWidget.__init__(self, colour, pos, None, handler)
 
-    def renderText(self, message):        
+    def renderText(self, message):
+        self.message = message
         if (self.background == None):
             self.image = self.font.render(message, True, self.colour)
         else:
             self.image = self.font.render(message, True, self.colour, self.background)
         
     def setText(self, newText):
+        self.message = newText
         self.renderText(newText)
 
+        
 class LcarsBlockLarge(LcarsButton):
     """Left navigation block - large version"""
 

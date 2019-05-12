@@ -9,6 +9,20 @@ from ui.widgets.screen import LcarsScreen
 from datasources.network import get_ip_address_string
 import shelve
 from fuzzywuzzy import process
+import trueskill
+import math
+import itertools
+
+# source: https://github.com/sublee/trueskill/issues/1#issuecomment-149762508
+def win_probability(team1, team2):
+    delta_mu = sum(r.mu for r in team1) - sum(r.mu for r in team2)
+    sum_sigma = sum(r.sigma ** 2 for r in itertools.chain(team1, team2))
+    size = len(team1) + len(team2)
+    denom = math.sqrt(size * (trueskill.BETA * trueskill.BETA) + sum_sigma)
+    ts = trueskill.global_env()
+    return ts.cdf(delta_mu / denom)
+
+
 
 
 class ScreenEnterMatch(LcarsScreen):
@@ -24,8 +38,8 @@ class ScreenEnterMatch(LcarsScreen):
 
         # the small buttons for rearranging players:
         all_sprites.add(LcarsButton2(colours.RED_BROWN, (324, 348), (32,32), "clear", glyph=True, handler=self.swapHandler))
-        all_sprites.add(LcarsButton2(colours.BEIGE, (288, 348), (32,32), "leftright", glyph=True, handler=self.swapHandler, glyphoffset=(0,5)))
-        all_sprites.add(LcarsButton2(colours.BEIGE, (252, 348), (32,32), "leftright", glyph=True, handler=self.swapHandler, glyphoffset=(0,-5)))
+        all_sprites.add(LcarsButton2(colours.BEIGE, (288, 348), (32,32), "bottomrow", glyph=True, handler=self.swapHandler, glyphoffset=(0,5)))
+        all_sprites.add(LcarsButton2(colours.BEIGE, (252, 348), (32,32), "toprow", glyph=True, handler=self.swapHandler, glyphoffset=(0,-5)))
         all_sprites.add(LcarsButton2(colours.BLUE, (216, 348), (32,32), "diag1", glyph=True, handler=self.swapHandler))
         all_sprites.add(LcarsButton2(colours.BLUE, (180, 348), (32,32), "diag2", glyph=True, handler=self.swapHandler))
         all_sprites.add(LcarsButton2(colours.BEIGE, (144, 348), (32,32), "rotateleft", glyph=True, handler=self.swapHandler))
@@ -46,6 +60,10 @@ class ScreenEnterMatch(LcarsScreen):
         self.carret = LcarsButton2(colours.WHITE, (284, 216), (4, 28), "")
         all_sprites.add(self.carret)
 
+        # add a text object for the odds:
+        self.oddsText = LcarsText(colours.WHITE, (768-360-16-3, 648+1), "1:1", 1)
+        all_sprites.add(self.oddsText)
+        
         # placeholders for names:
         self.matchedNames = []
         for i in range(6):
@@ -54,7 +72,34 @@ class ScreenEnterMatch(LcarsScreen):
             self.matchedNames.append(newbutton)
             all_sprites.add(newbutton)
 
+
+        # texts for selected players
+        self.selectedPlayers = [
+            LcarsText(colours.BLACK, (768-484-32+4, 216+4), "", 20/19),
+            LcarsText(colours.BLACK, (768-412-32+4, 216+4), "", 20/19),
+            LcarsText(colours.BLACK, (768-484-32+4, 600+4), "", 20/19),
+            LcarsText(colours.BLACK, (768-412-32+4, 600+4), "", 20/19)
+        ]
+        all_sprites.add(self.selectedPlayers[0], layer=1)
+        all_sprites.add(self.selectedPlayers[1], layer=1)
+        all_sprites.add(self.selectedPlayers[2], layer=1)
+        all_sprites.add(self.selectedPlayers[3], layer=1)
+
+        # sprites for highlighting/playerfocus
+        self.inputfocus = [
+            LcarsInputFocus((768-484-32 , 216), False, False, handler=partial(self.inputFocusHandler, 0)),
+            LcarsInputFocus((768-412-32 , 216), False, True, handler=partial(self.inputFocusHandler, 1)),
+            LcarsInputFocus((768-484-32 , 600), True, True, handler=partial(self.inputFocusHandler, 2)),
+            LcarsInputFocus((768-412-32 , 600), True, True, handler=partial(self.inputFocusHandler, 3))
+            ]
+        all_sprites.add(self.inputfocus[0], layer=2)
+        all_sprites.add(self.inputfocus[1], layer=2)
+        all_sprites.add(self.inputfocus[2], layer=2)
+        all_sprites.add(self.inputfocus[3], layer=2)
+        self.currentFocus = 0
+            
         self.searchString = ""
+        
         
     def update(self, screenSurface, fpsClock):
         #if pygame.time.get_ticks() - self.lastClockUpdate > 1000:
@@ -70,16 +115,85 @@ class ScreenEnterMatch(LcarsScreen):
         if event.type == pygame.MOUSEBUTTONUP:
             return False
 
+    def inputFocusHandler(self, which, item, event, clock):
+        print("input focus on {}".format(which))
+        self.currentFocus = which
+        for i in range(4):
+            self.inputfocus[i].setTransparent(i!=which)
+
+    def updateOdds(self):
+        p0 = self.selectedPlayers[0].message.lower()
+        p1 = self.selectedPlayers[1].message.lower()
+        p2 = self.selectedPlayers[2].message.lower()
+        p3 = self.selectedPlayers[3].message.lower()
+        team1 = []
+        team2 = []
+        players = shelve.open('playerdb')
+        if p0 in players:
+            team1.append(players[p0])
+        if p1 in players:
+            team1.append(players[p1])
+        if p2 in players:
+            team2.append(players[p2])
+        if p3 in players:
+            team2.append(players[p3])
+        players.close()
+        p = win_probability(team1, team2)
+        print("win probability: {}%".format(p*100))
+        
+        ratios = [
+            ("0:1", 0/(0+1)),
+            ("1:20", 1/(1+20)),
+            ("1:12", 1/(1+12)),
+            ("1:8", 1/(1+8)),
+            ("1:6", 1/(1+6)),
+            ("1:5", 1/(1+5)),
+            ("1:4", 1/(1+4)),
+            ("1:3", 1/(1+3)),
+            ("2:5", 2/(2+5)),
+            ("1:2", 1/(1+2)),
+            ("3:5", 3/(3+5)),
+            ("2:3", 2/(2+3)),
+            ("4:5", 4/(4+5)),
+            ("1:1", 1/(1+1)),
+            ("5:4", 5/(5+4)),
+            ("3:2", 3/(3+2)),
+            ("5:3", 5/(5+3)),
+            ("2:1", 2/(2+1)),
+            ("5:2", 5/(5+2)),
+            ("3:1", 3/(3+1)),
+            ("4:1", 4/(4+1)),
+            ("5:1", 5/(5+1)),
+            ("6:1", 6/(6+1)),
+            ("8:1", 8/(8+1)),
+            ("12:1", 12/(12+1)),
+            ("20:1", 20/(20+1)),
+            ("1:0", 1/(1+0)) ]
+        ratio = sorted(ratios, key=lambda x: abs(x[1]-p))[0][0]
+        print("selected ratio: {}".format(ratio))
+        self.oddsText.setText(ratio)
+
+        
+
+            
+        
     def playerClicked(self, index, item, event, clock):
         print("player {} clicked: {}".format(index, item.text))
         if item.addPlayer:
             print("adding")
             players = shelve.open("playerdb")
-            players[self.searchString] = {'mu': 25, 'sigma': 25/3}
+            players[self.searchString] = trueskill.Rating()
             players.close()
             self.updatePlayerSelection()
         else:
             print("choosing")
+            self.selectedPlayers[self.currentFocus].setText(item.text)
+            self.currentFocus = (self.currentFocus + 1) % 4
+            for i in range(4):
+                self.inputfocus[i].setTransparent(i!=self.currentFocus)
+            self.updateOdds()
+            
+            
         
     def updatePlayerSelection(self):
         players = shelve.open('playerdb')
@@ -148,6 +262,73 @@ class ScreenEnterMatch(LcarsScreen):
 
     def swapHandler(self, item, event, clock):
         print("swapping "+item.text)
+        if item.text == 'clear':
+            self.selectedPlayers[0].setText('')
+            self.selectedPlayers[1].setText('')
+            self.selectedPlayers[2].setText('')
+            self.selectedPlayers[3].setText('')
+        if item.text == 'rotateright':
+            tmp = self.selectedPlayers[0].message
+            self.selectedPlayers[0].setText(self.selectedPlayers[1].message)
+            self.selectedPlayers[1].setText(self.selectedPlayers[3].message)
+            self.selectedPlayers[3].setText(self.selectedPlayers[2].message)
+            self.selectedPlayers[2].setText(tmp)
+        if item.text == 'rotateleft':
+            tmp = self.selectedPlayers[0].message
+            self.selectedPlayers[0].setText(self.selectedPlayers[2].message)
+            self.selectedPlayers[2].setText(self.selectedPlayers[3].message)
+            self.selectedPlayers[3].setText(self.selectedPlayers[1].message)
+            self.selectedPlayers[1].setText(tmp)
+        if item.text == 'diag1':
+            tmp = self.selectedPlayers[0].message
+            self.selectedPlayers[0].setText(self.selectedPlayers[3].message)
+            self.selectedPlayers[3].setText(tmp)
+        if item.text == 'diag2':
+            tmp = self.selectedPlayers[1].message
+            self.selectedPlayers[1].setText(self.selectedPlayers[2].message)
+            self.selectedPlayers[2].setText(tmp)
+        if item.text == 'toprow':
+            tmp = self.selectedPlayers[0].message
+            self.selectedPlayers[0].setText(self.selectedPlayers[2].message)
+            self.selectedPlayers[2].setText(tmp)
+        if item.text == 'bottomrow':
+            tmp = self.selectedPlayers[1].message
+            self.selectedPlayers[1].setText(self.selectedPlayers[3].message)
+            self.selectedPlayers[3].setText(tmp)
+        if item.text == 'Auto':
+            # there are really only 3 combinations that can be played
+            p0 = self.selectedPlayers[0].message.lower()
+            p1 = self.selectedPlayers[1].message.lower()
+            p2 = self.selectedPlayers[2].message.lower()
+            p3 = self.selectedPlayers[3].message.lower()
+            players = shelve.open('playerdb')
+            match1 = [(players[p0], players[p1]), (players[p2], players[p3])]
+            match2 = [(players[p0], players[p2]), (players[p1], players[p3])]
+            match3 = [(players[p0], players[p3]), (players[p1], players[p2])]
+            q1 = trueskill.quality(match1)
+            q2 = trueskill.quality(match2)
+            q3 = trueskill.quality(match3)
+            match = None
+            if q1 > q2 and q1 > q3:
+                self.selectedPlayers[0].setText(capwords(p0))
+                self.selectedPlayers[1].setText(capwords(p1))
+                self.selectedPlayers[2].setText(capwords(p2))
+                self.selectedPlayers[3].setText(capwords(p3))
+            elif q2 > q3:
+                self.selectedPlayers[0].setText(capwords(p0))
+                self.selectedPlayers[1].setText(capwords(p2))
+                self.selectedPlayers[2].setText(capwords(p1))
+                self.selectedPlayers[3].setText(capwords(p3))
+            else:
+                self.selectedPlayers[0].setText(capwords(p0))
+                self.selectedPlayers[1].setText(capwords(p3))
+                self.selectedPlayers[2].setText(capwords(p1))
+                self.selectedPlayers[3].setText(capwords(p2))
+            players.close()
+        self.updateOdds()
+            
+            
+            
         
 
 
