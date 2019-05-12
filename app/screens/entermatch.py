@@ -33,7 +33,8 @@ class ScreenEnterMatch(LcarsScreen):
 
         # large interface buttons
         all_sprites.add(LcarsButton2(colours.RED_BROWN, (4, 708), (140,40), "Back",       self.backHandler), layer=1)
-        all_sprites.add(LcarsButton2(colours.ORANGE, (928, 528), (92, 60), "Start Match", self.startHandler), layer=1)
+        self.startMatchButton = LcarsButton2(colours.ORANGE, (928, 528), (92, 60), "Start Match", self.startHandler)
+        all_sprites.add(self.startMatchButton, layer=1)
         all_sprites.add(LcarsButton2(colours.BEIGE, (64,348), (40,32), "Auto", self.swapHandler))
 
         # the small buttons for rearranging players:
@@ -99,6 +100,7 @@ class ScreenEnterMatch(LcarsScreen):
         self.currentFocus = 0
             
         self.searchString = ""
+        self.validate()
         
         
     def update(self, screenSurface, fpsClock):
@@ -107,6 +109,32 @@ class ScreenEnterMatch(LcarsScreen):
         #    self.lastClockUpdate = pygame.time.get_ticks()
         LcarsScreen.update(self, screenSurface, fpsClock)
 
+
+    def validate(self):
+        p0 = self.selectedPlayers[0].message.lower()
+        p1 = self.selectedPlayers[1].message.lower()
+        p2 = self.selectedPlayers[2].message.lower()
+        p3 = self.selectedPlayers[3].message.lower()
+        team1 = set() # makes unique
+        team2 = set()
+        if p0 != '':
+            team1.add(p0)
+        if p1 != '':
+            team1.add(p1)
+        if p2 != '':
+            team2.add(p2)
+        if p3 != '':
+            team2.add(p3)
+        if ( len(team1) == len(team2) and
+             len(team1) >= 1 and
+             len(team1) <= 2 and
+             len(team1.intersection(team2)) == 0):
+
+            self.startMatchButton.setEnabled(True)
+        else:
+            self.startMatchButton.setEnabled(False)
+    
+        
     def handleEvents(self, event, fpsClock):
         if event.type == pygame.MOUSEBUTTONDOWN:
             #self.beep1.play()
@@ -138,7 +166,9 @@ class ScreenEnterMatch(LcarsScreen):
         if p3 in players:
             team2.append(players[p3])
         players.close()
-        p = win_probability(team1, team2)
+        p = 0.5
+        if len(team1) > 0 and len(team2) > 0:
+            p = win_probability(team1, team2)
         print("win probability: {}%".format(p*100))
         
         ratios = [
@@ -192,6 +222,7 @@ class ScreenEnterMatch(LcarsScreen):
             for i in range(4):
                 self.inputfocus[i].setTransparent(i!=self.currentFocus)
             self.updateOdds()
+            self.validate()
             
             
         
@@ -258,7 +289,8 @@ class ScreenEnterMatch(LcarsScreen):
         self.loadScreen(ScreenMain())
                         
     def startHandler(self, item, event, clock):
-        pass
+        print("starting match")
+        
 
     def swapHandler(self, item, event, clock):
         print("swapping "+item.text)
@@ -267,6 +299,7 @@ class ScreenEnterMatch(LcarsScreen):
             self.selectedPlayers[1].setText('')
             self.selectedPlayers[2].setText('')
             self.selectedPlayers[3].setText('')
+            self.validate()
         if item.text == 'rotateright':
             tmp = self.selectedPlayers[0].message
             self.selectedPlayers[0].setText(self.selectedPlayers[1].message)
@@ -301,7 +334,11 @@ class ScreenEnterMatch(LcarsScreen):
             p1 = self.selectedPlayers[1].message.lower()
             p2 = self.selectedPlayers[2].message.lower()
             p3 = self.selectedPlayers[3].message.lower()
+
             players = shelve.open('playerdb')
+            if p0 not in players or p1 not in players or p2 not in players or p3 not in players:
+                # nothing to do
+                return
             match1 = [(players[p0], players[p1]), (players[p2], players[p3])]
             match2 = [(players[p0], players[p2]), (players[p1], players[p3])]
             match3 = [(players[p0], players[p3]), (players[p1], players[p2])]

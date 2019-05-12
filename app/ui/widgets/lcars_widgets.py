@@ -255,8 +255,10 @@ class LcarsButton(LcarsWidget):
         self.image = pygame.Surface(size)
         self.normalcolour = colour
         self.highlightcolour = colours.WHITE
+        self.disabledcolour = (127,127,127)
         self.highlighted = False
         self.text = text
+        self.enabled = True
         self.glyph = glyph
         self.glyphoffset = glyphoffset
 
@@ -270,6 +272,10 @@ class LcarsButton(LcarsWidget):
         self.text = text
         self.rerender()
 
+    def setEnabled(self, enabled):
+        self.enabled = enabled
+        self.rerender()
+
     def setColor(self, colour, highlightcolour=colours.WHITE):
         self.normalcolour = colour
         self.highlightcolour = highlightcolour
@@ -277,7 +283,13 @@ class LcarsButton(LcarsWidget):
         
     def rerender(self):
         # just re-render
-        self.image.fill(self.highlightcolour if self.highlighted else self.normalcolour)
+        if not self.enabled:
+            self.image.fill(self.disabledcolour)
+        elif self.highlighted:
+            self.image.fill(self.highlightcolour)
+        else:
+            self.image.fill(self.normalcolour)
+            
         if self.glyph:
             glyphimage = pygame.image.load("assets/"+self.text+".png")
             x = int(self.image.get_rect().width/2 - glyphimage.get_rect().width/2 + self.glyphoffset[0])
@@ -293,6 +305,8 @@ class LcarsButton(LcarsWidget):
                              self.image.get_rect().height - textImage.get_rect().height - 5))
 
     def handleEvent(self, event, clock):
+        if not self.enabled:
+            return True
         if (event.type == MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos) and self.visible == True):
             self.highlighted = True
             self.beep.play()
