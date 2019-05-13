@@ -295,7 +295,21 @@ class ScreenEnterMatch(LcarsScreen):
                         
     def startHandler(self, item, event, clock):
         from screens.enteroutcome import ScreenEnterOutcome
-        self.loadScreen(ScreenEnterOutcome())
+        p0 = self.selectedPlayers[0].message.lower()
+        p1 = self.selectedPlayers[1].message.lower()
+        p2 = self.selectedPlayers[2].message.lower()
+        p3 = self.selectedPlayers[3].message.lower()
+        team1 = set() 
+        team2 = set()
+        if p0 != '':
+            team1.add(p0)
+        if p1 != '':
+            team1.add(p1)
+        if p2 != '':
+            team2.add(p2)
+        if p3 != '':
+            team2.add(p3)
+        self.loadScreen(ScreenEnterOutcome(team1, team2))
         print("starting match")
         
 
