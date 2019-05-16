@@ -27,8 +27,18 @@ def win_probability(team1, team2):
 
 
 class ScreenEnterMatch(LcarsScreen):
+
+
     def setup(self, all_sprites):
 
+        # load the most recently used player layout
+        prefill = shelve.open('latestmatch')
+        for i in range(4):
+            if str(i) not in prefill:
+                prefill[str(i)] = ''
+        prefill.close()
+        
+        
         # background image
         all_sprites.add(LcarsBackgroundImage("assets/bg_match.png"), layer=0)
 
@@ -69,19 +79,21 @@ class ScreenEnterMatch(LcarsScreen):
         # placeholders for names:
         self.matchedNames = []
         for i in range(6):
-            newbutton = LcarsButton2((127,127,127), (52, 200-36*i), (188, 32), "", handler=partial(self.playerClicked, i))
+            newbutton = LcarsButton2((127,127,127), (52, 200-36*i), (188, 32), '', handler=partial(self.playerClicked, i))
             newbutton.addPlayer = False
             self.matchedNames.append(newbutton)
             all_sprites.add(newbutton)
 
 
         # texts for selected players
+        prefill = shelve.open('latestmatch')
         self.selectedPlayers = [
-            LcarsText(colours.BLACK, (768-484-32+4, 216+4), "", 20/19),
-            LcarsText(colours.BLACK, (768-412-32+4, 216+4), "", 20/19),
-            LcarsText(colours.BLACK, (768-484-32+4, 600+4), "", 20/19),
-            LcarsText(colours.BLACK, (768-412-32+4, 600+4), "", 20/19)
+            LcarsText(colours.BLACK, (768-484-32+4, 216+4), capwords(prefill['0']), 20/19),
+            LcarsText(colours.BLACK, (768-412-32+4, 216+4), capwords(prefill['1']), 20/19),
+            LcarsText(colours.BLACK, (768-484-32+4, 600+4), capwords(prefill['2']), 20/19),
+            LcarsText(colours.BLACK, (768-412-32+4, 600+4), capwords(prefill['3']), 20/19)
         ]
+        prefill.close()
         all_sprites.add(self.selectedPlayers[0], layer=1)
         all_sprites.add(self.selectedPlayers[1], layer=1)
         all_sprites.add(self.selectedPlayers[2], layer=1)
@@ -219,6 +231,12 @@ class ScreenEnterMatch(LcarsScreen):
         else:
             print("choosing")
             self.selectedPlayers[self.currentFocus].setText(item.text)
+            # save in shelve
+            prefill = shelve.open('latestmatch')
+            prefill[str(self.currentFocus)] = item.text
+            prefill.close()
+
+            # rotate focus
             self.currentFocus = (self.currentFocus + 1) % 4
             for i in range(4):
                 self.inputfocus[i].setTransparent(i!=self.currentFocus)
@@ -299,16 +317,17 @@ class ScreenEnterMatch(LcarsScreen):
         p1 = self.selectedPlayers[1].message.lower()
         p2 = self.selectedPlayers[2].message.lower()
         p3 = self.selectedPlayers[3].message.lower()
-        team1 = set() 
-        team2 = set()
+        team1 = []
+        team2 = []
+        # because of the input validator it is already impossible that there are 2 identical players
         if p0 != '':
-            team1.add(p0)
+            team1.append(p0)
         if p1 != '':
-            team1.add(p1)
+            team1.append(p1)
         if p2 != '':
-            team2.add(p2)
+            team2.append(p2)
         if p3 != '':
-            team2.add(p3)
+            team2.append(p3)
         self.loadScreen(ScreenEnterOutcome(team1, team2))
         print("starting match")
         
@@ -383,7 +402,16 @@ class ScreenEnterMatch(LcarsScreen):
                 self.selectedPlayers[2].setText(capwords(p1))
                 self.selectedPlayers[3].setText(capwords(p2))
             players.close()
+            
         self.updateOdds()
+        # remember player arrangement
+        prefill = shelve.open('latestmatch')
+        prefill['0'] = self.selectedPlayers[0].message.lower()
+        prefill['1'] = self.selectedPlayers[1].message.lower()
+        prefill['2'] = self.selectedPlayers[2].message.lower()
+        prefill['3'] = self.selectedPlayers[3].message.lower()
+        prefill.close()
+        
             
             
             
