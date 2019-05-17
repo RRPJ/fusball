@@ -29,17 +29,17 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="1.4142136"
-     inkscape:cx="700.54079"
-     inkscape:cy="126.7312"
+     inkscape:zoom="0.50000001"
+     inkscape:cx="232.08629"
+     inkscape:cy="317.91383"
      inkscape:document-units="px"
-     inkscape:current-layer="layer1"
+     inkscape:current-layer="layer4"
      showgrid="true"
      units="px"
      inkscape:snap-bbox="true"
      inkscape:bbox-nodes="true"
      inkscape:snap-page="false"
-     inkscape:window-width="1522"
+     inkscape:window-width="1509"
      inkscape:window-height="1049"
      inkscape:window-x="1920"
      inkscape:window-y="17"
@@ -319,17 +319,16 @@
      inkscape:label="static components"
      style="display:inline;opacity:1">
     <text
-       transform="translate(0,-93.799985)"
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444447px;line-height:7.25;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';letter-spacing:0px;word-spacing:0px;display:inline;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.26458335"
-       x="216.59421"
-       y="113.10781"
+       x="214.70663"
+       y="18.959042"
        id="text850"><tspan
          sodipodi:role="line"
          id="tspan848"
-         x="216.59421"
-         y="113.10781"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444447px;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';fill:#ffffff;fill-opacity:1;stroke-width:0.26458335">lcars kickers access    -    screen 037</tspan></text>
+         x="214.70663"
+         y="18.959042"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444447px;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';fill:#ffffff;fill-opacity:1;stroke-width:0.26458335">lcars database access    -    screen 037</tspan></text>
     <path
        transform="translate(0,-93.799985)"
        style="display:inline;opacity:1;fill:#9bbde4;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
@@ -832,7 +831,7 @@
      inkscape:groupmode="layer"
      id="layer1"
      transform="translate(0,-93.799984)"
-     style="display:inline;opacity:1">
+     style="display:none;opacity:1">
     <rect
        style="display:inline;opacity:1;fill:#cd6666;fill-opacity:0.99578091;fill-rule:evenodd;stroke:none;stroke-width:0.8954367;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        id="rect896"
@@ -1028,7 +1027,7 @@
          sodipodi:nodetypes="ccccccccc" />
       <path
          id="path6755-5-53-3"
-         style="display:inline;opacity:1;fill:none;stroke:#000000;stroke-width:0.79400001;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         style="display:inline;opacity:1;fill:none;stroke:#000000;stroke-width:0.79400003;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
          d="M 245.53334,261.54584 243.41668,263.66251 M 243.41668,263.66251 245.53334,265.77917 M 247.65002,261.54584 249.76669,263.6625 247.65002,265.77917 M 243.41668,263.66251 249.76669,263.6625"
          inkscape:connector-curvature="0"
          sodipodi:nodetypes="ccccccccc"

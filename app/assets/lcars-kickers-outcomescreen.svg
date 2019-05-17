@@ -29,21 +29,21 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="0.7071068"
-     inkscape:cx="212.65436"
-     inkscape:cy="29.979041"
+     inkscape:zoom="1.4142136"
+     inkscape:cx="671.3626"
+     inkscape:cy="715.0967"
      inkscape:document-units="px"
-     inkscape:current-layer="layer1"
+     inkscape:current-layer="layer4"
      showgrid="true"
      units="px"
      inkscape:snap-bbox="true"
      inkscape:bbox-nodes="true"
      inkscape:snap-page="false"
-     inkscape:window-width="1920"
-     inkscape:window-height="1043"
-     inkscape:window-x="0"
-     inkscape:window-y="18"
-     inkscape:window-maximized="0"
+     inkscape:window-width="1509"
+     inkscape:window-height="1049"
+     inkscape:window-x="1920"
+     inkscape:window-y="17"
+     inkscape:window-maximized="1"
      showguides="false"
      inkscape:guide-bbox="true"
      inkscape:snap-global="true"
@@ -319,17 +319,16 @@
      inkscape:label="static components"
      style="display:inline;opacity:1">
     <text
-       transform="translate(0,-93.799985)"
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444447px;line-height:7.25;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';letter-spacing:0px;word-spacing:0px;display:inline;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.26458335"
-       x="216.59421"
-       y="113.10781"
+       x="215.16414"
+       y="20.017376"
        id="text850"><tspan
          sodipodi:role="line"
          id="tspan848"
-         x="216.59421"
-         y="113.10781"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444447px;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';fill:#ffffff;fill-opacity:1;stroke-width:0.26458335">lcars kickers access    -    screen 021</tspan></text>
+         x="215.16414"
+         y="20.017376"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444447px;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';fill:#ffffff;fill-opacity:1;stroke-width:0.26458335">lcars database access    -    screen 021</tspan></text>
     <path
        transform="translate(0,-93.799985)"
        style="display:inline;opacity:1;fill:#9bbde4;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:1;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
@@ -491,7 +490,7 @@
          id="tspan3616"
          x="106.89168"
          y="175.85973"
-         style="stroke-width:0.26458335"></tspan></text>
+         style="stroke-width:0.26458335" /></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.05555534px;line-height:7.25;font-family:Quicksand;-inkscape-font-specification:Quicksand;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458335"
@@ -502,7 +501,7 @@
          id="tspan3668"
          x="115.35835"
          y="168.45139"
-         style="stroke-width:0.26458335"></tspan></text>
+         style="stroke-width:0.26458335" /></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.05555534px;line-height:7.25;font-family:Quicksand;-inkscape-font-specification:Quicksand;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458335"
@@ -513,7 +512,7 @@
          id="tspan3716"
          x="146.05"
          y="176.91806"
-         style="stroke-width:0.26458335"></tspan></text>
+         style="stroke-width:0.26458335" /></text>
     <rect
        transform="translate(0,-93.799985)"
        style="display:inline;opacity:1;fill:#9bbde4;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:0.97244751;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
