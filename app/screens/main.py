@@ -36,56 +36,42 @@ class ScreenMain(LcarsScreen):
         # background image
         all_sprites.add(LcarsBackgroundImage("assets/bg_main.png"), layer=0)
 
+        
+        self.title = LcarsTitle(colours.WHITE, (768-560-32, 268), 260, "")
+        all_sprites.add(self.title)
+        
         # interface buttons
         all_sprites.add(LcarsButton2(colours.RED_BROWN, (4, 708), (140,40), "Power",       self.powerHandler), layer=1)
         all_sprites.add(LcarsButton2(colours.RED_BROWN, (4, 192), (140,80), "Enter Match", self.enterMatchHandler, ), layer=1)
         all_sprites.add(LcarsButton2(colours.PURPLE   , (4, 144), (140,44), "System Log",  self.logHandler), layer=1)
-        all_sprites.add(LcarsButton2(colours.RED_BROWN, (4, 92), (140,48),  "Ranking",     ), layer=1)
+        #all_sprites.add(LcarsButton2(colours.RED_BROWN, (4, 92), (140,48),  "Ranking"     ), layer=1)
+        all_sprites.add(LcarsText((0,0,0), (647,89), "Ranking", 20/19), layer=5)
         all_sprites.add(LcarsButton2(colours.ORANGE   , (4, 40), (140,48),  "About",       self.aboutHandler), layer=1)
-        all_sprites.add(LcarsButton2(colours.BLUE     , (320, 92), (156,48), "View All",   self.allRankingHandler), layer=1)
+        all_sprites.add(LcarsButton2(colours.BLUE     , (336, 92), (140,48), "Next",       self.nextHandler), layer=1)
+        all_sprites.add(LcarsButton2(colours.BLUE     , (192, 92), (140,48), "Prev",       self.prevHandler), layer=1)
 
-
-        players = shelve.open('playerdb')
-        ranked = sorted(players.items(), key=lambda kv:trueskill.expose(kv[1]), reverse=True)
-        # user buttons:
-        colorindex = 0
-        prevrank = ""
+        self.namebuttons = []
+        self.ranklabels = []
+        self.levellabels = []
+        self.skilllabels = []
+        colour = (0,0,0)
         for i in range(10):
-            # name field
-            if i < len(ranked):
-                name,rating = ranked[i]
-                rank = findRank(players, name)
-            else:
-                name = ''
-                rating = trueskill.Rating()
-                rank = '-'
-                
-            print("player: {}".format(name))
-            print("rank: {}".format(rank))
-            if rank != prevrank:
-                colorindex = (colorindex + 1) % 4
-                prevrank = rank
-            print("color index: {}".format(colorindex))
-
-            colour = [colours.BLUE, colours.PEACH, colours.BEIGE, colours.WHITE][colorindex]
-            
-            # rank number
-            all_sprites.add(LcarsText((0,0,0), (245+36*i, 300), str(rank), 20/19))
+            # label and rounded stub for rank
+            self.ranklabels.append(LcarsRoundStub(colour, (240+36*i, 264), ""))
+            all_sprites.add(self.ranklabels[-1])
             # player name
-            all_sprites.add(LcarsButton2(colour, (316, 496-36*i), (188,32), capwords(name), partial(self.playerClickedHandler, name)))
+            self.namebuttons.append(LcarsButton2(colour, (316, 496-36*i), (188,32), '', None))
+            all_sprites.add(self.namebuttons[-1])
             # player level
-            level = str(round(trueskill.expose(rating))) if i < len(ranked) else ''
-            all_sprites.add(LcarsButton2(colour, (508, 496-36*i), (68,32), level, partial(self.playerClickedHandler, name)))
+            self.levellabels.append(LcarsButton2(colour, (508, 496-36*i), (68,32), '', None))
+            all_sprites.add(self.levellabels[-1])
             # sigma field
-            #colour = random.choice([colours.PEACH, colours.BEIGE, colours.WHITE, colours.BLUE])
-            skill = "{:.2f}/{:.2f}".format(rating.mu, rating.sigma) if i < len(ranked) else ''
-            all_sprites.add(LcarsButton2(colour, (580, 496-36*i), (92,32), skill, partial(self.playerClickedHandler, name)))
+            self.skilllabels.append(LcarsButton2(colour, (580, 496-36*i), (92,32), '', None))
+            all_sprites.add(self.skilllabels[-1])
 
-        players.close()
         
-        # rank numbers:
-        #for i in range(3):
-
+        self.page = 0
+        self.updateRanking()
         
         #self.ip_address = LcarsText(colours.BLACK, (444, 520), get_ip_address_string())
         #all_sprites.add(self.ip_address, layer=1)
@@ -98,6 +84,51 @@ class ScreenMain(LcarsScreen):
         self.beep1 = Sound("assets/audio/panel/201.wav")
         Sound("assets/audio/panel/220.wav").play()
 
+
+    def updateRanking(self):
+        if self.page == 0:
+            self.title.setText("TOP 10")
+        else:
+            self.title.setText("TOP {}-{}".format(self.page*10, self.page*10+9))
+            
+        players = shelve.open('playerdb')
+        ranked = sorted(players.items(), key=lambda kv:trueskill.expose(kv[1]), reverse=True)
+        # user buttons:
+        colorindex = 0
+        prevrank = ""
+        for i in range(self.page*10, (self.page + 1) * 10):
+            # name field
+            if i < len(ranked):
+                name,rating = ranked[i]
+                rank = findRank(players, name)
+            else:
+                name = ''
+                rating = trueskill.Rating()
+                rank = '-'
+                
+            if rank != prevrank:
+                colorindex = (colorindex + 1) % 4
+                prevrank = rank
+        
+            colour = [colours.BLUE, colours.PEACH, colours.BEIGE, colours.WHITE][colorindex]
+
+            self.ranklabels[i % 10].setText(rank)
+            self.ranklabels[i % 10].setColour(colour)
+            
+            self.namebuttons[i % 10].setText(capwords(name))
+            self.namebuttons[i % 10].setColor(colour)
+
+            level = str(round(trueskill.expose(rating))) if i < len(ranked) else ''
+            self.levellabels[i % 10].setText(level)
+            self.levellabels[i % 10].setColor(colour)
+
+            skill = "{:.2f}/{:.2f}".format(rating.mu, rating.sigma) if i < len(ranked) else ''
+            self.skilllabels[i % 10].setText(skill)
+            self.skilllabels[i % 10].setColor(colour)
+
+        players.close()
+        
+        
     def update(self, screenSurface, fpsClock):
         if pygame.time.get_ticks() - self.lastClockUpdate > 1000:
             self.stardate.setText(datetime.now().strftime("%d%m.%y %H:%M:%S"))
@@ -121,6 +152,14 @@ class ScreenMain(LcarsScreen):
             sprite.visible = True
 
 
+    def nextHandler(self, item, event, clock):
+        self.page += 1
+        self.updateRanking()
+
+    def prevHandler(self, item, event, clock):
+        if self.page > 0:
+            self.page -= 1
+            self.updateRanking()
 
 
     def playerClickedHandler(self, number, item, event, clock):
@@ -128,6 +167,8 @@ class ScreenMain(LcarsScreen):
         
     def powerHandler(self, item, event, clock):
         pass
+        #pygame.image.save(item.image, "/home/kickers/screenshot.png")
+
 
     def enterMatchHandler(self, item, event, clock):
         from screens.entermatch import ScreenEnterMatch

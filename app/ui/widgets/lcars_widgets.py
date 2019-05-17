@@ -248,6 +248,26 @@ class LcarsInputFocus(LcarsWidget):
     def handleEvent(self, event, clock):
         return LcarsWidget.handleEvent(self, event, clock)
         
+class LcarsTitle(LcarsWidget):
+    def __init__(self, colour, pos, width, text):
+        self.colour = colour
+        self.pos = pos
+        self.size = (width, 32)
+        self.text = text
+
+        self.render()
+        LcarsWidget.__init__(self, colour, pos, self.size, None)
+        
+    def setText(self, text):
+        self.text=text
+        self.render()
+
+    def render(self):
+        self.image = pygame.Surface(self.size)
+        font = Font("assets/swiss911.ttf", 42)
+        textImage = font.render(self.text, True, self.colour)
+        self.image.blit(textImage, (0,-8))
+        pygame.draw.rect(self.image, self.colour, pygame.Rect(textImage.get_rect().width+4, 0, self.size[0], 32))
         
 
 class LcarsButton(LcarsWidget):
@@ -332,13 +352,46 @@ class LcarsButton2(LcarsButton):
         LcarsButton.__init__(self, colour, (y, x), size, text, handler, glyph, glyphoffset)
 
 
+class LcarsRoundStub(LcarsWidget):
+    def __init__(self, colour, pos, text):
+        self.colour = colour
+        self.text = text
+        self.pos = pos
+        self.render()
+        # align text right
+        #pos = (pos[0], pos[1] - self.image.get_rect().width)
+        LcarsWidget.__init__(self, colour, pos, None, handler=None)
+
+    def setText(self, text):
+        self.text = text
+        self.render()
+
+    def setColour(self, colour):
+        self.colour = colour
+        self.render()
+
+    def render(self):
+        # prep image
+        self.image = pygame.Surface((48, 32)).convert_alpha()
+        # draw background
+        pygame.draw.circle(self.image, self.colour, (16,16), 16)
+        pygame.draw.rect(self.image, self.colour, pygame.Rect(16, 0, 48-16, 32))
+        # add text
+        font = Font("assets/swiss911.ttf", 20)
+        textImage = font.render(self.text, True, (0,0,0))
+        self.image.blit(textImage, 
+                        (self.image.get_rect().width  - textImage.get_rect().width  - 5,
+                         self.image.get_rect().height - textImage.get_rect().height - 5))
+
+        
         
 class LcarsText(LcarsWidget):
     """Text that can be placed anywhere"""
 
-    def __init__(self, colour, pos, message, size=1.0, background=None, handler=None, otherfont=False):
+    def __init__(self, colour, pos, message, size=1.0, background=None, handler=None, otherfont=False, alignright=False):
         self.colour = colour
         self.background = background
+        self.alignright = alignright
         self.message = message
         if otherfont:
             self.font = Font("assets/swiss2.ttf", int(19.0 * size))
@@ -349,6 +402,8 @@ class LcarsText(LcarsWidget):
         # center the text if needed 
         if (pos[1] < 0):
             pos = (pos[0], 400 - self.image.get_rect().width / 2)
+        if alignright:
+            pos = (pos[0], pos[1] - self.image.get_rect().width)
             
         LcarsWidget.__init__(self, colour, pos, None, handler)
 
