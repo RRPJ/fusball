@@ -5,8 +5,30 @@ from ui.widgets.background import LcarsBackgroundImage, LcarsImage
 from ui.widgets.gifimage import LcarsGifImage
 from ui.widgets.lcars_widgets import *
 from ui.widgets.screen import LcarsScreen
+from string import capwords
+import shelve
+import trueskill
+import math
 
 from datasources.network import get_ip_address_string
+
+
+def findRank(players, player):
+    ranked = sorted(players.items(), key=lambda kv:trueskill.expose(kv[1]), reverse=True)
+    minindex = len(ranked)
+    maxindex = 0
+    i = 1
+    for name,skill in ranked:
+        if round(trueskill.expose(players[player])) == round(trueskill.expose(skill)): # since we only display rounded skill it is only fair to group by whole numbers
+            minindex = min(minindex, i)
+            maxindex = max(maxindex, i)
+        i += 1
+    if minindex==maxindex:
+        return "{}".format(minindex)
+    else:
+        return "{}-{}".format(minindex,maxindex)
+        
+
 
 
 class ScreenMain(LcarsScreen):
@@ -23,20 +45,47 @@ class ScreenMain(LcarsScreen):
         all_sprites.add(LcarsButton2(colours.BLUE     , (320, 92), (156,48), "View All",   self.allRankingHandler), layer=1)
 
 
+        players = shelve.open('playerdb')
+        ranked = sorted(players.items(), key=lambda kv:trueskill.expose(kv[1]), reverse=True)
         # user buttons:
+        colorindex = 0
+        prevrank = ""
         for i in range(10):
             # name field
-            colour = colours.RED_BROWN if i==0 else colours.GREY_BLUE
-            all_sprites.add(LcarsButton2(colour, (316, 496-36*i), (188,32), "Player name", partial(self.playerClickedHandler, i)))
-            # mu field
-            all_sprites.add(LcarsButton2(colour, (508, 496-36*i), (68,32), "sig", partial(self.playerClickedHandler, i)))
-            # sigma field
-            colour = random.choice([colours.PEACH, colours.BEIGE, colours.WHITE, colours.BLUE])
-            all_sprites.add(LcarsButton2(colour, (580, 496-36*i), (92,32), "mu", partial(self.playerClickedHandler, i)))
+            if i < len(ranked):
+                name,rating = ranked[i]
+                rank = findRank(players, name)
+            else:
+                name = ''
+                rating = trueskill.Rating()
+                rank = '-'
+                
+            print("player: {}".format(name))
+            print("rank: {}".format(rank))
+            if rank != prevrank:
+                colorindex = (colorindex + 1) % 4
+                prevrank = rank
+            print("color index: {}".format(colorindex))
 
+            colour = [colours.BLUE, colours.PEACH, colours.BEIGE, colours.WHITE][colorindex]
+            
+            # rank number
+            all_sprites.add(LcarsText((0,0,0), (245+36*i, 300), str(rank), 20/19))
+            # player name
+            all_sprites.add(LcarsButton2(colour, (316, 496-36*i), (188,32), capwords(name), partial(self.playerClickedHandler, name)))
+            # player level
+            level = str(round(trueskill.expose(rating))) if i < len(ranked) else ''
+            all_sprites.add(LcarsButton2(colour, (508, 496-36*i), (68,32), level, partial(self.playerClickedHandler, name)))
+            # sigma field
+            #colour = random.choice([colours.PEACH, colours.BEIGE, colours.WHITE, colours.BLUE])
+            skill = "{:.2f}/{:.2f}".format(rating.mu, rating.sigma) if i < len(ranked) else ''
+            all_sprites.add(LcarsButton2(colour, (580, 496-36*i), (92,32), skill, partial(self.playerClickedHandler, name)))
+
+        players.close()
+        
         # rank numbers:
-        for i in range(3):
-            all_sprites.add(LcarsText((0,0,0), (245+36*i, 300), str(i+1), 20/19))
+        #for i in range(3):
+
         
         #self.ip_address = LcarsText(colours.BLACK, (444, 520), get_ip_address_string())
         #all_sprites.add(self.ip_address, layer=1)
