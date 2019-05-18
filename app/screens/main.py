@@ -9,6 +9,7 @@ from string import capwords
 import shelve
 import trueskill
 import math
+import subprocess
 
 from datasources.network import get_ip_address_string
 
@@ -166,7 +167,8 @@ class ScreenMain(LcarsScreen):
         print("player {} clicked".format(number))
         
     def powerHandler(self, item, event, clock):
-        pass
+        subprocess.run(['sudo','systemctl','suspend'])
+        
         #pygame.image.save(item.image, "/home/kickers/screenshot.png")
 
 
