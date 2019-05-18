@@ -17,7 +17,7 @@
    id="svg8"
    inkscape:version="0.92.4 5da689c313, 2019-01-14"
    sodipodi:docname="lcars-kickers-log.svg"
-   inkscape:export-filename="/home/themba/synced/lcars_kickers/app/assets/bg_power.png"
+   inkscape:export-filename="/home/themba/synced/lcars_kickers/app/assets/bg_log.png"
    inkscape:export-xdpi="96"
    inkscape:export-ydpi="96">
   <defs
@@ -449,7 +449,7 @@
      inkscape:groupmode="layer"
      id="layer1"
      transform="translate(0,-93.799984)"
-     style="display:inline">
+     style="display:none">
     <path
        style="opacity:1;fill:#c46161;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:0.83130014;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        d="M 307.97501,221.85831 H 357.71669 V 230.32498 L 307.97501,230.32497 Z"
