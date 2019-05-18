@@ -8,6 +8,7 @@ from functools import partial
 from pprint import pprint
 import math
 import trueskill
+import time
 
 def pos(x,y):
     return (768-y-32+4, x+4)
@@ -169,6 +170,27 @@ class ScreenEnterOutcome(LcarsScreen):
         ranks = [1,1]
         ranks[self.winningteam] = 0
         newratings = trueskill.rate([tuple((players[x] for x in self.team1)), tuple((players[x] for x in self.team2))], ranks=ranks)
+
+        with open('logfile.log', 'a') as log:
+            log.write("{}: match played between {} and {}\n".format(time.strftime("%Y-%m-%d %H:%M:%S"), self.team1, self.team2))
+            log.write("                   : won by {}\n".format([self.team1, self.team2][self.winningteam]))
+            log.write("                   : skill before: {}: {}/{}\n".format(self.team1[0], players[self.team1[0]].mu, players[self.team1[0]].sigma))
+            log.write("                   : skill before: {}: {}/{}\n".format(self.team2[0], players[self.team2[0]].mu, players[self.team2[0]].sigma))
+            if len(self.team1)>=2:
+                log.write("                   : skill before: {}: {}/{}\n".format(self.team1[1], players[self.team1[1]].mu, players[self.team1[1]].sigma))
+            if len(self.team2)>=2:
+                log.write("                   : skill before: {}: {}/{}\n".format(self.team2[1], players[self.team2[1]].mu, players[self.team2[1]].sigma))
+
+            log.write("                   : skill eafter: {}: {}/{}\n".format(self.team1[0], newratings[0][0].mu, newratings[0][0].sigma))
+            log.write("                   : skill eafter: {}: {}/{}\n".format(self.team2[0], newratings[1][0].mu, newratings[1][0].sigma))
+            if len(self.team1)>=2:
+                log.write("                   : skill eafter: {}: {}/{}\n".format(self.team1[1], newratings[0][1].mu, newratings[0][1].sigma))
+            if len(self.team2)>=2:
+                log.write("                   : skill eafter: {}: {}/{}\n".format(self.team2[1], newratings[1][1].mu, newratings[1][1].sigma))
+            
+            
+
+        
         players[self.team1[0]] = newratings[0][0]
         players[self.team2[0]] = newratings[1][0]
         if len(self.team1) >= 2:
@@ -176,8 +198,11 @@ class ScreenEnterOutcome(LcarsScreen):
         if len(self.team2) >= 2:
             players[self.team2[1]] = newratings[1][1]
         
-        players.close()
 
+
+        
+            
+        players.close()        
         # return to match screen:
         from screens.entermatch import ScreenEnterMatch
         self.loadScreen(ScreenEnterMatch())

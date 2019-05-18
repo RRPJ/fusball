@@ -167,7 +167,10 @@ class ScreenMain(LcarsScreen):
         print("player {} clicked".format(number))
         
     def powerHandler(self, item, event, clock):
-        subprocess.run(['sudo','systemctl','suspend'])
+        from screens.power import ScreenPower
+        self.loadScreen(ScreenPower())
+
+        #
         
         #pygame.image.save(item.image, "/home/kickers/screenshot.png")
 
@@ -177,7 +180,9 @@ class ScreenMain(LcarsScreen):
         self.loadScreen(ScreenEnterMatch())
 
     def logHandler(self, item, event, clock):
-        pass
+        from screens.log import ScreenLog
+        self.loadScreen(ScreenLog())
+
 
     def allRankingHandler(self, item, event, clock):
         pass

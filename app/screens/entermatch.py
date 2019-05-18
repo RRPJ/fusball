@@ -13,6 +13,7 @@ import trueskill
 import math
 import re
 import itertools
+import time
 
 # source: https://github.com/sublee/trueskill/issues/1#issuecomment-149762508
 def win_probability(team1, team2):
@@ -224,6 +225,8 @@ class ScreenEnterMatch(LcarsScreen):
         print("player {} clicked: {}".format(index, item.text))
         if item.addPlayer:
             print("adding")
+            with open('logfile.log', 'a') as log:
+                log.write("{}: new player created '{}'\n".format(time.strftime("%Y-%m-%d %H:%M:%S"), self.searchString))
             players = shelve.open("playerdb")
             players[self.searchString] = trueskill.Rating()
             players.close()
