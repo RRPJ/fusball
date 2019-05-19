@@ -188,7 +188,8 @@ class ScreenMain(LcarsScreen):
         pass
 
     def aboutHandler(self, item, event, clock):
-        pass
+        from screens.about import ScreenAbout
+        self.loadScreen(ScreenAbout())
 
     
     def gaugesHandler(self, item, event, clock):
