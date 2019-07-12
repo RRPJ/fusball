@@ -237,6 +237,7 @@ class ScreenEnterMatch(LcarsScreen):
         self.placeholder.visible = True
         self.searchText.renderText(capwords("", " "))
         self.carret.rect.left = 284
+        self.updatePlayerSelection()
 
     def playerClicked(self, index, item, event, clock):
         print("player {} clicked: {}".format(index, item.text))
@@ -252,9 +253,6 @@ class ScreenEnterMatch(LcarsScreen):
         else:
             print("choosing")
 
-            # clear player input field after clicking player
-            self.resetPlayerInput()
-
             self.selectedPlayers[self.currentFocus].setText(item.text)
             # save in shelve
             prefill = shelve.open('latestmatch')
@@ -267,6 +265,9 @@ class ScreenEnterMatch(LcarsScreen):
                 self.inputfocus[i].setTransparent(i != self.currentFocus)
             self.updateOdds()
             self.validate()
+
+            # clear player input field after clicking player
+            self.resetPlayerInput()
 
     def updatePlayerSelection(self):
         players = shelve.open('playerdb')
