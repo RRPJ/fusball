@@ -15,6 +15,7 @@ import re
 import itertools
 import time
 
+
 # source: https://github.com/sublee/trueskill/issues/1#issuecomment-149762508
 def win_probability(team1, team2):
     delta_mu = sum(r.mu for r in team1) - sum(r.mu for r in team2)
@@ -25,10 +26,7 @@ def win_probability(team1, team2):
     return ts.cdf(delta_mu / denom)
 
 
-
-
 class ScreenEnterMatch(LcarsScreen):
-
 
     def setup(self, all_sprites):
 
@@ -113,16 +111,14 @@ class ScreenEnterMatch(LcarsScreen):
         all_sprites.add(self.inputfocus[3], layer=2)
         self.currentFocus = 0
             
-        self.searchString = ""
         self.validate()
-        
-        
+        self.searchString = ""
+              
     def update(self, screenSurface, fpsClock):
         #if pygame.time.get_ticks() - self.lastClockUpdate > 1000:
         #    self.stardate.setText(datetime.now().strftime("%d%m.%y %H:%M:%S"))
         #    self.lastClockUpdate = pygame.time.get_ticks()
         LcarsScreen.update(self, screenSurface, fpsClock)
-
 
     def validate(self):
         p0 = self.selectedPlayers[0].message.lower()
@@ -146,8 +142,7 @@ class ScreenEnterMatch(LcarsScreen):
 
             self.startMatchButton.setEnabled(True)
         else:
-            self.startMatchButton.setEnabled(False)
-    
+            self.startMatchButton.setEnabled(False)   
         
     def handleEvents(self, event, fpsClock):
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -215,11 +210,13 @@ class ScreenEnterMatch(LcarsScreen):
             ("1:0", 1/(1+0)) ]
         ratio = sorted(ratios, key=lambda x: abs(x[1]-p))[0][0]
         print("selected ratio: {}".format(ratio))
-        self.oddsText.setText(ratio)
-
+        self.oddsText.setText(ratio)     
         
-
-            
+    def resetPlayerInput(self):
+        self.searchString = ""
+        self.placeholder.visible = True
+        self.searchText.renderText(capwords("", " "))
+        self.carret.rect.left = 284   
         
     def playerClicked(self, index, item, event, clock):
         print("player {} clicked: {}".format(index, item.text))
@@ -233,6 +230,10 @@ class ScreenEnterMatch(LcarsScreen):
             self.updatePlayerSelection()
         else:
             print("choosing")
+            
+            # clear player input field after clicking player
+            self.resetPlayerInput()
+            
             self.selectedPlayers[self.currentFocus].setText(item.text)
             # save in shelve
             prefill = shelve.open('latestmatch')
@@ -245,9 +246,7 @@ class ScreenEnterMatch(LcarsScreen):
                 self.inputfocus[i].setTransparent(i!=self.currentFocus)
             self.updateOdds()
             self.validate()
-            
-            
-        
+               
     def updatePlayerSelection(self):
         players = shelve.open('playerdb')
         candidates = []
@@ -268,8 +267,6 @@ class ScreenEnterMatch(LcarsScreen):
                 print(candidates[i])
                 self.matchedNames[i].setText(capwords(candidates[i][0]))
                 self.matchedNames[i].setColor(colours.BEIGE, colours.WHITE)
-                
-
         
     def keyboardHandler(self, item, event, clock):
         print("keyboard event forwarded to match screen: {}".format(event))
@@ -291,7 +288,7 @@ class ScreenEnterMatch(LcarsScreen):
                 self.searchString = ""
 
         players = shelve.open('playerdb')
-        if self.searchString not in players.keys() and len(self.searchString)>3:
+        if self.searchString not in players.keys() and len(self.searchString.strip())>3:
             self.matchedNames[-1].setText("Add "+capwords(self.searchString))
             self.matchedNames[-1].setColor(colours.RED_BROWN)
             self.matchedNames[-1].addPlayer = True
@@ -301,14 +298,11 @@ class ScreenEnterMatch(LcarsScreen):
 
         # update list of selectable players
         self.updatePlayerSelection()
-            
-            
         
-        
+        # reset player input field    
         self.placeholder.visible = len(self.searchString)==0
         self.searchText.renderText(capwords(self.searchString, " "))
-        self.carret.rect.left = 284 + self.searchText.image.get_size()[0]
-        
+        self.carret.rect.left = 284 + self.searchText.image.get_size()[0]      
 
     def backHandler(self, item, event, clock):
         from screens.main import ScreenMain
@@ -334,7 +328,6 @@ class ScreenEnterMatch(LcarsScreen):
         self.loadScreen(ScreenEnterOutcome(team1, team2))
         print("starting match")
         
-
     def swapHandler(self, item, event, clock):
         print("swapping "+item.text)
         if item.text == 'clear':
@@ -414,10 +407,3 @@ class ScreenEnterMatch(LcarsScreen):
         prefill['2'] = self.selectedPlayers[2].message.lower()
         prefill['3'] = self.selectedPlayers[3].message.lower()
         prefill.close()
-        
-            
-            
-            
-        
-
-
