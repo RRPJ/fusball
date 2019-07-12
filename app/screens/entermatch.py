@@ -42,7 +42,7 @@ class ScreenEnterMatch(LcarsScreen):
 
         # large interface buttons
         all_sprites.add(LcarsButton2(colours.RED_BROWN, (4, 708),
-                                     (140, 40), "Back",       self.backHandler), layer=1)
+                                     (140, 40), "Back", self.backHandler), layer=1)
         self.startMatchButton = LcarsButton2(
             colours.ORANGE, (928, 528), (92, 60), "Start Match", self.startHandler)
         all_sprites.add(self.startMatchButton, layer=1)
