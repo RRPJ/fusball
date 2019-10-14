@@ -95,6 +95,8 @@ class ScreenEnterMatch(LcarsScreen):
             LcarsText(colours.BLACK, (768-412-32+4, 600+4), capwords(prefill['3']), 20/19)
         ]
         prefill.close()
+        self.updateOdds()
+        
         all_sprites.add(self.selectedPlayers[0], layer=1)
         all_sprites.add(self.selectedPlayers[1], layer=1)
         all_sprites.add(self.selectedPlayers[2], layer=1)
