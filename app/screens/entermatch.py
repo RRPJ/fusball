@@ -291,7 +291,7 @@ class ScreenEnterMatch(LcarsScreen):
                 self.searchString = ""
 
         players = shelve.open('playerdb')
-        if self.searchString not in players.keys() and len(self.searchString)>3:
+        if self.searchString not in players.keys() and len(self.searchString.strip())>3:
             self.matchedNames[-1].setText("Add "+capwords(self.searchString))
             self.matchedNames[-1].setColor(colours.RED_BROWN)
             self.matchedNames[-1].addPlayer = True
@@ -306,7 +306,7 @@ class ScreenEnterMatch(LcarsScreen):
         
         
         self.placeholder.visible = len(self.searchString)==0
-        self.searchText.renderText(capwords(self.searchString, " "))
+        self.searchText.renderText(capwords(self.searchString, ' '))
         self.carret.rect.left = 284 + self.searchText.image.get_size()[0]
         
 
