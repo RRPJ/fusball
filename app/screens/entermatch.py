@@ -33,11 +33,10 @@ class ScreenEnterMatch(LcarsScreen):
     def setup(self, all_sprites):
 
         # load the most recently used player layout
-        prefill = shelve.open('latestmatch')
-        for i in range(4):
-            if str(i) not in prefill:
-                prefill[str(i)] = ''
-        prefill.close()
+        recentplayers = shelve.open('recentplayers')
+        if 'names' not in recentplayers:
+            recentplayers['names'] = []
+        recentplayers.close()
         
         
         # background image
@@ -87,15 +86,19 @@ class ScreenEnterMatch(LcarsScreen):
 
 
         # texts for selected players
-        prefill = shelve.open('latestmatch')
+        #prefill = shelve.open('latestmatch')
         self.selectedPlayers = [
-            LcarsText(colours.BLACK, (768-484-32+4, 216+4), capwords(prefill['0']), 20/19),
-            LcarsText(colours.BLACK, (768-412-32+4, 216+4), capwords(prefill['1']), 20/19),
-            LcarsText(colours.BLACK, (768-484-32+4, 600+4), capwords(prefill['2']), 20/19),
-            LcarsText(colours.BLACK, (768-412-32+4, 600+4), capwords(prefill['3']), 20/19)
+            #LcarsText(colours.BLACK, (768-484-32+4, 216+4), capwords(prefill['0']), 20/19),
+            #LcarsText(colours.BLACK, (768-412-32+4, 216+4), capwords(prefill['1']), 20/19),
+            #LcarsText(colours.BLACK, (768-484-32+4, 600+4), capwords(prefill['2']), 20/19),
+            #LcarsText(colours.BLACK, (768-412-32+4, 600+4), capwords(prefill['3']), 20/19)
+            LcarsText(colours.BLACK, (768-484-32+4, 216+4), '', 20/19),
+            LcarsText(colours.BLACK, (768-412-32+4, 216+4), '', 20/19),
+            LcarsText(colours.BLACK, (768-484-32+4, 600+4), '', 20/19),
+            LcarsText(colours.BLACK, (768-412-32+4, 600+4), '', 20/19)
         ]
-        prefill.close()
-        self.updateOdds()
+        #prefill.close()
+        #self.updateOdds()
         
         all_sprites.add(self.selectedPlayers[0], layer=1)
         all_sprites.add(self.selectedPlayers[1], layer=1)
@@ -116,6 +119,8 @@ class ScreenEnterMatch(LcarsScreen):
         self.currentFocus = 0
             
         self.searchString = ""
+        self.updatePlayerSelection()
+        
         self.validate()
         
         
@@ -221,7 +226,13 @@ class ScreenEnterMatch(LcarsScreen):
 
         
 
-            
+
+    def uniq_list(self, inp):
+        out = []
+        for x in inp:
+            if x not in out:
+                out.append(x)
+        return out
         
     def playerClicked(self, index, item, event, clock):
         print("player {} clicked: {}".format(index, item.text))
@@ -235,12 +246,18 @@ class ScreenEnterMatch(LcarsScreen):
             self.updatePlayerSelection()
         else:
             print("choosing")
+            print("current focus: ", self.currentFocus)
             self.selectedPlayers[self.currentFocus].setText(item.text)
             # save in shelve
-            prefill = shelve.open('latestmatch')
-            prefill[str(self.currentFocus)] = item.text
-            prefill.close()
-
+            #prefill = shelve.open('latestmatch')
+            #prefill[str(self.currentFocus)] = item.text
+            #prefill.close()
+            recentplayers = shelve.open('recentplayers')
+            newnames = self.uniq_list([item.text.lower()] + recentplayers['names'])
+            recentplayers['names'] = newnames
+            recentplayers.close()
+            self.updatePlayerSelection()
+            
             # rotate focus
             self.currentFocus = (self.currentFocus + 1) % 4
             for i in range(4):
@@ -252,19 +269,34 @@ class ScreenEnterMatch(LcarsScreen):
         
     def updatePlayerSelection(self):
         players = shelve.open('playerdb')
+        recentplayers = shelve.open('recentplayers')['names']
         candidates = []
         if len(players) > 0:
             candidates = process.extractBests(self.searchString, players.keys(), score_cutoff=50, limit=6)
-        print(candidates)
+        #print(candidates)
         players.close()
+        # remove candicates from recent to prevent double listing
+        for c in candidates:
+            print('c[0]:', c[0])
+            if c[0] in recentplayers:
+                recentplayers.remove(c[0])
+        print('recentplayers: ', recentplayers)
+        print('candidates: ', candidates)
+        
         for i in range(6):
+            print('i: ', i)
             # skip the add player button
             if self.matchedNames[i].addPlayer:
                 continue
             if i >= len(candidates):
-                # reset remaining fields if there are not many candidates
-                self.matchedNames[i].setText('')
-                self.matchedNames[i].setColor((127,127,127), (127,127,127))
+                # fill up remaining fields with recent selections:
+                if i-len(candidates) < len(recentplayers):
+                    self.matchedNames[i].setText(capwords(recentplayers[i-len(candidates)]))
+                    self.matchedNames[i].setColor(colours.BEIGE, colours.WHITE)
+                else:
+                    # keep empty if there are none
+                    self.matchedNames[i].setText('')
+                    self.matchedNames[i].setColor((127,127,127), (127,127,127))
             else:
                 # add fields
                 print(candidates[i])
@@ -410,12 +442,12 @@ class ScreenEnterMatch(LcarsScreen):
             
         self.updateOdds()
         # remember player arrangement
-        prefill = shelve.open('latestmatch')
-        prefill['0'] = self.selectedPlayers[0].message.lower()
-        prefill['1'] = self.selectedPlayers[1].message.lower()
-        prefill['2'] = self.selectedPlayers[2].message.lower()
-        prefill['3'] = self.selectedPlayers[3].message.lower()
-        prefill.close()
+        #prefill = shelve.open('latestmatch')
+        #prefill['0'] = self.selectedPlayers[0].message.lower()
+        #prefill['1'] = self.selectedPlayers[1].message.lower()
+        #prefill['2'] = self.selectedPlayers[2].message.lower()
+        #prefill['3'] = self.selectedPlayers[3].message.lower()
+        #prefill.close()
         
             
             
