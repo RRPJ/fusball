@@ -14,16 +14,7 @@ import math
 import re
 import itertools
 import time
-
-
-# source: https://github.com/sublee/trueskill/issues/1#issuecomment-149762508
-def win_probability(team1, team2):
-    delta_mu = sum(r.mu for r in team1) - sum(r.mu for r in team2)
-    sum_sigma = sum(r.sigma ** 2 for r in itertools.chain(team1, team2))
-    size = len(team1) + len(team2)
-    denom = math.sqrt(size * (trueskill.BETA * trueskill.BETA) + sum_sigma)
-    ts = trueskill.global_env()
-    return ts.cdf(delta_mu / denom)
+from odds import win_probability, odds_texts
 
 
 class ScreenEnterMatch(LcarsScreen):
@@ -199,35 +190,7 @@ class ScreenEnterMatch(LcarsScreen):
             p = win_probability(team1, team2)
         print("win probability: {}%".format(p * 100))
 
-        ratios = [
-            ("0:1", 0 / (0 + 1)),
-            ("1:20", 1 / (1 + 20)),
-            ("1:12", 1 / (1 + 12)),
-            ("1:8", 1 / (1 + 8)),
-            ("1:6", 1 / (1 + 6)),
-            ("1:5", 1 / (1 + 5)),
-            ("1:4", 1 / (1 + 4)),
-            ("1:3", 1 / (1 + 3)),
-            ("2:5", 2 / (2 + 5)),
-            ("1:2", 1 / (1 + 2)),
-            ("3:5", 3 / (3 + 5)),
-            ("2:3", 2 / (2 + 3)),
-            ("4:5", 4 / (4 + 5)),
-            ("1:1", 1 / (1 + 1)),
-            ("5:4", 5 / (5 + 4)),
-            ("3:2", 3 / (3 + 2)),
-            ("5:3", 5 / (5 + 3)),
-            ("2:1", 2 / (2 + 1)),
-            ("5:2", 5 / (5 + 2)),
-            ("3:1", 3 / (3 + 1)),
-            ("4:1", 4 / (4 + 1)),
-            ("5:1", 5 / (5 + 1)),
-            ("6:1", 6 / (6 + 1)),
-            ("8:1", 8 / (8 + 1)),
-            ("12:1", 12 / (12 + 1)),
-            ("20:1", 20 / (20 + 1)),
-            ("1:0", 1 / (1 + 0))]
-        ratio = sorted(ratios, key=lambda x: abs(x[1] - p))[0][0]
+        ratio = sorted(odds_texts, key=lambda x: abs(x[1] - p))[0][0]
         print("selected ratio: {}".format(ratio))
         self.oddsText.setText(ratio)
 
