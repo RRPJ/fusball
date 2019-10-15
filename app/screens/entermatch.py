@@ -17,6 +17,11 @@ import time
 from odds import win_probability, odds_texts
 
 
+
+def pos(x,y):
+    return (768-y-32+4, x+4)
+
+
 class ScreenEnterMatch(LcarsScreen):
 
     def setup(self, all_sprites):
@@ -36,23 +41,23 @@ class ScreenEnterMatch(LcarsScreen):
         self.startMatchButton = LcarsButton2(
             colours.ORANGE, (928, 528), (92, 60), "Start Match", self.startHandler)
         all_sprites.add(self.startMatchButton, layer=1)
-        all_sprites.add(LcarsButton2(colours.BEIGE, (64, 348),
+        all_sprites.add(LcarsButton2(colours.BEIGE, (64, 330),
                                      (40, 32), "Auto", self.swapHandler))
 
         # the small buttons for rearranging players:
-        all_sprites.add(LcarsButton2(colours.RED_BROWN, (324, 348),
+        all_sprites.add(LcarsButton2(colours.RED_BROWN, (324, 330),
                                      (32, 32), "clear", glyph=True, handler=self.swapHandler))
-        all_sprites.add(LcarsButton2(colours.BEIGE, (288, 348), (32, 32),
+        all_sprites.add(LcarsButton2(colours.BEIGE, (288, 330), (32, 32),
                                      "bottomrow", glyph=True, handler=self.swapHandler, glyphoffset=(0, 5)))
-        all_sprites.add(LcarsButton2(colours.BEIGE, (252, 348), (32, 32),
+        all_sprites.add(LcarsButton2(colours.BEIGE, (252, 330), (32, 32),
                                      "toprow", glyph=True, handler=self.swapHandler, glyphoffset=(0, -5)))
-        all_sprites.add(LcarsButton2(colours.BLUE, (216, 348),
+        all_sprites.add(LcarsButton2(colours.BLUE, (216, 330),
                                      (32, 32), "diag1", glyph=True, handler=self.swapHandler))
-        all_sprites.add(LcarsButton2(colours.BLUE, (180, 348),
+        all_sprites.add(LcarsButton2(colours.BLUE, (180, 330),
                                      (32, 32), "diag2", glyph=True, handler=self.swapHandler))
-        all_sprites.add(LcarsButton2(colours.BEIGE, (144, 348), (32, 32),
+        all_sprites.add(LcarsButton2(colours.BEIGE, (144, 330), (32, 32),
                                      "rotateleft", glyph=True, handler=self.swapHandler))
-        all_sprites.add(LcarsButton2(colours.BEIGE, (108, 348), (32, 32),
+        all_sprites.add(LcarsButton2(colours.BEIGE, (108, 330), (32, 32),
                                      "rotateright", glyph=True, handler=self.swapHandler))
 
         # add a keyboard:
@@ -74,7 +79,7 @@ class ScreenEnterMatch(LcarsScreen):
 
         # add a text object for the odds:
         self.oddsText = LcarsText(
-            colours.WHITE, (768 - 360 - 16 - 3, 648 + 1), "1:1", 1)
+            colours.WHITE, pos(648, 336), "1:1", 20/19)
         all_sprites.add(self.oddsText)
 
         # placeholders for names:
@@ -89,13 +94,23 @@ class ScreenEnterMatch(LcarsScreen):
         # texts for selected players
         #prefill = shelve.open('latestmatch')
         self.selectedPlayers = [
-            LcarsText(colours.BLACK, (768-484-32+4, 216+4), '', 20/19),
-            LcarsText(colours.BLACK, (768-412-32+4, 216+4), '', 20/19),
-            LcarsText(colours.BLACK, (768-484-32+4, 600+4), '', 20/19),
-            LcarsText(colours.BLACK, (768-412-32+4, 600+4), '', 20/19)
+            LcarsText(colours.BLACK, (768-502-32+4, 216+4), '', 20/19),
+            LcarsText(colours.BLACK, (768-430-32+4, 216+4), '', 20/19),
+            LcarsText(colours.BLACK, (768-466-32+4, 600+4), '', 20/19),
+            LcarsText(colours.BLACK, (768-394-32+4, 600+4), '', 20/19)
         ]
         #prefill.close()
         #self.updateOdds()
+
+        all_sprites.add(LcarsButton2(colours.RED_BROWN, (408, 502),
+                                     (32, 32), "clear", glyph=True, handler=partial(self.clearSingleHandler, 0)))
+        all_sprites.add(LcarsButton2(colours.RED_BROWN, (408, 430),
+                                     (32, 32), "clear", glyph=True, handler=partial(self.clearSingleHandler, 1)))
+        all_sprites.add(LcarsButton2(colours.RED_BROWN, (564, 466),
+                                     (32, 32), "clear", glyph=True, handler=partial(self.clearSingleHandler, 2)))
+        all_sprites.add(LcarsButton2(colours.RED_BROWN, (564, 394),
+                                     (32, 32), "clear", glyph=True, handler=partial(self.clearSingleHandler, 3)))
+        
         
         all_sprites.add(self.selectedPlayers[0], layer=1)
         all_sprites.add(self.selectedPlayers[1], layer=1)
@@ -104,13 +119,13 @@ class ScreenEnterMatch(LcarsScreen):
 
         # sprites for highlighting/playerfocus
         self.inputfocus = [
-            LcarsInputFocus((768 - 484 - 32, 216), False, False,
+            LcarsInputFocus((768 - 502 - 32, 216), False, False,
                             handler=partial(self.inputFocusHandler, 0)),
-            LcarsInputFocus((768 - 412 - 32, 216), False, True,
+            LcarsInputFocus((768 - 430 - 32, 216), False, True,
                             handler=partial(self.inputFocusHandler, 1)),
-            LcarsInputFocus((768 - 484 - 32, 600), True, True,
+            LcarsInputFocus((768 - 466 - 32, 600), True, True,
                             handler=partial(self.inputFocusHandler, 2)),
-            LcarsInputFocus((768 - 412 - 32, 600), True, True,
+            LcarsInputFocus((768 - 394 - 32, 600), True, True,
                             handler=partial(self.inputFocusHandler, 3))
         ]
         all_sprites.add(self.inputfocus[0], layer=2)
@@ -342,6 +357,11 @@ class ScreenEnterMatch(LcarsScreen):
         self.loadScreen(ScreenEnterOutcome(team1, team2))
         print("starting match")
 
+    def clearSingleHandler(self, index, item, event, clock):
+        self.selectedPlayers[index].setText('')
+        self.validate()
+        self.updateOdds()
+        
     def swapHandler(self, item, event, clock):
         print("swapping " + item.text)
         if item.text == 'clear':
