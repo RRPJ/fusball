@@ -229,7 +229,10 @@ class ScreenEnterMatch(LcarsScreen):
 
     def playerClicked(self, index, item, event, clock):
         print("player {} clicked: {}".format(index, item.text))
+        name = item.text
         if item.addPlayer:
+            item.addPlayer = False # clear add field
+            name = self.searchString
             print("adding")
             with open('logfile.log', 'a') as log:
                 log.write("{}: new player created '{}'\n".format(
@@ -237,29 +240,25 @@ class ScreenEnterMatch(LcarsScreen):
             players = shelve.open("playerdb")
             players[self.searchString] = trueskill.Rating()
             players.close()
-            self.updatePlayerSelection()
-        else:
-            print("choosing")
-            self.selectedPlayers[self.currentFocus].setText(item.text)
-            # save in shelve
-            #prefill = shelve.open('latestmatch')
-            #prefill[str(self.currentFocus)] = item.text
-            #prefill.close()
-            recentplayers = shelve.open('recentplayers')
-            newnames = self.uniq_list([item.text.lower()] + recentplayers['names'])
-            recentplayers['names'] = newnames
-            recentplayers.close()
-            self.updatePlayerSelection()
+            #self.updatePlayerSelection()
+        
+        print("choosing")
+        self.selectedPlayers[self.currentFocus].setText(capwords(name))
+        recentplayers = shelve.open('recentplayers')
+        newnames = self.uniq_list([name.lower()] + recentplayers['names'])
+        recentplayers['names'] = newnames
+        recentplayers.close()
+        self.updatePlayerSelection()
             
-            # rotate focus
-            self.currentFocus = (self.currentFocus + 1) % 4
-            for i in range(4):
-                self.inputfocus[i].setTransparent(i != self.currentFocus)
-            self.updateOdds()
-            self.validate()
+        # rotate focus
+        self.currentFocus = (self.currentFocus + 1) % 4
+        for i in range(4):
+            self.inputfocus[i].setTransparent(i != self.currentFocus)
+        self.updateOdds()
+        self.validate()
 
-            # clear player input field after clicking player
-            self.resetPlayerInput()
+        # clear player input field after clicking player
+        self.resetPlayerInput()
 
     def updatePlayerSelection(self):
         players = shelve.open('playerdb')
@@ -274,8 +273,24 @@ class ScreenEnterMatch(LcarsScreen):
             print('c[0]:', c[0])
             if c[0] in recentplayers:
                 recentplayers.remove(c[0])
+
+        # remove already selected players
+        for i in range(4):
+            p = self.selectedPlayers[i].message.lower()
+            # recent players is easy
+            if p in recentplayers:
+                recentplayers.remove(p)
+            # candidates are harder because they are tuples
+            candidates = [c for c in candidates if c[0] != p]
+                
+        # remove already chosen players from suggestions
+        for i in range(4):
+            s = self.selectedPlayers[i].message.lower()
+            if s in recentplayers:
+                recentplayers.remove(s)
         print('recentplayers: ', recentplayers)
         print('candidates: ', candidates)
+        
         
         for i in range(6):
             print('i: ', i)
@@ -361,6 +376,7 @@ class ScreenEnterMatch(LcarsScreen):
     def clearSingleHandler(self, index, item, event, clock):
         self.selectedPlayers[index].setText('')
         self.validate()
+        self.updatePlayerSelection()
         self.updateOdds()
         
     def swapHandler(self, item, event, clock):

@@ -29,20 +29,20 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="1"
-     inkscape:cx="464.05631"
-     inkscape:cy="408.45942"
+     inkscape:zoom="1.4142136"
+     inkscape:cx="534.6686"
+     inkscape:cy="398.10953"
      inkscape:document-units="px"
-     inkscape:current-layer="g7531"
+     inkscape:current-layer="layer4"
      showgrid="false"
      units="px"
      inkscape:snap-bbox="true"
      inkscape:bbox-nodes="true"
      inkscape:snap-page="false"
-     inkscape:window-width="1599"
-     inkscape:window-height="868"
+     inkscape:window-width="1099"
+     inkscape:window-height="1049"
      inkscape:window-x="1920"
-     inkscape:window-y="1097"
+     inkscape:window-y="17"
      inkscape:window-maximized="1"
      showguides="false"
      inkscape:guide-bbox="true"
@@ -828,22 +828,22 @@
     <path
        id="rect5032-0-4-7-0-3-5"
        d="M 149.22501,61.912492 H 157.69168 V 70.379162 H 149.22501 Z"
-       style="display:inline;opacity:1;fill:#fdcc99;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:0.58976763;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       style="display:inline;opacity:1;fill:#7d7e80;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:0.58976763;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        inkscape:connector-curvature="0" />
     <path
        id="rect5032-0-4-7-0-3-5-9"
        d="M 149.225,80.962493 H 157.69167 V 89.429163 H 149.225 Z"
-       style="display:inline;opacity:1;fill:#fdcc99;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:0.58976763;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       style="display:inline;opacity:1;fill:#7d7e80;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:0.58976763;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        inkscape:connector-curvature="0" />
     <path
        id="rect5032-0-4-7-0-3-5-2"
        d="M 107.95,90.487494 H 116.41667 V 98.954164 H 107.95 Z"
-       style="display:inline;opacity:1;fill:#fdcc99;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:0.58976763;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       style="display:inline;opacity:1;fill:#7d7e80;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:0.58976763;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        inkscape:connector-curvature="0" />
     <path
        id="rect5032-0-4-7-0-3-5-28"
        d="M 107.94999,71.437494 H 116.41666 V 79.904164 H 107.94999 Z"
-       style="display:inline;opacity:1;fill:#fdcc99;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:0.58976763;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       style="display:inline;opacity:1;fill:#7d7e80;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:0.58976763;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        inkscape:connector-curvature="0" />
   </g>
   <g
@@ -899,9 +899,9 @@
          id="text4865-1"
          y="175.96283"
          x="67.626541"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.05555534px;line-height:7.25;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';letter-spacing:0px;word-spacing:0px;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458335"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.05555534px;line-height:7.25;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';letter-spacing:0px;word-spacing:0px;display:inline;fill:#000000;fill-opacity:0.375;stroke:none;stroke-width:0.26458335;"
          xml:space="preserve"><tspan
-           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';stroke-width:0.26458335"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';stroke-width:0.26458335;fill:#000000;fill-opacity:0.375;"
            y="175.96283"
            x="67.626541"
            id="tspan4863-9"
@@ -921,9 +921,9 @@
          id="text4865-1-2"
          y="185.48769"
          x="168.07864"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.05555534px;line-height:7.25;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';letter-spacing:0px;word-spacing:0px;display:inline;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458335"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.05555534px;line-height:7.25;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';letter-spacing:0px;word-spacing:0px;display:inline;fill:#000000;fill-opacity:0.375;stroke:none;stroke-width:0.26458335;"
          xml:space="preserve"><tspan
-           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';stroke-width:0.26458335"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';stroke-width:0.26458335;fill:#000000;fill-opacity:0.375;"
            y="185.48769"
            x="168.07864"
            id="tspan4863-9-1"
