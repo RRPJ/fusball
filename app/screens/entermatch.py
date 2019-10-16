@@ -417,38 +417,59 @@ class ScreenEnterMatch(LcarsScreen):
             self.selectedPlayers[1].setText(self.selectedPlayers[3].message)
             self.selectedPlayers[3].setText(tmp)
         if item.text == 'Auto':
-            # there are really only 3 combinations that can be played
-            p0 = self.selectedPlayers[0].message.lower()
-            p1 = self.selectedPlayers[1].message.lower()
-            p2 = self.selectedPlayers[2].message.lower()
-            p3 = self.selectedPlayers[3].message.lower()
+            # there are really only 3 combinations that teams can be assigned
+            # there are 4 combinations of offense/defense for each.
+            p0 = self.selectedPlayers[0].message.lower() # defense team A
+            p1 = self.selectedPlayers[1].message.lower() # offense team A
+            p2 = self.selectedPlayers[2].message.lower() # offense team B
+            p3 = self.selectedPlayers[3].message.lower() # defense team B
 
             players = shelve.open('playerdb')
             if p0 not in players or p1 not in players or p2 not in players or p3 not in players:
                 # nothing to do
                 return
-            match1 = [(players[p0], players[p1]), (players[p2], players[p3])]
-            match2 = [(players[p0], players[p2]), (players[p1], players[p3])]
-            match3 = [(players[p0], players[p3]), (players[p1], players[p2])]
-            q1 = trueskill.quality(match1)
-            q2 = trueskill.quality(match2)
-            q3 = trueskill.quality(match3)
-            match = None
-            if q1 > q2 and q1 > q3:
-                self.selectedPlayers[0].setText(capwords(p0))
-                self.selectedPlayers[1].setText(capwords(p1))
-                self.selectedPlayers[2].setText(capwords(p2))
-                self.selectedPlayers[3].setText(capwords(p3))
-            elif q2 > q3:
-                self.selectedPlayers[0].setText(capwords(p0))
-                self.selectedPlayers[1].setText(capwords(p2))
-                self.selectedPlayers[2].setText(capwords(p1))
-                self.selectedPlayers[3].setText(capwords(p3))
-            else:
-                self.selectedPlayers[0].setText(capwords(p0))
-                self.selectedPlayers[1].setText(capwords(p3))
-                self.selectedPlayers[2].setText(capwords(p1))
-                self.selectedPlayers[3].setText(capwords(p2))
+            match1a = [(players[p0][0], players[p1][1]), (players[p2][0], players[p3][1])]
+            match1b = [(players[p0][0], players[p1][1]), (players[p3][0], players[p2][1])]
+            match1c = [(players[p1][0], players[p0][1]), (players[p2][0], players[p3][1])]
+            match1d = [(players[p1][0], players[p0][1]), (players[p3][0], players[p2][1])]
+            match2a = [(players[p0][0], players[p2][1]), (players[p1][0], players[p3][1])]
+            match2b = [(players[p0][0], players[p2][1]), (players[p3][0], players[p1][1])]
+            match2c = [(players[p2][0], players[p0][1]), (players[p1][0], players[p3][1])]
+            match2d = [(players[p2][0], players[p0][1]), (players[p3][0], players[p1][1])]
+            match3a = [(players[p0][0], players[p3][1]), (players[p1][0], players[p2][1])]
+            match3b = [(players[p0][0], players[p3][1]), (players[p2][0], players[p1][1])]
+            match3c = [(players[p3][0], players[p0][1]), (players[p1][0], players[p2][1])]
+            match3d = [(players[p3][0], players[p0][1]), (players[p2][0], players[p1][1])]
+            q1a = trueskill.quality(match1a)
+            q1b = trueskill.quality(match1b)
+            q1c = trueskill.quality(match1c)
+            q1d = trueskill.quality(match1d)
+            q2a = trueskill.quality(match2a)
+            q2b = trueskill.quality(match2b)
+            q2c = trueskill.quality(match2c)
+            q2d = trueskill.quality(match2d)
+            q3a = trueskill.quality(match3a)
+            q3b = trueskill.quality(match3b)
+            q3c = trueskill.quality(match3c)
+            q3d = trueskill.quality(match3d)
+            #match = None
+            maxscore = max(q1a,q1b,q1c,q1d, q2a,q2b,q2c,q2d,q3a,q3b,q3c,q3d)
+            names = [p1,p0,p2,p3] if q1a==maxscore else (
+                    [p1,p0,p3,p2] if q1b==maxscore else (
+                    [p0,p1,p2,p3] if q1c==maxscore else (
+                    [p0,p1,p3,p2] if q1d==maxscore else (
+                    [p2,p0,p1,p3] if q2a==maxscore else (
+                    [p2,p0,p3,p1] if q2b==maxscore else (
+                    [p0,p2,p1,p3] if q2c==maxscore else (
+                    [p0,p2,p3,p1] if q2d==maxscore else (
+                    [p3,p0,p1,p2] if q3a==maxscore else (
+                    [p3,p0,p2,p1] if q3b==maxscore else (
+                    [p0,p3,p1,p2] if q3c==maxscore else (
+                    [p0,p3,p2,p1] )))))))))))
+            self.selectedPlayers[0].setText(capwords(names[0]))
+            self.selectedPlayers[1].setText(capwords(names[1]))
+            self.selectedPlayers[2].setText(capwords(names[2]))
+            self.selectedPlayers[3].setText(capwords(names[3]))
             players.close()
 
         self.updateOdds()
