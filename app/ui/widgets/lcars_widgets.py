@@ -388,17 +388,19 @@ class LcarsRoundStub(LcarsWidget):
 class LcarsText(LcarsWidget):
     """Text that can be placed anywhere"""
 
-    def __init__(self, colour, pos, message, size=1.0, background=None, handler=None, otherfont=False, alignright=False):
+    def __init__(self, colour, pos, message, size=1.0, background=None, handler=None, otherfont=False, alignright=False, placeholder='', placeholdercolor=(127,127,127)):
         self.colour = colour
+        self.placeholdercolor = placeholdercolor
         self.background = background
         self.alignright = alignright
         self.message = message
+        self.placeholder = placeholder
         if otherfont:
             self.font = Font("assets/swiss2.ttf", int(19.0 * size))
         else:
             self.font = Font("assets/swiss911.ttf", int(19.0 * size))
         
-        self.renderText(message)
+        self.render()
         # center the text if needed 
         if (pos[1] < 0):
             pos = (pos[0], 400 - self.image.get_rect().width / 2)
@@ -407,16 +409,21 @@ class LcarsText(LcarsWidget):
             
         LcarsWidget.__init__(self, colour, pos, None, handler)
 
-    def renderText(self, message):
-        self.message = message
+    def setColour(self, colour):
+        self.colour = colour
+        self.render()
+        
+    def render(self):
+        c = self.colour if len(self.message)>0 else self.placeholdercolor
+        m = self.message if len(self.message)>0 else self.placeholder 
         if (self.background == None):
-            self.image = self.font.render(message, True, self.colour)
+            self.image = self.font.render(m, True, c)
         else:
-            self.image = self.font.render(message, True, self.colour, self.background)
+            self.image = self.font.render(m, True, c, self.background)
         
     def setText(self, newText):
         self.message = newText
-        self.renderText(newText)
+        self.render()
 
         
 class LcarsBlockLarge(LcarsButton):

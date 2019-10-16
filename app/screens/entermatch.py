@@ -94,10 +94,10 @@ class ScreenEnterMatch(LcarsScreen):
         # texts for selected players
         #prefill = shelve.open('latestmatch')
         self.selectedPlayers = [
-            LcarsText(colours.BLACK, (768-502-32+4, 216+4), '', 20/19),
-            LcarsText(colours.BLACK, (768-430-32+4, 216+4), '', 20/19),
-            LcarsText(colours.BLACK, (768-466-32+4, 600+4), '', 20/19),
-            LcarsText(colours.BLACK, (768-394-32+4, 600+4), '', 20/19)
+            LcarsText(colours.BLACK, (768-502-32+4, 216+4), '', 20/19, placeholder='Defense...', placeholdercolor=(120,60,60)),
+            LcarsText(colours.BLACK, (768-430-32+4, 216+4), '', 20/19, placeholder='Offense...', placeholdercolor=(120,60,60)),
+            LcarsText(colours.BLACK, (768-466-32+4, 600+4), '', 20/19, placeholder='Offense...', placeholdercolor=(97,118,142)),
+            LcarsText(colours.BLACK, (768-394-32+4, 600+4), '', 20/19, placeholder='Defense...', placeholdercolor=(97,118,142))
         ]
         #prefill.close()
         #self.updateOdds()
@@ -150,6 +150,7 @@ class ScreenEnterMatch(LcarsScreen):
         p1 = self.selectedPlayers[1].message.lower()
         p2 = self.selectedPlayers[2].message.lower()
         p3 = self.selectedPlayers[3].message.lower()
+        
         team1 = set()  # makes unique
         team2 = set()
         if p0 != '':
@@ -212,7 +213,7 @@ class ScreenEnterMatch(LcarsScreen):
     def resetPlayerInput(self):
         self.searchString = ""
         self.placeholder.visible = True
-        self.searchText.renderText(capwords("", " "))
+        self.searchText.setText(capwords("", " "))
         self.carret.rect.left = 284
         self.updatePlayerSelection()
 
@@ -330,7 +331,7 @@ class ScreenEnterMatch(LcarsScreen):
 
         # reset player input field
         self.placeholder.visible = len(self.searchString) == 0
-        self.searchText.renderText(capwords(self.searchString, " "))
+        self.searchText.setText(capwords(self.searchString, " "))
         self.carret.rect.left = 284 + self.searchText.image.get_size()[0]
 
     def backHandler(self, item, event, clock):
