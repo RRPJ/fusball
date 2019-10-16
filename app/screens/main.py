@@ -10,17 +10,20 @@ import shelve
 import trueskill
 import math
 import subprocess
-
+from odds import win_probability
 from datasources.network import get_ip_address_string
 
 
+def playerLevel(player):
+    return trueskill.expose(player[0]) + trueskill.expose(player[1])
+    
 def findRank(players, player):
-    ranked = sorted(players.items(), key=lambda kv:trueskill.expose(kv[1]), reverse=True)
+    ranked = sorted(players.items(), key=lambda kv:playerLevel(kv[1]), reverse=True)
     minindex = len(ranked)
     maxindex = 0
     i = 1
     for name,skill in ranked:
-        if round(trueskill.expose(players[player])) == round(trueskill.expose(skill)): # since we only display rounded skill it is only fair to group by whole numbers
+        if round(playerLevel(players[player])) == round(playerLevel(skill)): # since we only display rounded skill it is only fair to group by whole numbers
             minindex = min(minindex, i)
             maxindex = max(maxindex, i)
         i += 1
@@ -38,7 +41,7 @@ class ScreenMain(LcarsScreen):
         all_sprites.add(LcarsBackgroundImage("assets/bg_main.png"), layer=0)
 
         
-        self.title = LcarsTitle(colours.WHITE, (768-560-32, 268), 260, "")
+        self.title = LcarsTitle(colours.WHITE, (768-568-32, 268), 260, "")
         all_sprites.add(self.title)
         
         # interface buttons
@@ -54,7 +57,8 @@ class ScreenMain(LcarsScreen):
         self.namebuttons = []
         self.ranklabels = []
         self.levellabels = []
-        self.skilllabels = []
+        self.offenselabels = []
+        self.defenselabels = []
         colour = (0,0,0)
         for i in range(10):
             # label and rounded stub for rank
@@ -66,9 +70,12 @@ class ScreenMain(LcarsScreen):
             # player level
             self.levellabels.append(LcarsButton2(colour, (508, 496-36*i), (68,32), '', None))
             all_sprites.add(self.levellabels[-1])
-            # sigma field
-            self.skilllabels.append(LcarsButton2(colour, (580, 496-36*i), (92,32), '', None))
-            all_sprites.add(self.skilllabels[-1])
+            # offensive field
+            self.offenselabels.append(LcarsButton2(colour, (580, 496-36*i), (92,32), '', None))
+            all_sprites.add(self.offenselabels[-1])
+            # defensive
+            self.defenselabels.append(LcarsButton2(colour, (676, 496-36*i), (92,32), '', None))
+            all_sprites.add(self.defenselabels[-1])
 
         
         self.page = 0
@@ -85,7 +92,7 @@ class ScreenMain(LcarsScreen):
         self.beep1 = Sound("assets/audio/panel/201.wav")
         Sound("assets/audio/panel/220.wav").play()
 
-
+        
     def updateRanking(self):
         if self.page == 0:
             self.title.setText("TOP 10")
@@ -93,7 +100,7 @@ class ScreenMain(LcarsScreen):
             self.title.setText("TOP {}-{}".format(self.page*10, self.page*10+9))
             
         players = shelve.open('playerdb')
-        ranked = sorted(players.items(), key=lambda kv:trueskill.expose(kv[1]), reverse=True)
+        ranked = sorted(players.items(), key=lambda kv:playerLevel(kv[1]), reverse=True)
         # user buttons:
         colorindex = 0
         prevrank = ""
@@ -104,7 +111,7 @@ class ScreenMain(LcarsScreen):
                 rank = findRank(players, name)
             else:
                 name = ''
-                rating = trueskill.Rating()
+                rating = (trueskill.Rating(), trueskill.Rating())
                 rank = '-'
                 
             if rank != prevrank:
@@ -119,13 +126,16 @@ class ScreenMain(LcarsScreen):
             self.namebuttons[i % 10].setText(capwords(name))
             self.namebuttons[i % 10].setColor(colour)
 
-            level = str(round(trueskill.expose(rating))) if i < len(ranked) else ''
+            level = str(round(playerLevel(rating))) if i < len(ranked) else ''
             self.levellabels[i % 10].setText(level)
             self.levellabels[i % 10].setColor(colour)
 
-            skill = "{:.2f}/{:.2f}".format(rating.mu, rating.sigma) if i < len(ranked) else ''
-            self.skilllabels[i % 10].setText(skill)
-            self.skilllabels[i % 10].setColor(colour)
+            offense = "{:.2f}/{:.2f}".format(rating[0].mu, rating[0].sigma) if i < len(ranked) else ''
+            defense = "{:.2f}/{:.2f}".format(rating[1].mu, rating[1].sigma) if i < len(ranked) else ''
+            self.offenselabels[i % 10].setText(offense)
+            self.defenselabels[i % 10].setText(defense)
+            self.offenselabels[i % 10].setColor(colour)
+            self.defenselabels[i % 10].setColor(colour)
 
         players.close()
         
