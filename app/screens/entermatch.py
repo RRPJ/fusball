@@ -192,10 +192,11 @@ class ScreenEnterMatch(LcarsScreen):
         team1 = []
         team2 = []
         players = shelve.open('playerdb')
-        if p0 in players:
-            team1.append(players[p0])
+        # offense first, defense second (1 and 2 are offense)
         if p1 in players:
             team1.append(players[p1])
+        if p0 in players:
+            team1.append(players[p0])
         if p2 in players:
             team2.append(players[p2])
         if p3 in players:
@@ -238,7 +239,7 @@ class ScreenEnterMatch(LcarsScreen):
                 log.write("{}: new player created '{}'\n".format(
                     time.strftime("%Y-%m-%d %H:%M:%S"), self.searchString))
             players = shelve.open("playerdb")
-            players[self.searchString] = trueskill.Rating()
+            players[self.searchString] = (trueskill.Rating(), trueskill.Rating())
             players.close()
             #self.updatePlayerSelection()
         
