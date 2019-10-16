@@ -56,3 +56,23 @@ odds_texts = [
             ("12:1", 12 / (12 + 1)),
             ("20:1", 20 / (20 + 1)),
             ("1:0", 1 / (1 + 0))]
+
+def playerLevel(player):
+    return trueskill.expose(player[0]) + trueskill.expose(player[1])
+    
+def findRank(players, player):
+    ranked = sorted(players.items(), key=lambda kv:playerLevel(kv[1]), reverse=True)
+    minindex = len(ranked)
+    maxindex = 0
+    i = 1
+    for name,skill in ranked:
+        if round(playerLevel(players[player])) == round(playerLevel(skill)): # since we only display rounded skill it is only fair to group by whole numbers
+            minindex = min(minindex, i)
+            maxindex = max(maxindex, i)
+        i += 1
+    if minindex==maxindex:
+        return "{}".format(minindex)
+    else:
+        return "{}-{}".format(minindex,maxindex)
+        
+

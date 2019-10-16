@@ -363,10 +363,10 @@ class ScreenEnterMatch(LcarsScreen):
         team1 = []
         team2 = []
         # because of the input validator it is already impossible that there are 2 identical players
-        if p0 != '':
-            team1.append(p0)
         if p1 != '':
             team1.append(p1)
+        if p0 != '':
+            team1.append(p0)
         if p2 != '':
             team2.append(p2)
         if p3 != '':

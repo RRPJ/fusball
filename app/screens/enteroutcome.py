@@ -9,26 +9,11 @@ from pprint import pprint
 import math
 import trueskill
 import time
-from odds import win_probability, odds_texts
+from odds import win_probability, odds_texts, findRank, playerLevel
 
 def pos(x,y):
     return (768-y-32+4, x+4)
 
-def findRank(players, player):
-    ranked = sorted(players.items(), key=lambda kv:trueskill.expose(kv[1]), reverse=True)
-    minindex = len(ranked)
-    maxindex = 0
-    i = 1
-    for name,skill in ranked:
-        if round(trueskill.expose(players[player])) == round(trueskill.expose(skill)): # since we only display rounded skill it is only fair to group by whole numbers
-            minindex = min(minindex, i)
-            maxindex = max(maxindex, i)
-        i += 1
-    if minindex==maxindex:
-        return "{}".format(minindex)
-    else:
-        return "{}-{}".format(minindex,maxindex)
-        
 
 class ScreenEnterOutcome(LcarsScreen):
     def __init__(self, team1, team2):
@@ -125,11 +110,9 @@ class ScreenEnterOutcome(LcarsScreen):
                 continue
             player = players[name]
             self.textLabels[0][j].setText(findRank(players, name))
-            self.textLabels[1][j].setText("{:.2f}/{:.2f}".format(player.mu, player.sigma))
-            self.textLabels[2][j].setText("{:.2f}/{:.2f}".format(player.mu, player.sigma))
-            self.textLabels[3][j].setText("{:d}".format(round(trueskill.expose(player))))
-            
-            
+            self.textLabels[1][j].setText("{:.2f}/{:.2f}".format(player[0].mu, player[0].sigma))
+            self.textLabels[2][j].setText("{:.2f}/{:.2f}".format(player[1].mu, player[1].sigma))
+            self.textLabels[3][j].setText("{:d}".format(round(playerLevel(player))))
         players.close()
         
         
@@ -162,7 +145,21 @@ class ScreenEnterOutcome(LcarsScreen):
 
         players = shelve.open('playerdb')
         
-        newratings = [tuple((players[x] for x in self.team1)), tuple((players[x] for x in self.team2))]
+        #newratings = [tuple((players[x] for x in self.team1)), tuple((players[x] for x in self.team2))]
+        # start with offensive players
+        newratings = [[players[self.team1[0]][0]], [players[self.team2[0]][0]]]
+        # depending on 1v1 or 2v2 add the other or the same as defense
+        if len(self.team1) > 1:
+            newratings[0].append(players[self.team1[1]][1])
+        else:
+            newratings[0].append(players[self.team1[0]][1])
+        if len(self.team2) > 1:
+            newratings[1].append(players[self.team2[1]][1])
+        else:
+            newratings[1].append(players[self.team2[0]][1])
+        newratings[0] = tuple(newratings[0])
+        newratings[1] = tuple(newratings[1])
+        print('initial ratings: ', newratings)
         numdraws = 2 * min(self.team1score, self.team2score)
         numwins = 5 - numdraws
         for i in range(numdraws):
@@ -174,13 +171,18 @@ class ScreenEnterOutcome(LcarsScreen):
         
 
         updated = dict(players.items()) # clone that does not write back
-        updated[self.team1[0]] = newratings[0][0]
-        updated[self.team2[0]] = newratings[1][0]
+        updated[self.team1[0]] = (newratings[0][0], updated[self.team1[0]][1])
+        updated[self.team2[0]] = (newratings[1][0], updated[self.team2[0]][1])
         if len(self.team1)>1:
-            updated[self.team1[1]] = newratings[0][1]
-            updated[self.team2[1]] = newratings[1][1]
+            updated[self.team1[1]] = (updated[self.team1[1]][0], newratings[0][1])
+        else:
+            updated[self.team1[0]] = (updated[self.team1[0]][0], newratings[0][1])
+        if len(self.team2)>1:
+            updated[self.team2[1]] = (updated[self.team2[1]][0], newratings[1][1])
+        else:
+            updated[self.team2[0]] = (updated[self.team2[0]][0], newratings[1][1])
 
-        self.ratingupdate = newratings
+        self.ratingupdate = updated
         for i in range(4):
             team = [self.team1, self.team2][math.floor(i/2)]
             if i%2 >= len(team):
@@ -188,9 +190,9 @@ class ScreenEnterOutcome(LcarsScreen):
             name = team[i%2]
             player = updated[name]
             self.textLabels[4][i].setText(findRank(updated, name))
-            self.textLabels[5][i].setText("{:.2f}/{:.2f}".format(player.mu, player.sigma))
-            self.textLabels[6][i].setText("{:.2f}/{:.2f}".format(player.mu, player.sigma))
-            self.textLabels[7][i].setText("{:d}".format(round(trueskill.expose(player))))
+            self.textLabels[5][i].setText("{:.2f}/{:.2f}".format(player[0].mu, player[0].sigma))
+            self.textLabels[6][i].setText("{:.2f}/{:.2f}".format(player[1].mu, player[1].sigma))
+            self.textLabels[7][i].setText("{:d}".format(round(playerLevel(player))))
             
         players.close()
         
@@ -202,28 +204,38 @@ class ScreenEnterOutcome(LcarsScreen):
         with open('logfile.log', 'a') as log:
             log.write("{}: match played between {} and {}\n".format(time.strftime("%Y-%m-%d %H:%M:%S"), self.team1, self.team2))
             log.write("                   : won by {}\n".format(winningteam))
-            log.write("                   : skill before: {}: {}/{}\n".format(self.team1[0], players[self.team1[0]].mu, players[self.team1[0]].sigma))
-            log.write("                   : skill before: {}: {}/{}\n".format(self.team2[0], players[self.team2[0]].mu, players[self.team2[0]].sigma))
+            log.write("                   : offensive skill before: {}: {}/{}\n".format(self.team1[0], players[self.team1[0]][0].mu, players[self.team1[0]][0].sigma))
+            log.write("                   : defensive skill before: {}: {}/{}\n".format(self.team1[0], players[self.team1[0]][1].mu, players[self.team1[0]][1].sigma))
+            log.write("                   : offensive skill before: {}: {}/{}\n".format(self.team2[0], players[self.team2[0]][0].mu, players[self.team2[0]][0].sigma))
+            log.write("                   : defensive skill before: {}: {}/{}\n".format(self.team2[0], players[self.team2[0]][1].mu, players[self.team2[0]][1].sigma))
             if len(self.team1)>=2:
-                log.write("                   : skill before: {}: {}/{}\n".format(self.team1[1], players[self.team1[1]].mu, players[self.team1[1]].sigma))
+                log.write("                   : offensive skill before: {}: {}/{}\n".format(self.team1[1], players[self.team1[1]][0].mu, players[self.team1[1]][0].sigma))
+                log.write("                   : defensive skill before: {}: {}/{}\n".format(self.team1[1], players[self.team1[1]][1].mu, players[self.team1[1]][1].sigma))
             if len(self.team2)>=2:
-                log.write("                   : skill before: {}: {}/{}\n".format(self.team2[1], players[self.team2[1]].mu, players[self.team2[1]].sigma))
+                log.write("                   : offensive skill before: {}: {}/{}\n".format(self.team2[1], players[self.team2[1]][0].mu, players[self.team2[1]][0].sigma))
+                log.write("                   : defensive skill before: {}: {}/{}\n".format(self.team2[1], players[self.team2[1]][1].mu, players[self.team2[1]][1].sigma))
 
             #self.updatedskills
-            players[self.team1[0]] = self.ratingupdate[0][0]
-            players[self.team2[0]] = self.ratingupdate[1][0]
+            # update offensive skills
+            players[self.team1[0]] = self.ratingupdate[self.team1[0]]
+            players[self.team2[0]] = self.ratingupdate[self.team2[0]]
             if len(self.team1) >= 2:
-                players[self.team1[1]] = self.ratingupdate[0][1]
-                if len(self.team2) >= 2:
-                    players[self.team2[1]] = self.ratingupdate[1][1]
-        
-            log.write("                   : skill after: {}: {}/{}\n".format(self.team1[0], players[self.team1[0]].mu, players[self.team1[0]].sigma))
-            log.write("                   : skill after: {}: {}/{}\n".format(self.team2[0], players[self.team2[0]].mu, players[self.team2[0]].sigma))
+                players[self.team1[1]] = self.ratingupdate[self.team1[1]]
+            if len(self.team2) >= 2:
+                players[self.team2[1]] = self.ratingupdate[self.team2[1]]
+
+            log.write("                   : offensive skill after: {}: {}/{}\n".format(self.team1[0], players[self.team1[0]][0].mu, players[self.team1[0]][0].sigma))
+            log.write("                   : defensive skill after: {}: {}/{}\n".format(self.team1[0], players[self.team1[0]][1].mu, players[self.team1[0]][1].sigma))
+            log.write("                   : offensive skill after: {}: {}/{}\n".format(self.team2[0], players[self.team2[0]][0].mu, players[self.team2[0]][0].sigma))
+            log.write("                   : defensive skill after: {}: {}/{}\n".format(self.team2[0], players[self.team2[0]][1].mu, players[self.team2[0]][1].sigma))
             if len(self.team1)>=2:
-                log.write("                   : skill after: {}: {}/{}\n".format(self.team1[1], players[self.team1[1]].mu, players[self.team1[1]].sigma))
+                log.write("                   : offensive skill after: {}: {}/{}\n".format(self.team1[1], players[self.team1[1]][0].mu, players[self.team1[1]][0].sigma))
+                log.write("                   : defensive skill after: {}: {}/{}\n".format(self.team1[1], players[self.team1[1]][1].mu, players[self.team1[1]][1].sigma))
             if len(self.team2)>=2:
-                log.write("                   : skill after: {}: {}/{}\n".format(self.team2[1], players[self.team2[1]].mu, players[self.team2[1]].sigma))
-            
+                log.write("                   : offensive skill after: {}: {}/{}\n".format(self.team2[1], players[self.team2[1]][0].mu, players[self.team2[1]][0].sigma))
+                log.write("                   : defensive skill after: {}: {}/{}\n".format(self.team2[1], players[self.team2[1]][1].mu, players[self.team2[1]][1].sigma))
+
+                    
         players.close()
         # return to match screen:
         from screens.entermatch import ScreenEnterMatch

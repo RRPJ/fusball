@@ -4,5 +4,6 @@ import shelve
 
 playerdb = shelve.open('playerdb')
 for p in playerdb:
-    playerdb[p] = (playerdb[p], playerdb[p])
+    if type(playerdb[p]) != tuple:
+        playerdb[p] = (playerdb[p], playerdb[p])
 playerdb.close()
