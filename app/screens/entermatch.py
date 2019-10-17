@@ -41,24 +41,28 @@ class ScreenEnterMatch(LcarsScreen):
         self.startMatchButton = LcarsButton2(
             colours.ORANGE, (928, 528), (92, 60), "Start Match", self.startHandler)
         all_sprites.add(self.startMatchButton, layer=1)
-        all_sprites.add(LcarsButton2(colours.BEIGE, (64, 330),
-                                     (40, 32), "Auto", self.swapHandler))
+
+        
+        all_sprites.add(LcarsButton2(colours.BEIGE, (928, 392),
+                                     (92, 32), "Auto", self.autoHandler))
 
         # the small buttons for rearranging players:
-        all_sprites.add(LcarsButton2(colours.RED_BROWN, (324, 330),
-                                     (32, 32), "clear", glyph=True, handler=self.swapHandler))
-        all_sprites.add(LcarsButton2(colours.BEIGE, (288, 330), (32, 32),
+        all_sprites.add(LcarsButton2(colours.BEIGE, (244, 330), (32, 32),
                                      "bottomrow", glyph=True, handler=self.swapHandler, glyphoffset=(0, 5)))
-        all_sprites.add(LcarsButton2(colours.BEIGE, (252, 330), (32, 32),
+        all_sprites.add(LcarsButton2(colours.BEIGE, (208, 330), (32, 32),
                                      "toprow", glyph=True, handler=self.swapHandler, glyphoffset=(0, -5)))
-        all_sprites.add(LcarsButton2(colours.BLUE, (216, 330),
+        all_sprites.add(LcarsButton2(colours.BLUE, (172, 330),
                                      (32, 32), "diag1", glyph=True, handler=self.swapHandler))
-        all_sprites.add(LcarsButton2(colours.BLUE, (180, 330),
+        all_sprites.add(LcarsButton2(colours.BLUE, (136, 330),
                                      (32, 32), "diag2", glyph=True, handler=self.swapHandler))
-        all_sprites.add(LcarsButton2(colours.BEIGE, (144, 330), (32, 32),
+        all_sprites.add(LcarsButton2(colours.BEIGE, (100, 330), (32, 32),
                                      "rotateleft", glyph=True, handler=self.swapHandler))
-        all_sprites.add(LcarsButton2(colours.BEIGE, (108, 330), (32, 32),
+        all_sprites.add(LcarsButton2(colours.BEIGE, (64, 330), (32, 32),
                                      "rotateright", glyph=True, handler=self.swapHandler))
+        all_sprites.add(LcarsButton2(colours.BEIGE, (280, 330), (32, 32),
+                                     "leftcol", glyph=True, glyphoffset=(-5,0), handler=self.swapHandler))
+        all_sprites.add(LcarsButton2(colours.BEIGE, (316, 330), (32, 32),
+                                     "rightcol", glyph=True, glyphoffset=(5,0), handler=self.swapHandler))
 
         # add a keyboard:
         all_sprites.add(LcarsKeyboard((572, 280), self.keyboardHandler))
@@ -416,68 +420,71 @@ class ScreenEnterMatch(LcarsScreen):
             tmp = self.selectedPlayers[1].message
             self.selectedPlayers[1].setText(self.selectedPlayers[3].message)
             self.selectedPlayers[3].setText(tmp)
-        if item.text == 'Auto':
-            # there are really only 3 combinations that teams can be assigned
-            # there are 4 combinations of offense/defense for each.
-            p0 = self.selectedPlayers[0].message.lower() # defense team A
-            p1 = self.selectedPlayers[1].message.lower() # offense team A
-            p2 = self.selectedPlayers[2].message.lower() # offense team B
-            p3 = self.selectedPlayers[3].message.lower() # defense team B
+        if item.text == 'leftcol':
+            tmp = self.selectedPlayers[0].message
+            self.selectedPlayers[0].setText(self.selectedPlayers[1].message)
+            self.selectedPlayers[1].setText(tmp)
+        if item.text == 'rightcol':
+            tmp = self.selectedPlayers[2].message
+            self.selectedPlayers[2].setText(self.selectedPlayers[3].message)
+            self.selectedPlayers[3].setText(tmp)
+        self.updateOdds()
 
-            players = shelve.open('playerdb')
-            if p0 not in players or p1 not in players or p2 not in players or p3 not in players:
-                # nothing to do
-                return
-            match1a = [(players[p0][0], players[p1][1]), (players[p2][0], players[p3][1])]
-            match1b = [(players[p0][0], players[p1][1]), (players[p3][0], players[p2][1])]
-            match1c = [(players[p1][0], players[p0][1]), (players[p2][0], players[p3][1])]
-            match1d = [(players[p1][0], players[p0][1]), (players[p3][0], players[p2][1])]
-            match2a = [(players[p0][0], players[p2][1]), (players[p1][0], players[p3][1])]
-            match2b = [(players[p0][0], players[p2][1]), (players[p3][0], players[p1][1])]
-            match2c = [(players[p2][0], players[p0][1]), (players[p1][0], players[p3][1])]
-            match2d = [(players[p2][0], players[p0][1]), (players[p3][0], players[p1][1])]
-            match3a = [(players[p0][0], players[p3][1]), (players[p1][0], players[p2][1])]
-            match3b = [(players[p0][0], players[p3][1]), (players[p2][0], players[p1][1])]
-            match3c = [(players[p3][0], players[p0][1]), (players[p1][0], players[p2][1])]
-            match3d = [(players[p3][0], players[p0][1]), (players[p2][0], players[p1][1])]
-            q1a = trueskill.quality(match1a)
-            q1b = trueskill.quality(match1b)
-            q1c = trueskill.quality(match1c)
-            q1d = trueskill.quality(match1d)
-            q2a = trueskill.quality(match2a)
-            q2b = trueskill.quality(match2b)
-            q2c = trueskill.quality(match2c)
-            q2d = trueskill.quality(match2d)
-            q3a = trueskill.quality(match3a)
-            q3b = trueskill.quality(match3b)
-            q3c = trueskill.quality(match3c)
-            q3d = trueskill.quality(match3d)
-            #match = None
-            maxscore = max(q1a,q1b,q1c,q1d, q2a,q2b,q2c,q2d,q3a,q3b,q3c,q3d)
-            names = [p1,p0,p2,p3] if q1a==maxscore else (
-                    [p1,p0,p3,p2] if q1b==maxscore else (
-                    [p0,p1,p2,p3] if q1c==maxscore else (
-                    [p0,p1,p3,p2] if q1d==maxscore else (
-                    [p2,p0,p1,p3] if q2a==maxscore else (
-                    [p2,p0,p3,p1] if q2b==maxscore else (
-                    [p0,p2,p1,p3] if q2c==maxscore else (
-                    [p0,p2,p3,p1] if q2d==maxscore else (
-                    [p3,p0,p1,p2] if q3a==maxscore else (
-                    [p3,p0,p2,p1] if q3b==maxscore else (
-                    [p0,p3,p1,p2] if q3c==maxscore else (
-                    [p0,p3,p2,p1] )))))))))))
-            self.selectedPlayers[0].setText(capwords(names[0]))
-            self.selectedPlayers[1].setText(capwords(names[1]))
-            self.selectedPlayers[2].setText(capwords(names[2]))
-            self.selectedPlayers[3].setText(capwords(names[3]))
-            players.close()
+    def autoHandler(self, item, event, clock):
+        # there are really only 3 combinations that teams can be assigned
+        # there are 4 combinations of offense/defense for each.
+        p0 = self.selectedPlayers[0].message.lower() # defense team A
+        p1 = self.selectedPlayers[1].message.lower() # offense team A
+        p2 = self.selectedPlayers[2].message.lower() # offense team B
+        p3 = self.selectedPlayers[3].message.lower() # defense team B
+            
+        players = shelve.open('playerdb')
+        if p0 not in players or p1 not in players or p2 not in players or p3 not in players:
+            # nothing to do
+            return
+        match1a = [(players[p0][0], players[p1][1]), (players[p2][0], players[p3][1])]
+        match1b = [(players[p0][0], players[p1][1]), (players[p3][0], players[p2][1])]
+        match1c = [(players[p1][0], players[p0][1]), (players[p2][0], players[p3][1])]
+        match1d = [(players[p1][0], players[p0][1]), (players[p3][0], players[p2][1])]
+        match2a = [(players[p0][0], players[p2][1]), (players[p1][0], players[p3][1])]
+        match2b = [(players[p0][0], players[p2][1]), (players[p3][0], players[p1][1])]
+        match2c = [(players[p2][0], players[p0][1]), (players[p1][0], players[p3][1])]
+        match2d = [(players[p2][0], players[p0][1]), (players[p3][0], players[p1][1])]
+        match3a = [(players[p0][0], players[p3][1]), (players[p1][0], players[p2][1])]
+        match3b = [(players[p0][0], players[p3][1]), (players[p2][0], players[p1][1])]
+        match3c = [(players[p3][0], players[p0][1]), (players[p1][0], players[p2][1])]
+        match3d = [(players[p3][0], players[p0][1]), (players[p2][0], players[p1][1])]
+        q1a = trueskill.quality(match1a)
+        q1b = trueskill.quality(match1b)
+        q1c = trueskill.quality(match1c)
+        q1d = trueskill.quality(match1d)
+        q2a = trueskill.quality(match2a)
+        q2b = trueskill.quality(match2b)
+        q2c = trueskill.quality(match2c)
+        q2d = trueskill.quality(match2d)
+        q3a = trueskill.quality(match3a)
+        q3b = trueskill.quality(match3b)
+        q3c = trueskill.quality(match3c)
+        q3d = trueskill.quality(match3d)
+        #match = None
+        maxscore = max(q1a,q1b,q1c,q1d, q2a,q2b,q2c,q2d,q3a,q3b,q3c,q3d)
+        names = [p1,p0,p2,p3] if q1a==maxscore else (
+            [p1,p0,p3,p2] if q1b==maxscore else (
+            [p0,p1,p2,p3] if q1c==maxscore else (
+            [p0,p1,p3,p2] if q1d==maxscore else (
+            [p2,p0,p1,p3] if q2a==maxscore else (
+            [p2,p0,p3,p1] if q2b==maxscore else (
+            [p0,p2,p1,p3] if q2c==maxscore else (
+            [p0,p2,p3,p1] if q2d==maxscore else (
+            [p3,p0,p1,p2] if q3a==maxscore else (
+            [p3,p0,p2,p1] if q3b==maxscore else (
+            [p0,p3,p1,p2] if q3c==maxscore else (
+            [p0,p3,p2,p1] )))))))))))
+        self.selectedPlayers[0].setText(capwords(names[0]))
+        self.selectedPlayers[1].setText(capwords(names[1]))
+        self.selectedPlayers[2].setText(capwords(names[2]))
+        self.selectedPlayers[3].setText(capwords(names[3]))
+        players.close()
 
         self.updateOdds()
-        # remember player arrangement
-        #prefill = shelve.open('latestmatch')
-        #prefill['0'] = self.selectedPlayers[0].message.lower()
-        #prefill['1'] = self.selectedPlayers[1].message.lower()
-        #prefill['2'] = self.selectedPlayers[2].message.lower()
-        #prefill['3'] = self.selectedPlayers[3].message.lower()
-        #prefill.close()
-
+    
