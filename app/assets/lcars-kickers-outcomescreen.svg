@@ -29,9 +29,9 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="0.70710678"
-     inkscape:cx="356.90981"
-     inkscape:cy="370.31787"
+     inkscape:zoom="11.313708"
+     inkscape:cx="166.24447"
+     inkscape:cy="416.8307"
      inkscape:document-units="px"
      inkscape:current-layer="layer4"
      showgrid="true"
@@ -39,7 +39,7 @@
      inkscape:snap-bbox="true"
      inkscape:bbox-nodes="true"
      inkscape:snap-page="false"
-     inkscape:window-width="1920"
+     inkscape:window-width="1394"
      inkscape:window-height="1049"
      inkscape:window-x="1920"
      inkscape:window-y="17"
@@ -1252,30 +1252,19 @@
        x="0"
        y="101.60001" />
     <rect
-       style="display:inline;opacity:1;fill:#9bbde4;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:1.09445322;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       style="display:inline;opacity:1;fill:#9bbde4;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:1.1228838;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        id="rect3976-0-4-3-6"
-       width="20.108376"
+       width="21.166656"
        height="8.4666452"
-       x="47.62495"
+       x="46.566669"
        y="92.075027" />
     <rect
-       style="display:inline;opacity:1;fill:#c46161;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:1.09445333;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       style="display:inline;opacity:1;fill:#c46161;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:1.1228869;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        id="rect3976-0-4-3-3-4"
-       width="20.108345"
+       width="21.166735"
        height="8.4666605"
        x="24.341602"
        y="92.075005" />
-    <text
-       id="text4865-1-3-3-4-4-3-0-9"
-       y="98.33474"
-       x="45.477978"
-       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.05555534px;line-height:7.25;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';letter-spacing:0px;word-spacing:0px;display:inline;opacity:1;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.26458335"
-       xml:space="preserve"><tspan
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';fill:#ffffff;fill-opacity:1;stroke-width:0.26458335"
-         y="98.33474"
-         x="45.477978"
-         id="tspan4863-9-6-0-9-9-94-6-5"
-         sodipodi:role="line">:</tspan></text>
     <path
        sodipodi:nodetypes="cssccsscc"
        inkscape:connector-curvature="0"
@@ -1311,17 +1300,6 @@
          x="25.224232"
          id="tspan4863-9-6-0-9-9-94-9"
          sodipodi:role="line">Game Odds:</tspan></text>
-    <text
-       id="text4865-1-3-3-4-4-3-8-2"
-       y="89.830879"
-       x="25.064381"
-       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.05555534px;line-height:7.25;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';letter-spacing:0px;word-spacing:0px;display:inline;opacity:1;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458335"
-       xml:space="preserve"><tspan
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444447px;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';stroke-width:0.26458335"
-         y="89.830879"
-         x="25.064381"
-         id="tspan4863-9-6-0-9-9-94-9-6"
-         sodipodi:role="line">Likelihood of result:</tspan></text>
     <rect
        style="display:inline;opacity:1;fill:#fdcc9a;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:0.83386642;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        id="rect3614-7-8-1-5-9-6-1-7-7"
@@ -1453,6 +1431,98 @@
        height="8.46667"
        x="68.791672"
        y="101.60001" />
+    <rect
+       style="display:inline;opacity:1;fill:#9bbde4;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:1.09445322;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect3976-0-4-3-7"
+       width="20.108376"
+       height="8.4666452"
+       x="365.12497"
+       y="-28.574974" />
+    <rect
+       style="display:inline;opacity:1;fill:#7f7f7f;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:1.60772741;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect3976-0-4-1-41"
+       width="43.391663"
+       height="8.4666672"
+       x="341.84167"
+       y="-19.049957" />
+    <path
+       style="display:inline;opacity:1;fill:#fdcc9a;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:1.28880155;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="M 380.99995,-44.449879 C 383.72188,-44.444729 385.23327,-42.877739 385.23327,-40.216549 V -39.158209 H 341.84161 L 341.84163,-40.216549 C 341.84168,-42.870649 343.40316,-44.454939 346.07495,-44.449879"
+       id="rect966-4-2-1-9-85"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="csccsc" />
+    <rect
+       style="display:inline;opacity:1;fill:#7f7f7f;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:1.60772741;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect3976-0-4-1-4-9"
+       width="43.391663"
+       height="8.4666672"
+       x="341.84161"
+       y="-38.100246" />
+    <rect
+       style="display:inline;opacity:1;fill:#c46161;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:1.09445333;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect3976-0-4-3-3-7"
+       width="20.108345"
+       height="8.4666605"
+       x="341.84161"
+       y="-28.574989" />
+    <rect
+       style="display:inline;opacity:1;fill:#9bbde4;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:1.09445322;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect3976-0-4-3-6-5"
+       width="20.108376"
+       height="8.4666452"
+       x="365.12497"
+       y="-9.5249805" />
+    <rect
+       style="display:inline;opacity:1;fill:#c46161;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:1.09445333;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect3976-0-4-3-3-4-3"
+       width="20.108345"
+       height="8.4666605"
+       x="341.84161"
+       y="-9.5249996" />
+    <text
+       id="text4865-1-3-3-4-4-3-0-9-8"
+       y="-3.2652678"
+       x="362.978"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.05555534px;line-height:7.25;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';letter-spacing:0px;word-spacing:0px;display:inline;opacity:1;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.26458335"
+       xml:space="preserve"><tspan
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';fill:#ffffff;fill-opacity:1;stroke-width:0.26458335"
+         y="-3.2652678"
+         x="362.978"
+         id="tspan4863-9-6-0-9-9-94-6-5-8"
+         sodipodi:role="line">:</tspan></text>
+    <text
+       id="text4865-1-3-3-4-4-3-0-3"
+       y="-22.315254"
+       x="362.978"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.05555534px;line-height:7.25;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';letter-spacing:0px;word-spacing:0px;display:inline;opacity:1;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.26458335"
+       xml:space="preserve"><tspan
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';fill:#ffffff;fill-opacity:1;stroke-width:0.26458335"
+         y="-22.315254"
+         x="362.978"
+         id="tspan4863-9-6-0-9-9-94-6-1"
+         sodipodi:role="line">:</tspan></text>
+    <text
+       id="text4865-1-3-3-4-4-3-8-8"
+       y="-30.819122"
+       x="342.72424"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.05555534px;line-height:7.25;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';letter-spacing:0px;word-spacing:0px;display:inline;opacity:1;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458335"
+       xml:space="preserve"><tspan
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444494px;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';stroke-width:0.26458335"
+         y="-30.819122"
+         x="342.72424"
+         id="tspan4863-9-6-0-9-9-94-9-9"
+         sodipodi:role="line">Game Odds:</tspan></text>
+    <text
+       id="text4865-1-3-3-4-4-3-8-2-6"
+       y="-11.769125"
+       x="342.56439"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.05555534px;line-height:7.25;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';letter-spacing:0px;word-spacing:0px;display:inline;opacity:1;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458335"
+       xml:space="preserve"><tspan
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.64444494px;font-family:'Swiss911 UCm BT';-inkscape-font-specification:'Swiss911 UCm BT';stroke-width:0.26458335"
+         y="-11.769125"
+         x="342.56439"
+         id="tspan4863-9-6-0-9-9-94-9-6-4"
+         sodipodi:role="line">Likelihood of result:</tspan></text>
   </g>
   <g
      inkscape:label="dynamic components"
