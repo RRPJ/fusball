@@ -12,6 +12,7 @@ from fuzzywuzzy import process
 import trueskill
 import math
 import re
+from pprint import pprint
 import itertools
 import time
 from odds import win_probability, odds_texts
@@ -175,12 +176,39 @@ class ScreenEnterMatch(LcarsScreen):
             self.startMatchButton.setEnabled(False)
 
     def handleEvents(self, event, fpsClock):
+        
         if event.type == pygame.MOUSEBUTTONDOWN:
             # self.beep1.play()
             pass
 
         if event.type == pygame.MOUSEBUTTONUP:
             return False
+
+        if event.type == pygame.USEREVENT:
+            with shelve.open('tagdb') as tagdb:
+                if event.tagid in tagdb:
+                    tagname = tagdb[event.tagid]
+                    print('key presented for: ', tagname)
+                    with shelve.open("playerdb") as playerdb:
+                        if tagname not in playerdb:
+                            print('player does not exist!')
+                            return
+                    
+                    for i in range(4):
+                        if self.selectedPlayers[i].message == capwords(tagname):
+                            self.selectedPlayers[i].setText('')
+                    self.selectedPlayers[self.currentFocus].setText(capwords(tagname))
+                    self.updatePlayerSelection()
+            
+                    # rotate focus
+                    self.currentFocus = (self.currentFocus + 1) % 4
+                    for i in range(4):
+                        self.inputfocus[i].setTransparent(i != self.currentFocus)
+                    self.updateOdds()
+                    self.validate()
+                else:
+                    print('tag ', event.tagid, ' not registered')
+            
 
     def inputFocusHandler(self, which, item, event, clock):
         print("input focus on {}".format(which))

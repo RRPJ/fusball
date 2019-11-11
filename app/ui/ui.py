@@ -1,7 +1,8 @@
 import pygame
 from pygame.locals import *
-
 from ui.utils import sound
+import threading
+import serial
 
 
 class UserInterface:
@@ -35,6 +36,22 @@ class UserInterface:
         self.screen.setup(self.all_sprites)
         self.running = True
 
+        thread = threading.Thread(target=self.serialPoller, args=())
+        thread.daemon = True
+        thread.start()
+
+
+
+    def serialPoller(self):
+        dev = serial.Serial('/dev/ttyUSB0', 115200)
+        while True:
+            line = dev.readline()
+            code = ''.join(line.decode('utf=8').strip().split())
+            ev = pygame.event.Event(pygame.USEREVENT, tagid=code)
+            pygame.event.post(ev)
+
+
+    
     def update(self):
         self.screen.pre_update(self.screenSurface, self.fpsClock)
         self.all_sprites.update(self.screenSurface)
