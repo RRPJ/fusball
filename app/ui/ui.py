@@ -3,11 +3,13 @@ from pygame.locals import *
 from ui.utils import sound
 import threading
 import serial
+import config
 
 
 class UserInterface:
-    def __init__(self, screen, resolution=(1024, 768),
-                 ui_placement_mode=False, fps=60, dev_mode=False, audio=True,
+    #def __init__(self, screen, resolution=(1024, 768),
+    def __init__(self, screen, resolution=config.RESOLUTION,
+                 ui_placement_mode=config.UI_PLACEMENT_MODE, fps=config.FPS, dev_mode=config.DEV_MODE, audio=config.SOUND,
                  audio_params=(22050, -8, 1, 1024)):
         # init system
         pygame.display.init()
@@ -19,7 +21,14 @@ class UserInterface:
         #cursor = ((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
         pygame.mouse.set_cursor(*cursor)
 
-        self.screenSurface = pygame.display.set_mode(resolution, pygame.FULLSCREEN) #, pygame.FULLSCREEN)
+        # import ctypes
+        # ctypes.windll.user32.SetProcessDPIAware()
+
+        self.screenSurface = pygame.display.set_mode(
+                                                resolution
+                                                , pygame.FULLSCREEN
+                                                # , pygame.SCALED
+                                                )
         self.fpsClock = pygame.time.Clock()
         self.fps = fps
         pygame.display.set_caption("LCARS")
@@ -36,19 +45,19 @@ class UserInterface:
         self.screen.setup(self.all_sprites)
         self.running = True
 
-        thread = threading.Thread(target=self.serialPoller, args=())
-        thread.daemon = True
-        thread.start()
+        # thread = threading.Thread(target=self.serialPoller, args=())
+        # thread.daemon = True
+        # thread.start()
 
 
 
-    def serialPoller(self):
-        dev = serial.Serial('/dev/ttyUSB0', 115200)
-        while True:
-            line = dev.readline()
-            code = ''.join(line.decode('utf=8').strip().split())
-            ev = pygame.event.Event(pygame.USEREVENT, tagid=code)
-            pygame.event.post(ev)
+    # def serialPoller(self):
+    #     dev = serial.Serial('/dev/ttyUSB0', 115200)
+    #     while True:
+    #         line = dev.readline()
+    #         code = ''.join(line.decode('utf=8').strip().split())
+    #         ev = pygame.event.Event(pygame.USEREVENT, tagid=code)
+    #         pygame.event.post(ev)
 
 
     

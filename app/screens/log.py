@@ -52,17 +52,31 @@ class ScreenLog(LcarsScreen):
         self.page = max(0,self.page-1)
         self.showPage()
         
+    # def showPage(self):
+    #     with open('logfile.log', 'r') as log:
+    #         lines = log.readlines()
+    #     for i in range(LINES):
+    #         self.textlines[i].setText('')
+    #     for i,line in enumerate(lines[self.page*LINES:(self.page+1)*LINES]):
+    #         self.textlines[i].setText(line[:-1]) # cut \n
+    #     self.maxpage = math.ceil(len(lines)/LINES)
+    #     self.pageLabel.setText('Page {} of {}'.format(self.page+1, self.maxpage))
+            
     def showPage(self):
-        with open('logfile.log', 'r') as log:
-            lines = log.readlines()
+        try:
+            with open('logfile.log', 'r') as log:
+                lines = log.readlines()
+        except FileNotFoundError:
+            print("Log file not found.")
+            return  # Return without attempting to display anything
+    
         for i in range(LINES):
             self.textlines[i].setText('')
-        for i,line in enumerate(lines[self.page*LINES:(self.page+1)*LINES]):
-            self.textlines[i].setText(line[:-1]) # cut \n
-        self.maxpage = math.ceil(len(lines)/LINES)
-        self.pageLabel.setText('Page {} of {}'.format(self.page+1, self.maxpage))
-            
-        
+        for i, line in enumerate(lines[self.page * LINES:(self.page + 1) * LINES]):
+            self.textlines[i].setText(line[:-1])  # cut \n
+        self.maxpage = math.ceil(len(lines) / LINES)
+        self.pageLabel.setText('Page {} of {}'.format(self.page + 1, self.maxpage))
+
         
 
         

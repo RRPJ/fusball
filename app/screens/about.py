@@ -14,7 +14,7 @@ import sys
 class ScreenAbout(LcarsScreen):
     def setup(self, all_sprites):
         # background image
-        all_sprites.add(LcarsBackgroundImage("assets/bg_about.png"), layer=0)
+        # all_sprites.add(LcarsBackgroundImage("assets/bg_about.png"), layer=0)
         
         # interface buttons:
         all_sprites.add(LcarsButton2(colours.RED_BROWN, (4, 4), (140,68), "Back", self.backHandler ))

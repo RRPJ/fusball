@@ -14,8 +14,6 @@ from odds import win_probability, findRank, playerLevel
 from datasources.network import get_ip_address_string
 
 
-
-
 class ScreenMain(LcarsScreen):
     def setup(self, all_sprites):
         # background image
@@ -30,8 +28,8 @@ class ScreenMain(LcarsScreen):
         all_sprites.add(LcarsButton2(colours.RED_BROWN, (4, 192), (140,80), "Enter Match", self.enterMatchHandler, ), layer=1)
         all_sprites.add(LcarsButton2(colours.PURPLE   , (4, 144), (140,44), "System Log",  self.logHandler), layer=1)
         #all_sprites.add(LcarsButton2(colours.RED_BROWN, (4, 92), (140,48),  "Ranking"     ), layer=1)
-        all_sprites.add(LcarsText((0,0,0), (647,89), "Ranking", 20/19), layer=5)
-        all_sprites.add(LcarsButton2(colours.ORANGE   , (4, 40), (140,48),  "About",       self.aboutHandler), layer=1)
+        # all_sprites.add(LcarsText((0,0,0), (647,89), "Ranking", 20/19), layer=5)
+        # all_sprites.add(LcarsButton2(colours.ORANGE   , (4, 40), (140,48),  "About",       self.aboutHandler), layer=1)
         all_sprites.add(LcarsButton2(colours.BLUE     , (336, 92), (140,48), "Next",       self.nextHandler), layer=1)
         all_sprites.add(LcarsButton2(colours.BLUE     , (192, 92), (140,48), "Prev",       self.prevHandler), layer=1)
 
