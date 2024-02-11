@@ -1,10 +1,19 @@
 # LCARS Kickers Interface
 
-To launch: 
-```
-cd rpi_lcars/app
-/usr/bin/python3 lcars.py
-``` 
+Welcome to the LCARS Kickers Interface! This Python repository provides a user-friendly application for registering foosball scores and maintaining a leaderboard. Leveraging Microsoft's TrueSkill algorithm, it tracks players' skills in both offense and defense, offering a comprehensive gaming experience.
 
-You may wish to set DEV_MODE to True in config.py so that you can see the mouse pointer
+## Getting Started
 
+To launch the application, follow these simple steps:
+
+1. Navigate to the `fusball/app` directory.
+2. Run the following command:
+    ```Python
+    Python lcars.py
+    ```
+
+## Cursor Mode
+
+During development or when not using a touch-screen, you might want to enable the development mode. To do so, set `DEV_MODE` to `True` in the `config.py` file. This allows you to visualize the mouse pointer, facilitating debugging and testing processes.
+
+Enjoy the game and have fun competing with your friends!
