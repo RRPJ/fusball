@@ -12,7 +12,7 @@ To launch the application, follow these simple steps:
     Python lcars.py
     ```
 
-## Cursor Mode
+## Development Mode (Mouse Cursor)
 
 During development or when not using a touch-screen, you might want to enable the development mode. To do so, set `DEV_MODE` to `True` in the `config.py` file. This allows you to visualize the mouse pointer, facilitating debugging and testing processes.
 
