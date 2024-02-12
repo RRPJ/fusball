@@ -4,7 +4,12 @@ Welcome to the LCARS Kickers Interface! This Python repository provides a user-f
 
 ## Getting Started
 
-To launch the application, follow these simple steps:
+First install the required packages:
+```Python
+pip install -r requirements.txt
+```
+
+To launch the application, follow these steps:
 
 1. Navigate to the `fusball/app` directory.
 2. Run the following command:
@@ -14,6 +19,7 @@ To launch the application, follow these simple steps:
 
 ## Development Mode (Mouse Cursor)
 
-During development or when not using a touch-screen, you might want to enable the development mode. To do so, set `DEV_MODE` to `True` in the `config.py` file. This allows you to visualize the mouse pointer, facilitating debugging and testing processes.
+Development Mode is now active by default. It enables a mouse cursor. This game was originally programmed for a machine with a touch-screen, which did not necessitate a cursor.
+If you ever want to turn it off, set `DEV_MODE` to `False` in the `config.py` file. 
 
 Enjoy the game and have fun competing with your friends!
