@@ -9,9 +9,12 @@ First install the required packages:
 pip install -r requirements.txt
 ```
 
-To launch the application:
+To launch the application, first navigate to the app directory
+```Python
+cd app
+```
 
-Run the following command:
+Then run the following command:
 ```Python
 Python app/lcars.py
 ```
