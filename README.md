@@ -16,7 +16,7 @@ cd app
 
 Then run the following command:
 ```Python
-Python app/lcars.py
+Python lcars.py
 ```
 
 ## Development Mode (Mouse Cursor)
