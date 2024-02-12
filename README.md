@@ -9,13 +9,12 @@ First install the required packages:
 pip install -r requirements.txt
 ```
 
-To launch the application, follow these steps:
+To launch the application:
 
-1. Navigate to the `fusball/app` directory.
-2. Run the following command:
-    ```Python
-    Python lcars.py
-    ```
+Run the following command:
+```Python
+Python app/lcars.py
+```
 
 ## Development Mode (Mouse Cursor)
 
