@@ -6,9 +6,20 @@ set "ROOT=%~dp0"
 if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
 set "APP_DIR=%ROOT%\app"
 set "VENV_PY=%ROOT%\.venv\Scripts\python.exe"
+set "ENTRYPOINT=fusball.py"
 
-if not exist "%APP_DIR%\lcars.py" (
-    echo ERROR: Could not find app\lcars.py. Run this launcher from the repository root.
+if not exist "%APP_DIR%\%ENTRYPOINT%" (
+    if exist "%APP_DIR%\lcars.py" (
+        set "ENTRYPOINT=lcars.py"
+    ) else (
+        echo ERROR: Could not find app\fusball.py or app\lcars.py. Run this launcher from the repository root.
+        pause
+        exit /b 1
+    )
+)
+
+if not exist "%APP_DIR%\%ENTRYPOINT%" (
+    echo ERROR: Could not find app\%ENTRYPOINT%. Run this launcher from the repository root.
     pause
     exit /b 1
 )
@@ -44,7 +55,7 @@ if defined FUSBALL_NO_LAUNCH (
 )
 
 cd /d "%APP_DIR%"
-"%VENV_PY%" lcars.py
+"%VENV_PY%" %ENTRYPOINT%
 set "EXIT_CODE=%ERRORLEVEL%"
 
 if not "%EXIT_CODE%"=="0" (

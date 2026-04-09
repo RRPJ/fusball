@@ -7,7 +7,8 @@
 
 ## Project Conventions
 
-- Launch app from `app/` directory (`python lcars.py`).
+- Launch app from `app/` directory (`python fusball.py`).
+- Keep `lcars.py` compatibility unless a migration task explicitly removes it.
 - Data is stateful and lives in shelve files under `app/`.
 - Treat `playerdb*`, `recentplayers*`, and `tagdb*` as production-like data.
 - Keep kiosk/fullscreen assumptions intact unless a task explicitly changes them.

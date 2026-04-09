@@ -8,10 +8,10 @@ Diagnostics are logged to startup.log in the app directory for persistent inspec
 """
 
 import sys
-import os
 from pathlib import Path
 import shelve
 import datetime
+from typing import Optional
 
 
 def _log_write(log_file: Path, message: str) -> None:
@@ -21,7 +21,7 @@ def _log_write(log_file: Path, message: str) -> None:
         f.write(message + "\n")
 
 
-def check_assets(log_file: Path = None):
+def check_assets(log_file: Optional[Path] = None) -> bool:
     """Verify required asset files exist.
     
     Returns:
@@ -50,7 +50,7 @@ def check_assets(log_file: Path = None):
     return True
 
 
-def check_database_access(log_file: Path = None):
+def check_database_access(log_file: Optional[Path] = None) -> bool:
     """Verify database files can be created/accessed.
     
     Returns:
@@ -76,7 +76,7 @@ def check_database_access(log_file: Path = None):
     return True
 
 
-def check_pygame(log_file: Path = None):
+def check_pygame(log_file: Optional[Path] = None) -> bool:
     """Verify pygame can be initialized.
     
     Returns:
@@ -96,7 +96,7 @@ def check_pygame(log_file: Path = None):
         return False
 
 
-def run_diagnostics():
+def run_diagnostics() -> bool:
     """Run all startup diagnostics.
     
     Performs asset, database, and pygame checks. Warnings are non-blocking;

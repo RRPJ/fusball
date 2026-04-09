@@ -52,14 +52,42 @@ python scripts/smoke_check.py
 
 ```bash
 cd app
-python lcars.py
+python fusball.py
 ```
+
+Backward compatibility note:
+- `python lcars.py` still works and currently delegates to the same app startup path.
 
 Notes:
 - The app is fullscreen and designed for touchscreen kiosks.
 - In development, mouse cursor behavior is controlled by `DEV_MODE` in `app/config.py`.
 
-## 4) Troubleshooting
+## 4) Coding Standards
+
+Install development dependencies:
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+Run lint and formatting checks:
+
+```bash
+ruff check app/startup.py app/fusball.py scripts
+black --check app/startup.py app/fusball.py scripts
+```
+
+Enable pre-commit hooks:
+
+```bash
+pre-commit install
+```
+
+Function documentation tip:
+- The inline function documentation you asked about is called a `docstring`.
+- For new or changed functions, prefer short docstrings that describe purpose, inputs, and return value.
+
+## 5) Troubleshooting
 
 - If audio causes startup issues, keep `SOUND = False` in `app/config.py`.
 - If you see display issues on desktop, validate fullscreen support at your current resolution.

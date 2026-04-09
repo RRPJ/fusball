@@ -7,6 +7,20 @@
 3. Run `python scripts/smoke_check.py` before opening a PR.
 4. Keep changes small and behavior-preserving unless intentionally changing gameplay.
 
+## Coding Standards
+
+- Install dev tools with `pip install -r requirements-dev.txt`.
+- Run lint: `ruff check app/startup.py app/fusball.py scripts`.
+- Run formatting check: `black --check app/startup.py app/fusball.py scripts`.
+- Enable local hooks: `pre-commit install`.
+- For changed functions, add concise docstrings when intent is not immediately obvious.
+
+## Naming Policy
+
+- `fusball.py` is the canonical entrypoint for new docs/scripts.
+- `lcars.py` remains for backward compatibility during migration.
+- Avoid broad symbol renames from `Lcars*` unless part of an explicit migration slice.
+
 ## Data Safety Requirements
 
 - Before modifying persistence logic, create a backup:
@@ -16,6 +30,7 @@
 ## Pull Request Checklist
 
 - [ ] Smoke check passes locally.
+- [ ] Ruff and Black checks pass locally.
 - [ ] Any data-shape changes have migration and rollback notes.
 - [ ] README/docs are updated for behavior or workflow changes.
 - [ ] UI changes preserve touchscreen-first navigation and hit targets.

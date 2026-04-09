@@ -19,7 +19,7 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 python scripts/smoke_check.py
 cd app
-python lcars.py
+python fusball.py
 ```
 
 Linux/macOS:
@@ -31,7 +31,7 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 python scripts/smoke_check.py
 cd app
-python lcars.py
+python fusball.py
 ```
 
 Windows double-click launcher:
@@ -57,6 +57,27 @@ Run it with:
 
 ```bash
 python scripts/smoke_check.py
+```
+
+## Coding Standards
+
+Install dev tooling:
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+Run checks manually:
+
+```bash
+ruff check app/startup.py app/fusball.py scripts
+black --check app/startup.py app/fusball.py scripts
+```
+
+Enable local pre-commit checks:
+
+```bash
+pre-commit install
 ```
 
 ## Data Safety

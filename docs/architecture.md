@@ -2,7 +2,8 @@
 
 ## Runtime Entry Point
 
-- `app/lcars.py` initializes the first screen and enters the UI tick loop.
+- `app/fusball.py` is the canonical entrypoint and delegates to legacy startup.
+- `app/lcars.py` remains as a compatibility entrypoint during migration.
 - `app/ui/ui.py` owns the Pygame lifecycle, event loop, and screen transitions.
 
 ## Screen System
@@ -34,5 +35,5 @@
 ## Known Legacy Constraints
 
 - Storage format is legacy shelve files (`.bak/.dir` style artifacts exist in repo).
-- Relative file paths assume process cwd is `app/` when launching `lcars.py`.
+- Relative file paths assume process cwd is `app/` when launching `fusball.py`.
 - UI was built for kiosk/touchscreen/fullscreen operation.
