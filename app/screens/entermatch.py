@@ -5,10 +5,9 @@ from ui.widgets.lcars_widgets import *
 from ui.widgets.screen import LcarsScreen
 import shelve
 from fuzzywuzzy import process
-import trueskill
 import re
 import time
-from services.match_service import odds_ratio_for_teams
+from services.match_service import best_balanced_lineup, odds_ratio_for_teams
 from services.player_store import (
     add_player_if_missing,
     add_recent_player,
@@ -438,49 +437,10 @@ class ScreenEnterMatch(LcarsScreen):
         p1 = self.selectedPlayers[1].message.lower() # offense team A
         p2 = self.selectedPlayers[2].message.lower() # offense team B
         p3 = self.selectedPlayers[3].message.lower() # defense team B
-            
         with shelve.open('playerdb') as players:
-            if p0 not in players or p1 not in players or p2 not in players or p3 not in players:
-                # nothing to do
-                return
-            match1a = [(players[p0][0], players[p1][1]), (players[p2][0], players[p3][1])]
-            match1b = [(players[p0][0], players[p1][1]), (players[p3][0], players[p2][1])]
-            match1c = [(players[p1][0], players[p0][1]), (players[p2][0], players[p3][1])]
-            match1d = [(players[p1][0], players[p0][1]), (players[p3][0], players[p2][1])]
-            match2a = [(players[p0][0], players[p2][1]), (players[p1][0], players[p3][1])]
-            match2b = [(players[p0][0], players[p2][1]), (players[p3][0], players[p1][1])]
-            match2c = [(players[p2][0], players[p0][1]), (players[p1][0], players[p3][1])]
-            match2d = [(players[p2][0], players[p0][1]), (players[p3][0], players[p1][1])]
-            match3a = [(players[p0][0], players[p3][1]), (players[p1][0], players[p2][1])]
-            match3b = [(players[p0][0], players[p3][1]), (players[p2][0], players[p1][1])]
-            match3c = [(players[p3][0], players[p0][1]), (players[p1][0], players[p2][1])]
-            match3d = [(players[p3][0], players[p0][1]), (players[p2][0], players[p1][1])]
-        q1a = trueskill.quality(match1a)
-        q1b = trueskill.quality(match1b)
-        q1c = trueskill.quality(match1c)
-        q1d = trueskill.quality(match1d)
-        q2a = trueskill.quality(match2a)
-        q2b = trueskill.quality(match2b)
-        q2c = trueskill.quality(match2c)
-        q2d = trueskill.quality(match2d)
-        q3a = trueskill.quality(match3a)
-        q3b = trueskill.quality(match3b)
-        q3c = trueskill.quality(match3c)
-        q3d = trueskill.quality(match3d)
-        #match = None
-        maxscore = max(q1a,q1b,q1c,q1d, q2a,q2b,q2c,q2d,q3a,q3b,q3c,q3d)
-        names = [p1,p0,p2,p3] if q1a==maxscore else (
-            [p1,p0,p3,p2] if q1b==maxscore else (
-            [p0,p1,p2,p3] if q1c==maxscore else (
-            [p0,p1,p3,p2] if q1d==maxscore else (
-            [p2,p0,p1,p3] if q2a==maxscore else (
-            [p2,p0,p3,p1] if q2b==maxscore else (
-            [p0,p2,p1,p3] if q2c==maxscore else (
-            [p0,p2,p3,p1] if q2d==maxscore else (
-            [p3,p0,p1,p2] if q3a==maxscore else (
-            [p3,p0,p2,p1] if q3b==maxscore else (
-            [p0,p3,p1,p2] if q3c==maxscore else (
-            [p0,p3,p2,p1] )))))))))))
+            names = best_balanced_lineup(players, p0, p1, p2, p3)
+        if names is None:
+            return
         self.selectedPlayers[0].setText(capwords(names[0]))
         self.selectedPlayers[1].setText(capwords(names[1]))
         self.selectedPlayers[2].setText(capwords(names[2]))

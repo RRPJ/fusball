@@ -5,8 +5,8 @@ from ui.widgets.screen import LcarsScreen
 import shelve
 from functools import partial
 import math
-import time
 from odds import findRank, playerLevel
+from services.match_log import append_match_log
 from services.match_service import odds_ratio_for_teams, calculate_rating_update
 
 def pos(x,y):
@@ -163,38 +163,34 @@ class ScreenEnterOutcome(LcarsScreen):
     def saveHandler(self, item, event, clock):
         winningteam = self.team1 if self.team1score > self.team2score else self.team2
         with shelve.open('playerdb') as players:
-            with open('logfile.log', 'a') as log:
-                log.write("{}: match played between {} and {}\n".format(time.strftime("%Y-%m-%d %H:%M:%S"), self.team1, self.team2))
-                log.write("                   : won by {}\n".format(winningteam))
-                log.write("                   : offensive skill before: {}: {}/{}\n".format(self.team1[0], players[self.team1[0]][0].mu, players[self.team1[0]][0].sigma))
-                log.write("                   : defensive skill before: {}: {}/{}\n".format(self.team1[0], players[self.team1[0]][1].mu, players[self.team1[0]][1].sigma))
-                log.write("                   : offensive skill before: {}: {}/{}\n".format(self.team2[0], players[self.team2[0]][0].mu, players[self.team2[0]][0].sigma))
-                log.write("                   : defensive skill before: {}: {}/{}\n".format(self.team2[0], players[self.team2[0]][1].mu, players[self.team2[0]][1].sigma))
-                if len(self.team1)>=2:
-                    log.write("                   : offensive skill before: {}: {}/{}\n".format(self.team1[1], players[self.team1[1]][0].mu, players[self.team1[1]][0].sigma))
-                    log.write("                   : defensive skill before: {}: {}/{}\n".format(self.team1[1], players[self.team1[1]][1].mu, players[self.team1[1]][1].sigma))
-                if len(self.team2)>=2:
-                    log.write("                   : offensive skill before: {}: {}/{}\n".format(self.team2[1], players[self.team2[1]][0].mu, players[self.team2[1]][0].sigma))
-                    log.write("                   : defensive skill before: {}: {}/{}\n".format(self.team2[1], players[self.team2[1]][1].mu, players[self.team2[1]][1].sigma))
+            before_ratings = {
+                name: players[name]
+                for team in (self.team1, self.team2)
+                for name in team
+            }
 
-                # update offensive and defensive skills
-                players[self.team1[0]] = self.ratingupdate[self.team1[0]]
-                players[self.team2[0]] = self.ratingupdate[self.team2[0]]
-                if len(self.team1) >= 2:
-                    players[self.team1[1]] = self.ratingupdate[self.team1[1]]
-                if len(self.team2) >= 2:
-                    players[self.team2[1]] = self.ratingupdate[self.team2[1]]
+            # update offensive and defensive skills
+            players[self.team1[0]] = self.ratingupdate[self.team1[0]]
+            players[self.team2[0]] = self.ratingupdate[self.team2[0]]
+            if len(self.team1) >= 2:
+                players[self.team1[1]] = self.ratingupdate[self.team1[1]]
+            if len(self.team2) >= 2:
+                players[self.team2[1]] = self.ratingupdate[self.team2[1]]
 
-                log.write("                   : offensive skill after: {}: {}/{}\n".format(self.team1[0], players[self.team1[0]][0].mu, players[self.team1[0]][0].sigma))
-                log.write("                   : defensive skill after: {}: {}/{}\n".format(self.team1[0], players[self.team1[0]][1].mu, players[self.team1[0]][1].sigma))
-                log.write("                   : offensive skill after: {}: {}/{}\n".format(self.team2[0], players[self.team2[0]][0].mu, players[self.team2[0]][0].sigma))
-                log.write("                   : defensive skill after: {}: {}/{}\n".format(self.team2[0], players[self.team2[0]][1].mu, players[self.team2[0]][1].sigma))
-                if len(self.team1)>=2:
-                    log.write("                   : offensive skill after: {}: {}/{}\n".format(self.team1[1], players[self.team1[1]][0].mu, players[self.team1[1]][0].sigma))
-                    log.write("                   : defensive skill after: {}: {}/{}\n".format(self.team1[1], players[self.team1[1]][1].mu, players[self.team1[1]][1].sigma))
-                if len(self.team2)>=2:
-                    log.write("                   : offensive skill after: {}: {}/{}\n".format(self.team2[1], players[self.team2[1]][0].mu, players[self.team2[1]][0].sigma))
-                    log.write("                   : defensive skill after: {}: {}/{}\n".format(self.team2[1], players[self.team2[1]][1].mu, players[self.team2[1]][1].sigma))
+            after_ratings = {
+                name: players[name]
+                for team in (self.team1, self.team2)
+                for name in team
+            }
+
+        append_match_log(
+            'logfile.log',
+            self.team1,
+            self.team2,
+            winningteam,
+            before_ratings,
+            after_ratings,
+        )
         # return to match screen:
         from screens.entermatch import ScreenEnterMatch
         self.loadScreen(ScreenEnterMatch())

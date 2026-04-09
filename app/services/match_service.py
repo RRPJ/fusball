@@ -6,7 +6,7 @@ stays consistent across UI flows.
 
 from __future__ import annotations
 
-from typing import Dict, Mapping, Sequence, Tuple
+from typing import Dict, Mapping, Optional, Sequence, Tuple
 
 import trueskill
 
@@ -87,3 +87,37 @@ def calculate_rating_update(
         updated[team2[0]] = (updated[team2[0]][0], rating_pairs[1][1])
 
     return updated
+
+
+def best_balanced_lineup(
+    players: Mapping[PlayerName, PlayerRating],
+    defense_a: PlayerName,
+    offense_a: PlayerName,
+    offense_b: PlayerName,
+    defense_b: PlayerName,
+) -> Optional[list[PlayerName]]:
+    """Return the best lineup ordering for balanced match quality.
+
+    The returned order is compatible with the UI selected player slots:
+    [team A defense, team A offense, team B offense, team B defense].
+    Returns None when any referenced player is missing.
+    """
+    names = [defense_a, offense_a, offense_b, defense_b]
+    if any(name not in players for name in names):
+        return None
+
+    options = [
+        ([offense_a, defense_a, offense_b, defense_b], [(players[defense_a][0], players[offense_a][1]), (players[offense_b][0], players[defense_b][1])]),
+        ([offense_a, defense_a, defense_b, offense_b], [(players[defense_a][0], players[offense_a][1]), (players[defense_b][0], players[offense_b][1])]),
+        ([defense_a, offense_a, offense_b, defense_b], [(players[offense_a][0], players[defense_a][1]), (players[offense_b][0], players[defense_b][1])]),
+        ([defense_a, offense_a, defense_b, offense_b], [(players[offense_a][0], players[defense_a][1]), (players[defense_b][0], players[offense_b][1])]),
+        ([offense_b, defense_a, offense_a, defense_b], [(players[defense_a][0], players[offense_b][1]), (players[offense_a][0], players[defense_b][1])]),
+        ([offense_b, defense_a, defense_b, offense_a], [(players[defense_a][0], players[offense_b][1]), (players[defense_b][0], players[offense_a][1])]),
+        ([defense_a, offense_b, offense_a, defense_b], [(players[offense_b][0], players[defense_a][1]), (players[offense_a][0], players[defense_b][1])]),
+        ([defense_a, offense_b, defense_b, offense_a], [(players[offense_b][0], players[defense_a][1]), (players[defense_b][0], players[offense_a][1])]),
+        ([defense_b, defense_a, offense_a, offense_b], [(players[defense_a][0], players[defense_b][1]), (players[offense_a][0], players[offense_b][1])]),
+        ([defense_b, defense_a, offense_b, offense_a], [(players[defense_a][0], players[defense_b][1]), (players[offense_b][0], players[offense_a][1])]),
+        ([defense_a, defense_b, offense_a, offense_b], [(players[defense_b][0], players[defense_a][1]), (players[offense_a][0], players[offense_b][1])]),
+        ([defense_a, defense_b, offense_b, offense_a], [(players[defense_b][0], players[defense_a][1]), (players[offense_b][0], players[offense_a][1])]),
+    ]
+    return max(options, key=lambda option: trueskill.quality(option[1]))[0]
