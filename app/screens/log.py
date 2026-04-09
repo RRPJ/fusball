@@ -1,16 +1,7 @@
-from datetime import datetime
-from functools import partial
-import random
 import math
-from ui.widgets.background import LcarsBackgroundImage, LcarsImage
-from ui.widgets.gifimage import LcarsGifImage
+from ui.widgets.background import LcarsBackgroundImage
 from ui.widgets.lcars_widgets import *
 from ui.widgets.screen import LcarsScreen
-from string import capwords
-import subprocess
-from pprint import pprint
-import sys
-import time
 
 LINES = 25
 

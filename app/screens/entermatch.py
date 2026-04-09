@@ -1,19 +1,12 @@
-from datetime import datetime
 from functools import partial
-import random
 from string import capwords
-from ui.widgets.background import LcarsBackgroundImage, LcarsImage
-from ui.widgets.gifimage import LcarsGifImage
+from ui.widgets.background import LcarsBackgroundImage
 from ui.widgets.lcars_widgets import *
 from ui.widgets.screen import LcarsScreen
-from datasources.network import get_ip_address_string
 import shelve
 from fuzzywuzzy import process
 import trueskill
-import math
 import re
-from pprint import pprint
-import itertools
 import time
 from odds import win_probability, odds_texts
 

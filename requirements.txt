@@ -1,5 +1,7 @@
-pygame
-pillow
-trueskill
-serial
-fuzzywuzzy
+pygame==2.6.1; python_version < "3.14"
+pygame-ce==2.5.7; python_version >= "3.14"
+Pillow>=10.4,<13
+trueskill==0.4.5
+pyserial==3.5
+fuzzywuzzy==0.18.0
+psutil==7.1.2

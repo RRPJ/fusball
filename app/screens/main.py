@@ -1,17 +1,11 @@
 from datetime import datetime
-from functools import partial
-import random
-from ui.widgets.background import LcarsBackgroundImage, LcarsImage
-from ui.widgets.gifimage import LcarsGifImage
+from ui.widgets.background import LcarsBackgroundImage
 from ui.widgets.lcars_widgets import *
 from ui.widgets.screen import LcarsScreen
 from string import capwords
 import shelve
 import trueskill
-import math
-import subprocess
-from odds import win_probability, findRank, playerLevel
-from datasources.network import get_ip_address_string
+from odds import findRank, playerLevel
 
 
 class ScreenMain(LcarsScreen):

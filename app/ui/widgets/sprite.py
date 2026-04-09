@@ -5,7 +5,10 @@ class LcarsWidget(pygame.sprite.DirtySprite):
     """Base class for all widgets"""
 
     def __init__(self, color, pos, size, handler=None):
+        preloaded_image = getattr(self, "image", None)
         pygame.sprite.DirtySprite.__init__(self)
+        if preloaded_image is not None:
+            self.image = preloaded_image
         if self.image == None:
             self.image = pygame.Surface(size).convert()
             self.image.fill(color)
