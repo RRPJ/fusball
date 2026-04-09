@@ -9,7 +9,8 @@ from pprint import pprint
 import math
 import trueskill
 import time
-from odds import win_probability, odds_texts, findRank, playerLevel
+from odds import findRank, playerLevel
+from services.match_service import odds_ratio_for_teams, calculate_rating_update
 
 def pos(x,y):
     return (768-y-32+4, x+4)
@@ -63,20 +64,9 @@ class ScreenEnterOutcome(LcarsScreen):
 
         # game odds
         # add a text object for the odds:
-        team1ratings = []
-        team2ratings = []
-        players = shelve.open('playerdb')
-        team1ratings.append(players[self.team1[0]])
-        team2ratings.append(players[self.team2[0]])
-        if len(self.team1) > 1:
-            team1ratings.append(players[self.team1[1]])
-        if len(self.team2) > 1:
-            team2ratings.append(players[self.team2[1]])
-        players.close()
-        p = win_probability(team1ratings, team2ratings)
+        with shelve.open('playerdb') as players:
+            p, ratio = odds_ratio_for_teams(players, self.team1, self.team2)
         print("win probability: {}%".format(p * 100))
-
-        ratio = sorted(odds_texts, key=lambda x: abs(x[1] - p))[0][0]
         print("selected ratio: {}".format(ratio))
         all_sprites.add(LcarsText(colours.BLACK, pos(160, 460), str(ratio.split(':')[0]), 20/19, alignright=True))
         all_sprites.add(LcarsText(colours.BLACK, pos(180, 460), str(ratio.split(':')[1]), 20/19))
@@ -153,45 +143,14 @@ class ScreenEnterOutcome(LcarsScreen):
             minscore = min(self.team1score, self.team2score)
             maxscore = max(self.team1score, self.team2score)
             self.saveButton.setEnabled(maxscore==5 and minscore!=5)
-            players = shelve.open('playerdb')
-        
-            #newratings = [tuple((players[x] for x in self.team1)), tuple((players[x] for x in self.team2))]
-            # start with offensive players
-            newratings = [[players[self.team1[0]][0]], [players[self.team2[0]][0]]]
-            # depending on 1v1 or 2v2 add the other or the same as defense
-            if len(self.team1) > 1:
-                newratings[0].append(players[self.team1[1]][1])
-            else:
-                newratings[0].append(players[self.team1[0]][1])
-            if len(self.team2) > 1:
-                newratings[1].append(players[self.team2[1]][1])
-            else:
-                newratings[1].append(players[self.team2[0]][1])
-            newratings[0] = tuple(newratings[0])
-            newratings[1] = tuple(newratings[1])
-            print('initial ratings: ', newratings)
-
-            numdraws = minscore
-            numwins = maxscore - minscore
-            for i in range(numdraws):
-                newratings = trueskill.rate(newratings, ranks=[1,1])
-                print(newratings)
-            for i in range(numwins):
-                newratings = trueskill.rate(newratings, ranks=[0,1] if self.team1score > self.team2score else [1,0])
-            print(newratings)
-            
-
-            updated = dict(players.items()) # clone that does not write back
-            updated[self.team1[0]] = (newratings[0][0], updated[self.team1[0]][1])
-            updated[self.team2[0]] = (newratings[1][0], updated[self.team2[0]][1])
-            if len(self.team1)>1:
-                updated[self.team1[1]] = (updated[self.team1[1]][0], newratings[0][1])
-            else:
-                updated[self.team1[0]] = (updated[self.team1[0]][0], newratings[0][1])
-            if len(self.team2)>1:
-                updated[self.team2[1]] = (updated[self.team2[1]][0], newratings[1][1])
-            else:
-                updated[self.team2[0]] = (updated[self.team2[0]][0], newratings[1][1])
+            with shelve.open('playerdb') as players:
+                updated = calculate_rating_update(
+                    players,
+                    self.team1,
+                    self.team2,
+                    self.team1score,
+                    self.team2score,
+                )
 
             self.ratingupdate = updated
             for i in range(4):
@@ -204,8 +163,6 @@ class ScreenEnterOutcome(LcarsScreen):
                 self.textLabels[5][i].setText("{:.2f}/{:.2f}".format(player[0].mu, player[0].sigma))
                 self.textLabels[6][i].setText("{:.2f}/{:.2f}".format(player[1].mu, player[1].sigma))
                 self.textLabels[7][i].setText("{:d}".format(round(playerLevel(player))))
-            
-            players.close()
         
 
     def saveHandler(self, item, event, clock):

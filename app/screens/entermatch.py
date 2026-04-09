@@ -8,7 +8,7 @@ from fuzzywuzzy import process
 import trueskill
 import re
 import time
-from odds import win_probability, odds_texts
+from services.match_service import odds_ratio_for_teams
 
 
 
@@ -214,25 +214,9 @@ class ScreenEnterMatch(LcarsScreen):
         p1 = self.selectedPlayers[1].message.lower()
         p2 = self.selectedPlayers[2].message.lower()
         p3 = self.selectedPlayers[3].message.lower()
-        team1 = []
-        team2 = []
-        players = shelve.open('playerdb')
-        # offense first, defense second (1 and 2 are offense)
-        if p1 in players:
-            team1.append(players[p1])
-        if p0 in players:
-            team1.append(players[p0])
-        if p2 in players:
-            team2.append(players[p2])
-        if p3 in players:
-            team2.append(players[p3])
-        players.close()
-        p = 0.5
-        if len(team1) > 0 and len(team2) > 0:
-            p = win_probability(team1, team2)
+        with shelve.open('playerdb') as players:
+            p, ratio = odds_ratio_for_teams(players, [p1, p0], [p2, p3])
         print("win probability: {}%".format(p * 100))
-
-        ratio = sorted(odds_texts, key=lambda x: abs(x[1] - p))[0][0]
         print("selected ratio: {}".format(ratio))
         self.oddsText.setText(ratio)
 

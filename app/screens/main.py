@@ -5,7 +5,8 @@ from ui.widgets.screen import LcarsScreen
 from string import capwords
 import shelve
 import trueskill
-from odds import findRank, playerLevel
+from odds import playerLevel
+from services.player_store import ranked_players, rank_labels_by_name
 
 
 class ScreenMain(LcarsScreen):
@@ -72,8 +73,10 @@ class ScreenMain(LcarsScreen):
         else:
             self.title.setText("TOP {}-{}".format(self.page*10, self.page*10+9))
             
-        players = shelve.open('playerdb')
-        ranked = sorted(players.items(), key=lambda kv:playerLevel(kv[1]), reverse=True)
+        with shelve.open('playerdb') as players:
+            ranked = ranked_players(players.items())
+            rank_labels = rank_labels_by_name(ranked)
+
         # user buttons:
         colorindex = 0
         prevrank = ""
@@ -81,7 +84,7 @@ class ScreenMain(LcarsScreen):
             # name field
             if i < len(ranked):
                 name,rating = ranked[i]
-                rank = findRank(players, name)
+                rank = rank_labels[name]
             else:
                 name = ''
                 rating = (trueskill.Rating(), trueskill.Rating())
@@ -109,8 +112,6 @@ class ScreenMain(LcarsScreen):
             self.defenselabels[i % 10].setText(defense)
             self.offenselabels[i % 10].setColor(colour)
             self.defenselabels[i % 10].setColor(colour)
-
-        players.close()
         
         
     def update(self, screenSurface, fpsClock):
