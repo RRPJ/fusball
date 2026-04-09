@@ -9,7 +9,6 @@ from __future__ import annotations
 from typing import Dict, Mapping, Optional, Sequence, Tuple
 
 import trueskill
-
 from odds import odds_texts, win_probability
 
 PlayerName = str
@@ -106,18 +105,31 @@ def best_balanced_lineup(
     if any(name not in players for name in names):
         return None
 
+    p = players  # short alias for readability in the options table below
     options = [
-        ([offense_a, defense_a, offense_b, defense_b], [(players[defense_a][0], players[offense_a][1]), (players[offense_b][0], players[defense_b][1])]),
-        ([offense_a, defense_a, defense_b, offense_b], [(players[defense_a][0], players[offense_a][1]), (players[defense_b][0], players[offense_b][1])]),
-        ([defense_a, offense_a, offense_b, defense_b], [(players[offense_a][0], players[defense_a][1]), (players[offense_b][0], players[defense_b][1])]),
-        ([defense_a, offense_a, defense_b, offense_b], [(players[offense_a][0], players[defense_a][1]), (players[defense_b][0], players[offense_b][1])]),
-        ([offense_b, defense_a, offense_a, defense_b], [(players[defense_a][0], players[offense_b][1]), (players[offense_a][0], players[defense_b][1])]),
-        ([offense_b, defense_a, defense_b, offense_a], [(players[defense_a][0], players[offense_b][1]), (players[defense_b][0], players[offense_a][1])]),
-        ([defense_a, offense_b, offense_a, defense_b], [(players[offense_b][0], players[defense_a][1]), (players[offense_a][0], players[defense_b][1])]),
-        ([defense_a, offense_b, defense_b, offense_a], [(players[offense_b][0], players[defense_a][1]), (players[defense_b][0], players[offense_a][1])]),
-        ([defense_b, defense_a, offense_a, offense_b], [(players[defense_a][0], players[defense_b][1]), (players[offense_a][0], players[offense_b][1])]),
-        ([defense_b, defense_a, offense_b, offense_a], [(players[defense_a][0], players[defense_b][1]), (players[offense_b][0], players[offense_a][1])]),
-        ([defense_a, defense_b, offense_a, offense_b], [(players[defense_b][0], players[defense_a][1]), (players[offense_a][0], players[offense_b][1])]),
-        ([defense_a, defense_b, offense_b, offense_a], [(players[defense_b][0], players[defense_a][1]), (players[offense_b][0], players[offense_a][1])]),
+        ([offense_a, defense_a, offense_b, defense_b],
+         [(p[defense_a][0], p[offense_a][1]), (p[offense_b][0], p[defense_b][1])]),
+        ([offense_a, defense_a, defense_b, offense_b],
+         [(p[defense_a][0], p[offense_a][1]), (p[defense_b][0], p[offense_b][1])]),
+        ([defense_a, offense_a, offense_b, defense_b],
+         [(p[offense_a][0], p[defense_a][1]), (p[offense_b][0], p[defense_b][1])]),
+        ([defense_a, offense_a, defense_b, offense_b],
+         [(p[offense_a][0], p[defense_a][1]), (p[defense_b][0], p[offense_b][1])]),
+        ([offense_b, defense_a, offense_a, defense_b],
+         [(p[defense_a][0], p[offense_b][1]), (p[offense_a][0], p[defense_b][1])]),
+        ([offense_b, defense_a, defense_b, offense_a],
+         [(p[defense_a][0], p[offense_b][1]), (p[defense_b][0], p[offense_a][1])]),
+        ([defense_a, offense_b, offense_a, defense_b],
+         [(p[offense_b][0], p[defense_a][1]), (p[offense_a][0], p[defense_b][1])]),
+        ([defense_a, offense_b, defense_b, offense_a],
+         [(p[offense_b][0], p[defense_a][1]), (p[defense_b][0], p[offense_a][1])]),
+        ([defense_b, defense_a, offense_a, offense_b],
+         [(p[defense_a][0], p[defense_b][1]), (p[offense_a][0], p[offense_b][1])]),
+        ([defense_b, defense_a, offense_b, offense_a],
+         [(p[defense_a][0], p[defense_b][1]), (p[offense_b][0], p[offense_a][1])]),
+        ([defense_a, defense_b, offense_a, offense_b],
+         [(p[defense_b][0], p[defense_a][1]), (p[offense_a][0], p[offense_b][1])]),
+        ([defense_a, defense_b, offense_b, offense_a],
+         [(p[defense_b][0], p[defense_a][1]), (p[offense_b][0], p[offense_a][1])]),
     ]
     return max(options, key=lambda option: trueskill.quality(option[1]))[0]

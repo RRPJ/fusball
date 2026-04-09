@@ -1,12 +1,10 @@
+import re
+import shelve
+import time
 from functools import partial
 from string import capwords
-from ui.widgets.background import LcarsBackgroundImage
-from ui.widgets.lcars_widgets import *
-from ui.widgets.screen import LcarsScreen
-import shelve
+
 from fuzzywuzzy import process
-import re
-import time
 from services.match_service import best_balanced_lineup, odds_ratio_for_teams
 from services.player_store import (
     add_player_if_missing,
@@ -16,7 +14,9 @@ from services.player_store import (
     player_names,
     recent_player_names,
 )
-
+from ui.widgets.background import LcarsBackgroundImage
+from ui.widgets.lcars_widgets import *
+from ui.widgets.screen import LcarsScreen
 
 
 def pos(x,y):
@@ -29,7 +29,7 @@ class ScreenEnterMatch(LcarsScreen):
 
         # load the most recently used player layout
         ensure_recent_players_initialized()
-        
+
         # background image
         all_sprites.add(LcarsBackgroundImage("assets/bg_match.png"), layer=0)
 
@@ -40,7 +40,7 @@ class ScreenEnterMatch(LcarsScreen):
             colours.ORANGE, (928, 528), (92, 60), "Start Match", self.startHandler)
         all_sprites.add(self.startMatchButton, layer=1)
 
-        
+
         all_sprites.add(LcarsButton2(colours.BEIGE, (928, 392),
                                      (92, 32), "Auto", self.autoHandler))
 
@@ -112,8 +112,8 @@ class ScreenEnterMatch(LcarsScreen):
                                      (32, 32), "clear", glyph=True, handler=partial(self.clearSingleHandler, 2)))
         all_sprites.add(LcarsButton2(colours.RED_BROWN, (564, 394),
                                      (32, 32), "clear", glyph=True, handler=partial(self.clearSingleHandler, 3)))
-        
-        
+
+
         all_sprites.add(self.selectedPlayers[0], layer=1)
         all_sprites.add(self.selectedPlayers[1], layer=1)
         all_sprites.add(self.selectedPlayers[2], layer=1)
@@ -137,7 +137,7 @@ class ScreenEnterMatch(LcarsScreen):
         self.currentFocus = 0
         self.searchString = ""
         self.updatePlayerSelection()
-        
+
         self.validate()
         self.searchString = ""
 
@@ -152,7 +152,7 @@ class ScreenEnterMatch(LcarsScreen):
         p1 = self.selectedPlayers[1].message.lower()
         p2 = self.selectedPlayers[2].message.lower()
         p3 = self.selectedPlayers[3].message.lower()
-        
+
         team1 = set()  # makes unique
         team2 = set()
         if p0 != '':
@@ -173,7 +173,7 @@ class ScreenEnterMatch(LcarsScreen):
             self.startMatchButton.setEnabled(False)
 
     def handleEvents(self, event, fpsClock):
-        
+
         if event.type == pygame.MOUSEBUTTONDOWN:
             # self.beep1.play()
             pass
@@ -189,13 +189,13 @@ class ScreenEnterMatch(LcarsScreen):
                     if not player_exists(tagname):
                         print('player does not exist!')
                         return
-                    
+
                     for i in range(4):
                         if self.selectedPlayers[i].message == capwords(tagname):
                             self.selectedPlayers[i].setText('')
                     self.selectedPlayers[self.currentFocus].setText(capwords(tagname))
                     self.updatePlayerSelection()
-            
+
                     # rotate focus
                     self.currentFocus = (self.currentFocus + 1) % 4
                     for i in range(4):
@@ -204,7 +204,7 @@ class ScreenEnterMatch(LcarsScreen):
                     self.validate()
                 else:
                     print('tag ', event.tagid, ' not registered')
-            
+
 
     def inputFocusHandler(self, which, item, event, clock):
         print("input focus on {}".format(which))
@@ -238,7 +238,7 @@ class ScreenEnterMatch(LcarsScreen):
             if x not in out:
                 out.append(x)
         return out
-        
+
 
     def playerClicked(self, index, item, event, clock):
         print("player {} clicked: {}".format(index, item.text))
@@ -252,12 +252,12 @@ class ScreenEnterMatch(LcarsScreen):
                     time.strftime("%Y-%m-%d %H:%M:%S"), self.searchString))
             add_player_if_missing(self.searchString)
             #self.updatePlayerSelection()
-        
+
         print("choosing")
         self.selectedPlayers[self.currentFocus].setText(capwords(name))
         add_recent_player(name)
         self.updatePlayerSelection()
-            
+
         # rotate focus
         self.currentFocus = (self.currentFocus + 1) % 4
         for i in range(4):
@@ -289,7 +289,7 @@ class ScreenEnterMatch(LcarsScreen):
                 recentplayers.remove(p)
             # candidates are harder because they are tuples
             candidates = [c for c in candidates if c[0] != p]
-                
+
         # remove already chosen players from suggestions
         for i in range(4):
             s = self.selectedPlayers[i].message.lower()
@@ -297,8 +297,8 @@ class ScreenEnterMatch(LcarsScreen):
                 recentplayers.remove(s)
         print('recentplayers: ', recentplayers)
         print('candidates: ', candidates)
-        
-        
+
+
         for i in range(6):
             print('i: ', i)
             # skip the add player button
@@ -322,10 +322,10 @@ class ScreenEnterMatch(LcarsScreen):
     def keyboardHandler(self, item, event, clock):
         print("keyboard event forwarded to match screen: {}".format(event))
         # update the input field with the new text:
-        if type(event) == str:
+        if isinstance(event, str):
             if event == 'bkspc':
                 match = re.search('0x[0-9][0-9]$', self.searchString)
-                if match != None:
+                if match is not None:
                     self.searchString = self.searchString[:-
                                                           4] + chr(int(match.group(), 16))
                 else:
@@ -383,7 +383,7 @@ class ScreenEnterMatch(LcarsScreen):
         self.validate()
         self.updatePlayerSelection()
         self.updateOdds()
-        
+
     def swapHandler(self, item, event, clock):
         print("swapping " + item.text)
         if item.text == 'clear':
@@ -447,4 +447,4 @@ class ScreenEnterMatch(LcarsScreen):
         self.selectedPlayers[3].setText(capwords(names[3]))
 
         self.updateOdds()
-    
+

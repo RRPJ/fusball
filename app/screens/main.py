@@ -1,12 +1,13 @@
+import shelve
 from datetime import datetime
+from string import capwords
+
+import trueskill
+from odds import playerLevel
+from services.player_store import rank_labels_by_name, ranked_players
 from ui.widgets.background import LcarsBackgroundImage
 from ui.widgets.lcars_widgets import *
 from ui.widgets.screen import LcarsScreen
-from string import capwords
-import shelve
-import trueskill
-from odds import playerLevel
-from services.player_store import ranked_players, rank_labels_by_name
 
 
 class ScreenMain(LcarsScreen):
@@ -14,10 +15,10 @@ class ScreenMain(LcarsScreen):
         # background image
         all_sprites.add(LcarsBackgroundImage("assets/bg_main.png"), layer=0)
 
-        
+
         self.title = LcarsTitle(colours.WHITE, (768-568-32, 268), 260, "")
         all_sprites.add(self.title)
-        
+
         # interface buttons
         all_sprites.add(LcarsButton2(colours.RED_BROWN, (4, 708), (140,40), "Power",       self.powerHandler), layer=1)
         all_sprites.add(LcarsButton2(colours.RED_BROWN, (4, 192), (140,80), "Enter Match", self.enterMatchHandler, ), layer=1)
@@ -51,10 +52,10 @@ class ScreenMain(LcarsScreen):
             self.defenselabels.append(LcarsButton2(colour, (676, 496-36*i), (92,32), '', None))
             all_sprites.add(self.defenselabels[-1])
 
-        
+
         self.page = 0
         self.updateRanking()
-        
+
         #self.ip_address = LcarsText(colours.BLACK, (444, 520), get_ip_address_string())
         #all_sprites.add(self.ip_address, layer=1)
 
@@ -66,13 +67,13 @@ class ScreenMain(LcarsScreen):
         self.beep1 = Sound("assets/audio/panel/201.wav")
         Sound("assets/audio/panel/220.wav").play()
 
-        
+
     def updateRanking(self):
         if self.page == 0:
             self.title.setText("TOP 10")
         else:
             self.title.setText("TOP {}-{}".format(self.page*10, self.page*10+9))
-            
+
         with shelve.open('playerdb') as players:
             ranked = ranked_players(players.items())
             rank_labels = rank_labels_by_name(ranked)
@@ -89,16 +90,16 @@ class ScreenMain(LcarsScreen):
                 name = ''
                 rating = (trueskill.Rating(), trueskill.Rating())
                 rank = '-'
-                
+
             if rank != prevrank:
                 colorindex = (colorindex + 1) % 4
                 prevrank = rank
-        
+
             colour = [colours.BLUE, colours.PEACH, colours.BEIGE, colours.WHITE][colorindex]
 
             self.ranklabels[i % 10].setText(rank)
             self.ranklabels[i % 10].setColour(colour)
-            
+
             self.namebuttons[i % 10].setText(capwords(name))
             self.namebuttons[i % 10].setColor(colour)
 
@@ -112,8 +113,8 @@ class ScreenMain(LcarsScreen):
             self.defenselabels[i % 10].setText(defense)
             self.offenselabels[i % 10].setColor(colour)
             self.defenselabels[i % 10].setColor(colour)
-        
-        
+
+
     def update(self, screenSurface, fpsClock):
         if pygame.time.get_ticks() - self.lastClockUpdate > 1000:
             self.stardate.setText(datetime.now().strftime("%d%m.%y %H:%M:%S"))
@@ -149,13 +150,13 @@ class ScreenMain(LcarsScreen):
 
     def playerClickedHandler(self, number, item, event, clock):
         print("player {} clicked".format(number))
-        
+
     def powerHandler(self, item, event, clock):
         from screens.power import ScreenPower
         self.loadScreen(ScreenPower())
 
         #
-        
+
         #pygame.image.save(item.image, "/home/kickers/screenshot.png")
 
 
@@ -175,7 +176,7 @@ class ScreenMain(LcarsScreen):
         from screens.about import ScreenAbout
         self.loadScreen(ScreenAbout())
 
-    
+
     def gaugesHandler(self, item, event, clock):
         self.hideInfoText()
         self.sensor_gadget.visible = False
@@ -199,7 +200,7 @@ class ScreenMain(LcarsScreen):
         self.sensor_gadget.visible = False
         self.dashboard.visible = False
         self.weather.visible = False
-        
+
     def logoutHandler(self, item, event, clock):
         from screens.authorize import ScreenAuthorize
         self.loadScreen(ScreenAuthorize())

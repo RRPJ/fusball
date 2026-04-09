@@ -1,13 +1,15 @@
+import math
+import shelve
+from functools import partial
 from string import capwords
+
+from odds import findRank, playerLevel
+from services.match_log import append_match_log
+from services.match_service import calculate_rating_update, odds_ratio_for_teams
 from ui.widgets.background import LcarsBackgroundImage
 from ui.widgets.lcars_widgets import *
 from ui.widgets.screen import LcarsScreen
-import shelve
-from functools import partial
-import math
-from odds import findRank, playerLevel
-from services.match_log import append_match_log
-from services.match_service import odds_ratio_for_teams, calculate_rating_update
+
 
 def pos(x,y):
     return (768-y-32+4, x+4)
@@ -20,7 +22,7 @@ class ScreenEnterOutcome(LcarsScreen):
         self.team1score = None
         self.team2score = None
         super().__init__()
-        
+
     def setup(self, all_sprites):
         all_sprites.add(LcarsBackgroundImage("assets/lcars-kickers-resultscreen.png"), layer=0)
 
@@ -38,11 +40,11 @@ class ScreenEnterOutcome(LcarsScreen):
             self.scorebuttons2.append(b2)
             all_sprites.add(b1, layer=1)
             all_sprites.add(b2, layer=1)
-            
+
         self.saveButton = LcarsButton2(colours.ORANGE,   (740,520), (120, 68), "Save Result", self.saveHandler)
         self.saveButton.setEnabled(False)
         all_sprites.add(self.saveButton, layer=1)
-        
+
         # fixed text:
         all_sprites.add(LcarsText(colours.BLACK, pos(316, 352), capwords(self.team1[0]), 20/19))
         all_sprites.add(LcarsText(colours.BLACK, pos(508, 352), capwords(self.team2[0]), 20/19))
@@ -73,14 +75,14 @@ class ScreenEnterOutcome(LcarsScreen):
         self.lhtext2 = LcarsText(colours.BLACK, pos(180, 408), '', 20/19)
         all_sprites.add(self.lhtext1)
         all_sprites.add(self.lhtext2)
-        
-            
+
+
         # adjustable texts:
         xs = [384, 428, 532, 636, 724, 768, 872, 976]
         ys = [140, 104, 68, 32]
 
         self.textLabels = [[None for y in ys] for x in xs]
-        
+
         # now accessible as self.textLabels[x][y]
         for i,x in enumerate(xs):
             for j,y in enumerate(ys):
@@ -101,9 +103,9 @@ class ScreenEnterOutcome(LcarsScreen):
                 self.textLabels[1][j].setText("{:.2f}/{:.2f}".format(player[0].mu, player[0].sigma))
                 self.textLabels[2][j].setText("{:.2f}/{:.2f}".format(player[1].mu, player[1].sigma))
                 self.textLabels[3][j].setText("{:d}".format(round(playerLevel(player))))
-        
-        
-        
+
+
+
 
     def update(self, screenSurface, clock):
         LcarsScreen.update(self, screenSurface, clock)
@@ -131,10 +133,10 @@ class ScreenEnterOutcome(LcarsScreen):
             self.team2score = score
             for i in range(6):
                 self.scorebuttons2[i].setColor(colours.BLUE      if i<= self.team2score else (127,127,127))
-        
 
-        
-        if self.team1score != None and self.team2score != None:
+
+
+        if self.team1score is not None and self.team2score is not None:
             minscore = min(self.team1score, self.team2score)
             maxscore = max(self.team1score, self.team2score)
             self.saveButton.setEnabled(maxscore==5 and minscore!=5)
@@ -158,7 +160,7 @@ class ScreenEnterOutcome(LcarsScreen):
                 self.textLabels[5][i].setText("{:.2f}/{:.2f}".format(player[0].mu, player[0].sigma))
                 self.textLabels[6][i].setText("{:.2f}/{:.2f}".format(player[1].mu, player[1].sigma))
                 self.textLabels[7][i].setText("{:d}".format(round(playerLevel(player))))
-        
+
 
     def saveHandler(self, item, event, clock):
         winningteam = self.team1 if self.team1score > self.team2score else self.team2
@@ -194,5 +196,5 @@ class ScreenEnterOutcome(LcarsScreen):
         # return to match screen:
         from screens.entermatch import ScreenEnterMatch
         self.loadScreen(ScreenEnterMatch())
-        
-        
+
+

@@ -10,7 +10,6 @@ import shelve
 from typing import Dict, Iterable, List, Sequence, Tuple
 
 import trueskill
-
 from odds import playerLevel
 
 PlayerName = str
@@ -34,7 +33,9 @@ def rank_labels_by_name(ranked: Sequence[Tuple[PlayerName, PlayerRating]]) -> Di
 
     for index, (name, _) in enumerate(ranked, start=1):
         level = rounded_levels[index - 1]
-        matching_positions = [pos for pos, value in enumerate(rounded_levels, start=1) if value == level]
+        matching_positions = [
+            pos for pos, value in enumerate(rounded_levels, start=1) if value == level
+        ]
         min_rank = matching_positions[0]
         max_rank = matching_positions[-1]
         labels[name] = str(min_rank) if min_rank == max_rank else f"{min_rank}-{max_rank}"

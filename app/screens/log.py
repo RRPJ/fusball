@@ -1,4 +1,5 @@
 import math
+
 from ui.widgets.background import LcarsBackgroundImage
 from ui.widgets.lcars_widgets import *
 from ui.widgets.screen import LcarsScreen
@@ -21,7 +22,7 @@ class ScreenLog(LcarsScreen):
             newline = LcarsText(colours.WHITE, pos(150, 550-20*i), '', 20/19)
             self.textlines.append(newline)
             all_sprites.add(newline)
-        
+
 
         # interface buttons:
         all_sprites.add(LcarsButton2(colours.RED_BROWN, (360, 700), (140,48), "Back", self.backHandler ))
@@ -30,7 +31,7 @@ class ScreenLog(LcarsScreen):
 
         self.pageLabel = LcarsText(colours.WHITE, pos(346, 620), '', 20/19)
         all_sprites.add(self.pageLabel)
-        
+
         self.page = 0
         self.showPage()
 
@@ -42,7 +43,7 @@ class ScreenLog(LcarsScreen):
     def prevHandler(self, item, event, clock):
         self.page = max(0,self.page-1)
         self.showPage()
-        
+
     # def showPage(self):
     #     with open('logfile.log', 'r') as log:
     #         lines = log.readlines()
@@ -52,7 +53,7 @@ class ScreenLog(LcarsScreen):
     #         self.textlines[i].setText(line[:-1]) # cut \n
     #     self.maxpage = math.ceil(len(lines)/LINES)
     #     self.pageLabel.setText('Page {} of {}'.format(self.page+1, self.maxpage))
-            
+
     def showPage(self):
         try:
             with open('logfile.log', 'r') as log:
@@ -60,7 +61,7 @@ class ScreenLog(LcarsScreen):
         except FileNotFoundError:
             print("Log file not found.")
             return  # Return without attempting to display anything
-    
+
         for i in range(LINES):
             self.textlines[i].setText('')
         for i, line in enumerate(lines[self.page * LINES:(self.page + 1) * LINES]):
@@ -68,12 +69,12 @@ class ScreenLog(LcarsScreen):
         self.maxpage = math.ceil(len(lines) / LINES)
         self.pageLabel.setText('Page {} of {}'.format(self.page + 1, self.maxpage))
 
-        
 
-        
+
+
 
     def backHandler(self, item, event, clock):
         from screens.main import ScreenMain
         self.loadScreen(ScreenMain())
 
-            
+

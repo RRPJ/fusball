@@ -1,14 +1,14 @@
 import sys
-import pygame
-import config
 
+import config
+import pygame
 from ui import colours
 from ui.utils.sound import Sound
 from ui.widgets.background import LcarsBackgroundImage
 from ui.widgets.gifimage import LcarsGifImage
-from ui.widgets.lcars_widgets import LcarsText
+from ui.widgets.lcars_widgets import LcarsButton, LcarsText
 from ui.widgets.screen import LcarsScreen
-from ui.widgets.lcars_widgets import LcarsButton
+
 
 class ScreenAuthorize(LcarsScreen):
 
@@ -16,8 +16,8 @@ class ScreenAuthorize(LcarsScreen):
         all_sprites.add(LcarsBackgroundImage("assets/lcars_screen_2.png"),
                         layer=0)
 
-        all_sprites.add(LcarsGifImage("assets/gadgets/stlogorotating.gif", (103, 369), 50), 
-                        layer=0)        
+        all_sprites.add(LcarsGifImage("assets/gadgets/stlogorotating.gif", (103, 369), 50),
+                        layer=0)
 
         all_sprites.add(LcarsText(colours.ORANGE, (270, -1), "AUTHORIZATION REQUIRED", 2),
                         layer=0)
@@ -27,7 +27,7 @@ class ScreenAuthorize(LcarsScreen):
 
         all_sprites.add(LcarsText(colours.BLUE, (360, -1), "TOUCH TERMINAL TO PROCEED", 1.5),
                         layer=1)
-        
+
         #all_sprites.add(LcarsText(colours.BLUE, (390, -1), "FAILED ATTEMPTS WILL BE REPORTED", 1.5),layer=1)
 
 
@@ -42,7 +42,7 @@ class ScreenAuthorize(LcarsScreen):
 
         if config.DEV_MODE:
             all_sprites.add(LcarsButton(colours.GREY_BLUE, (0, 770), "X", self.exitHandler, (30, 30)), layer=2)
-        
+
         self.layer1 = all_sprites.get_sprites_from_layer(1)
         self.layer2 = all_sprites.get_sprites_from_layer(2)
 
