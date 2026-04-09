@@ -6,7 +6,10 @@ on rendering and interaction.
 
 from __future__ import annotations
 
+import shelve
 from typing import Dict, Iterable, List, Sequence, Tuple
+
+import trueskill
 
 from odds import playerLevel
 
@@ -37,3 +40,53 @@ def rank_labels_by_name(ranked: Sequence[Tuple[PlayerName, PlayerRating]]) -> Di
         labels[name] = str(min_rank) if min_rank == max_rank else f"{min_rank}-{max_rank}"
 
     return labels
+
+
+def player_names() -> List[PlayerName]:
+    """Return all player names from persistent storage."""
+    with shelve.open("playerdb") as players:
+        return list(players.keys())
+
+
+def player_exists(name: PlayerName) -> bool:
+    """Return whether a player exists in persistent storage."""
+    with shelve.open("playerdb") as players:
+        return name in players
+
+
+def add_player_if_missing(name: PlayerName) -> bool:
+    """Create a default offense/defense rating entry when absent.
+
+    Returns True when a new player was added, otherwise False.
+    """
+    with shelve.open("playerdb") as players:
+        if name in players:
+            return False
+        players[name] = (trueskill.Rating(), trueskill.Rating())
+        return True
+
+
+def ensure_recent_players_initialized() -> None:
+    """Ensure the recent player list exists in storage."""
+    with shelve.open("recentplayers") as recentplayers:
+        if "names" not in recentplayers:
+            recentplayers["names"] = []
+
+
+def recent_player_names() -> List[PlayerName]:
+    """Return the stored list of recent player names."""
+    ensure_recent_players_initialized()
+    with shelve.open("recentplayers") as recentplayers:
+        return list(recentplayers["names"])
+
+
+def add_recent_player(name: PlayerName) -> None:
+    """Insert a player at the front of recent names, keeping uniqueness."""
+    lname = name.lower()
+    with shelve.open("recentplayers") as recentplayers:
+        names = recentplayers.get("names", [])
+        merged = [lname]
+        for existing in names:
+            if existing not in merged:
+                merged.append(existing)
+        recentplayers["names"] = merged

@@ -1,13 +1,10 @@
 from string import capwords
-from ui.widgets.background import LcarsBackgroundImage, LcarsImage
+from ui.widgets.background import LcarsBackgroundImage
 from ui.widgets.lcars_widgets import *
 from ui.widgets.screen import LcarsScreen
 import shelve
-from string import capwords
 from functools import partial
-from pprint import pprint
 import math
-import trueskill
 import time
 from odds import findRank, playerLevel
 from services.match_service import odds_ratio_for_teams, calculate_rating_update
@@ -80,7 +77,6 @@ class ScreenEnterOutcome(LcarsScreen):
             
         # adjustable texts:
         xs = [384, 428, 532, 636, 724, 768, 872, 976]
-        widths = [40, 100, 100, 40, 40, 100, 100, 40]
         ys = [140, 104, 68, 32]
 
         self.textLabels = [[None for y in ys] for x in xs]
@@ -92,20 +88,19 @@ class ScreenEnterOutcome(LcarsScreen):
                 all_sprites.add(self.textLabels[i][j])
 
         # prefill the labels with 'before' values
-        players = shelve.open('playerdb')
-        for j,y in enumerate(ys):
-            team = [self.team1, self.team2][math.floor(j/2)]
-            if j%2 >= len(team):
-                continue
-            name = team[j%2]
-            if name not in players:
-                continue
-            player = players[name]
-            self.textLabels[0][j].setText(findRank(players, name))
-            self.textLabels[1][j].setText("{:.2f}/{:.2f}".format(player[0].mu, player[0].sigma))
-            self.textLabels[2][j].setText("{:.2f}/{:.2f}".format(player[1].mu, player[1].sigma))
-            self.textLabels[3][j].setText("{:d}".format(round(playerLevel(player))))
-        players.close()
+        with shelve.open('playerdb') as players:
+            for j,y in enumerate(ys):
+                team = [self.team1, self.team2][math.floor(j/2)]
+                if j%2 >= len(team):
+                    continue
+                name = team[j%2]
+                if name not in players:
+                    continue
+                player = players[name]
+                self.textLabels[0][j].setText(findRank(players, name))
+                self.textLabels[1][j].setText("{:.2f}/{:.2f}".format(player[0].mu, player[0].sigma))
+                self.textLabels[2][j].setText("{:.2f}/{:.2f}".format(player[1].mu, player[1].sigma))
+                self.textLabels[3][j].setText("{:d}".format(round(playerLevel(player))))
         
         
         
@@ -166,45 +161,40 @@ class ScreenEnterOutcome(LcarsScreen):
         
 
     def saveHandler(self, item, event, clock):
-        players = shelve.open('playerdb')
-
         winningteam = self.team1 if self.team1score > self.team2score else self.team2
-        with open('logfile.log', 'a') as log:
-            log.write("{}: match played between {} and {}\n".format(time.strftime("%Y-%m-%d %H:%M:%S"), self.team1, self.team2))
-            log.write("                   : won by {}\n".format(winningteam))
-            log.write("                   : offensive skill before: {}: {}/{}\n".format(self.team1[0], players[self.team1[0]][0].mu, players[self.team1[0]][0].sigma))
-            log.write("                   : defensive skill before: {}: {}/{}\n".format(self.team1[0], players[self.team1[0]][1].mu, players[self.team1[0]][1].sigma))
-            log.write("                   : offensive skill before: {}: {}/{}\n".format(self.team2[0], players[self.team2[0]][0].mu, players[self.team2[0]][0].sigma))
-            log.write("                   : defensive skill before: {}: {}/{}\n".format(self.team2[0], players[self.team2[0]][1].mu, players[self.team2[0]][1].sigma))
-            if len(self.team1)>=2:
-                log.write("                   : offensive skill before: {}: {}/{}\n".format(self.team1[1], players[self.team1[1]][0].mu, players[self.team1[1]][0].sigma))
-                log.write("                   : defensive skill before: {}: {}/{}\n".format(self.team1[1], players[self.team1[1]][1].mu, players[self.team1[1]][1].sigma))
-            if len(self.team2)>=2:
-                log.write("                   : offensive skill before: {}: {}/{}\n".format(self.team2[1], players[self.team2[1]][0].mu, players[self.team2[1]][0].sigma))
-                log.write("                   : defensive skill before: {}: {}/{}\n".format(self.team2[1], players[self.team2[1]][1].mu, players[self.team2[1]][1].sigma))
+        with shelve.open('playerdb') as players:
+            with open('logfile.log', 'a') as log:
+                log.write("{}: match played between {} and {}\n".format(time.strftime("%Y-%m-%d %H:%M:%S"), self.team1, self.team2))
+                log.write("                   : won by {}\n".format(winningteam))
+                log.write("                   : offensive skill before: {}: {}/{}\n".format(self.team1[0], players[self.team1[0]][0].mu, players[self.team1[0]][0].sigma))
+                log.write("                   : defensive skill before: {}: {}/{}\n".format(self.team1[0], players[self.team1[0]][1].mu, players[self.team1[0]][1].sigma))
+                log.write("                   : offensive skill before: {}: {}/{}\n".format(self.team2[0], players[self.team2[0]][0].mu, players[self.team2[0]][0].sigma))
+                log.write("                   : defensive skill before: {}: {}/{}\n".format(self.team2[0], players[self.team2[0]][1].mu, players[self.team2[0]][1].sigma))
+                if len(self.team1)>=2:
+                    log.write("                   : offensive skill before: {}: {}/{}\n".format(self.team1[1], players[self.team1[1]][0].mu, players[self.team1[1]][0].sigma))
+                    log.write("                   : defensive skill before: {}: {}/{}\n".format(self.team1[1], players[self.team1[1]][1].mu, players[self.team1[1]][1].sigma))
+                if len(self.team2)>=2:
+                    log.write("                   : offensive skill before: {}: {}/{}\n".format(self.team2[1], players[self.team2[1]][0].mu, players[self.team2[1]][0].sigma))
+                    log.write("                   : defensive skill before: {}: {}/{}\n".format(self.team2[1], players[self.team2[1]][1].mu, players[self.team2[1]][1].sigma))
 
-            #self.updatedskills
-            # update offensive skills
-            players[self.team1[0]] = self.ratingupdate[self.team1[0]]
-            players[self.team2[0]] = self.ratingupdate[self.team2[0]]
-            if len(self.team1) >= 2:
-                players[self.team1[1]] = self.ratingupdate[self.team1[1]]
-            if len(self.team2) >= 2:
-                players[self.team2[1]] = self.ratingupdate[self.team2[1]]
+                # update offensive and defensive skills
+                players[self.team1[0]] = self.ratingupdate[self.team1[0]]
+                players[self.team2[0]] = self.ratingupdate[self.team2[0]]
+                if len(self.team1) >= 2:
+                    players[self.team1[1]] = self.ratingupdate[self.team1[1]]
+                if len(self.team2) >= 2:
+                    players[self.team2[1]] = self.ratingupdate[self.team2[1]]
 
-            log.write("                   : offensive skill after: {}: {}/{}\n".format(self.team1[0], players[self.team1[0]][0].mu, players[self.team1[0]][0].sigma))
-            log.write("                   : defensive skill after: {}: {}/{}\n".format(self.team1[0], players[self.team1[0]][1].mu, players[self.team1[0]][1].sigma))
-            log.write("                   : offensive skill after: {}: {}/{}\n".format(self.team2[0], players[self.team2[0]][0].mu, players[self.team2[0]][0].sigma))
-            log.write("                   : defensive skill after: {}: {}/{}\n".format(self.team2[0], players[self.team2[0]][1].mu, players[self.team2[0]][1].sigma))
-            if len(self.team1)>=2:
-                log.write("                   : offensive skill after: {}: {}/{}\n".format(self.team1[1], players[self.team1[1]][0].mu, players[self.team1[1]][0].sigma))
-                log.write("                   : defensive skill after: {}: {}/{}\n".format(self.team1[1], players[self.team1[1]][1].mu, players[self.team1[1]][1].sigma))
-            if len(self.team2)>=2:
-                log.write("                   : offensive skill after: {}: {}/{}\n".format(self.team2[1], players[self.team2[1]][0].mu, players[self.team2[1]][0].sigma))
-                log.write("                   : defensive skill after: {}: {}/{}\n".format(self.team2[1], players[self.team2[1]][1].mu, players[self.team2[1]][1].sigma))
-
-                    
-        players.close()
+                log.write("                   : offensive skill after: {}: {}/{}\n".format(self.team1[0], players[self.team1[0]][0].mu, players[self.team1[0]][0].sigma))
+                log.write("                   : defensive skill after: {}: {}/{}\n".format(self.team1[0], players[self.team1[0]][1].mu, players[self.team1[0]][1].sigma))
+                log.write("                   : offensive skill after: {}: {}/{}\n".format(self.team2[0], players[self.team2[0]][0].mu, players[self.team2[0]][0].sigma))
+                log.write("                   : defensive skill after: {}: {}/{}\n".format(self.team2[0], players[self.team2[0]][1].mu, players[self.team2[0]][1].sigma))
+                if len(self.team1)>=2:
+                    log.write("                   : offensive skill after: {}: {}/{}\n".format(self.team1[1], players[self.team1[1]][0].mu, players[self.team1[1]][0].sigma))
+                    log.write("                   : defensive skill after: {}: {}/{}\n".format(self.team1[1], players[self.team1[1]][1].mu, players[self.team1[1]][1].sigma))
+                if len(self.team2)>=2:
+                    log.write("                   : offensive skill after: {}: {}/{}\n".format(self.team2[1], players[self.team2[1]][0].mu, players[self.team2[1]][0].sigma))
+                    log.write("                   : defensive skill after: {}: {}/{}\n".format(self.team2[1], players[self.team2[1]][1].mu, players[self.team2[1]][1].sigma))
         # return to match screen:
         from screens.entermatch import ScreenEnterMatch
         self.loadScreen(ScreenEnterMatch())

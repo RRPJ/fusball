@@ -9,6 +9,14 @@ import trueskill
 import re
 import time
 from services.match_service import odds_ratio_for_teams
+from services.player_store import (
+    add_player_if_missing,
+    add_recent_player,
+    ensure_recent_players_initialized,
+    player_exists,
+    player_names,
+    recent_player_names,
+)
 
 
 
@@ -21,10 +29,7 @@ class ScreenEnterMatch(LcarsScreen):
     def setup(self, all_sprites):
 
         # load the most recently used player layout
-        recentplayers = shelve.open('recentplayers')
-        if 'names' not in recentplayers:
-            recentplayers['names'] = []
-        recentplayers.close()
+        ensure_recent_players_initialized()
         
         # background image
         all_sprites.add(LcarsBackgroundImage("assets/bg_match.png"), layer=0)
@@ -182,10 +187,9 @@ class ScreenEnterMatch(LcarsScreen):
                 if event.tagid in tagdb:
                     tagname = tagdb[event.tagid]
                     print('key presented for: ', tagname)
-                    with shelve.open("playerdb") as playerdb:
-                        if tagname not in playerdb:
-                            print('player does not exist!')
-                            return
+                    if not player_exists(tagname):
+                        print('player does not exist!')
+                        return
                     
                     for i in range(4):
                         if self.selectedPlayers[i].message == capwords(tagname):
@@ -247,17 +251,12 @@ class ScreenEnterMatch(LcarsScreen):
             with open('logfile.log', 'a') as log:
                 log.write("{}: new player created '{}'\n".format(
                     time.strftime("%Y-%m-%d %H:%M:%S"), self.searchString))
-            players = shelve.open("playerdb")
-            players[self.searchString] = (trueskill.Rating(), trueskill.Rating())
-            players.close()
+            add_player_if_missing(self.searchString)
             #self.updatePlayerSelection()
         
         print("choosing")
         self.selectedPlayers[self.currentFocus].setText(capwords(name))
-        recentplayers = shelve.open('recentplayers')
-        newnames = self.uniq_list([name.lower()] + recentplayers['names'])
-        recentplayers['names'] = newnames
-        recentplayers.close()
+        add_recent_player(name)
         self.updatePlayerSelection()
             
         # rotate focus
@@ -271,13 +270,12 @@ class ScreenEnterMatch(LcarsScreen):
         self.resetPlayerInput()
 
     def updatePlayerSelection(self):
-        players = shelve.open('playerdb')
-        recentplayers = shelve.open('recentplayers')['names']
+        names = player_names()
+        recentplayers = recent_player_names()
         candidates = []
-        if len(players) > 0:
+        if len(names) > 0:
             candidates = process.extractBests(
-                self.searchString, players.keys(), score_cutoff=50, limit=6)
-        players.close()
+                self.searchString, names, score_cutoff=50, limit=6)
         # remove candicates from recent to prevent double listing
         for c in candidates:
             print('c[0]:', c[0])
@@ -342,14 +340,12 @@ class ScreenEnterMatch(LcarsScreen):
             if item.text == "clear":
                 self.searchString = ""
 
-        players = shelve.open('playerdb')
-        if self.searchString not in players.keys() and len(self.searchString.strip()) > 3:
+        if not player_exists(self.searchString) and len(self.searchString.strip()) > 3:
             self.matchedNames[-1].setText("Add " + capwords(self.searchString))
             self.matchedNames[-1].setColor(colours.RED_BROWN)
             self.matchedNames[-1].addPlayer = True
         else:
             self.matchedNames[-1].addPlayer = False
-        players.close()
 
         # update list of selectable players
         self.updatePlayerSelection()
@@ -443,22 +439,22 @@ class ScreenEnterMatch(LcarsScreen):
         p2 = self.selectedPlayers[2].message.lower() # offense team B
         p3 = self.selectedPlayers[3].message.lower() # defense team B
             
-        players = shelve.open('playerdb')
-        if p0 not in players or p1 not in players or p2 not in players or p3 not in players:
-            # nothing to do
-            return
-        match1a = [(players[p0][0], players[p1][1]), (players[p2][0], players[p3][1])]
-        match1b = [(players[p0][0], players[p1][1]), (players[p3][0], players[p2][1])]
-        match1c = [(players[p1][0], players[p0][1]), (players[p2][0], players[p3][1])]
-        match1d = [(players[p1][0], players[p0][1]), (players[p3][0], players[p2][1])]
-        match2a = [(players[p0][0], players[p2][1]), (players[p1][0], players[p3][1])]
-        match2b = [(players[p0][0], players[p2][1]), (players[p3][0], players[p1][1])]
-        match2c = [(players[p2][0], players[p0][1]), (players[p1][0], players[p3][1])]
-        match2d = [(players[p2][0], players[p0][1]), (players[p3][0], players[p1][1])]
-        match3a = [(players[p0][0], players[p3][1]), (players[p1][0], players[p2][1])]
-        match3b = [(players[p0][0], players[p3][1]), (players[p2][0], players[p1][1])]
-        match3c = [(players[p3][0], players[p0][1]), (players[p1][0], players[p2][1])]
-        match3d = [(players[p3][0], players[p0][1]), (players[p2][0], players[p1][1])]
+        with shelve.open('playerdb') as players:
+            if p0 not in players or p1 not in players or p2 not in players or p3 not in players:
+                # nothing to do
+                return
+            match1a = [(players[p0][0], players[p1][1]), (players[p2][0], players[p3][1])]
+            match1b = [(players[p0][0], players[p1][1]), (players[p3][0], players[p2][1])]
+            match1c = [(players[p1][0], players[p0][1]), (players[p2][0], players[p3][1])]
+            match1d = [(players[p1][0], players[p0][1]), (players[p3][0], players[p2][1])]
+            match2a = [(players[p0][0], players[p2][1]), (players[p1][0], players[p3][1])]
+            match2b = [(players[p0][0], players[p2][1]), (players[p3][0], players[p1][1])]
+            match2c = [(players[p2][0], players[p0][1]), (players[p1][0], players[p3][1])]
+            match2d = [(players[p2][0], players[p0][1]), (players[p3][0], players[p1][1])]
+            match3a = [(players[p0][0], players[p3][1]), (players[p1][0], players[p2][1])]
+            match3b = [(players[p0][0], players[p3][1]), (players[p2][0], players[p1][1])]
+            match3c = [(players[p3][0], players[p0][1]), (players[p1][0], players[p2][1])]
+            match3d = [(players[p3][0], players[p0][1]), (players[p2][0], players[p1][1])]
         q1a = trueskill.quality(match1a)
         q1b = trueskill.quality(match1b)
         q1c = trueskill.quality(match1c)
@@ -489,7 +485,6 @@ class ScreenEnterMatch(LcarsScreen):
         self.selectedPlayers[1].setText(capwords(names[1]))
         self.selectedPlayers[2].setText(capwords(names[2]))
         self.selectedPlayers[3].setText(capwords(names[3]))
-        players.close()
 
         self.updateOdds()
     
