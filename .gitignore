@@ -50,6 +50,10 @@ coverage.xml
 .pytest_cache/
 .mypy_cache/
 
+# IDE artifacts (should never be committed)
+.project
+.pydevproject
+
 # Translations
 *.mo
 *.pot

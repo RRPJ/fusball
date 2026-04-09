@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Quick test of startup diagnostics integration."""
+"""Quick test of startup diagnostics and fusball entrypoint integration."""
 
 import sys
 from pathlib import Path
@@ -17,18 +17,26 @@ except Exception as e:
     print(f"  ✗ Failed to import startup: {e}", file=sys.stderr)
     sys.exit(1)
 
-# Test 2: Import modified lcars
-print("Test 2: Importing lcars module...")
+# Test 2: Import fusball entrypoint
+print("Test 2: Importing fusball (new entrypoint)...")
 try:
-    # Just check the syntax, don't run main()
+    import fusball
+    print("  ✓ fusball module imported successfully")
+except Exception as e:
+    print(f"  ✗ Failed to import fusball: {e}", file=sys.stderr)
+    sys.exit(1)
+
+# Test 3: Import lcars (legacy, should still work for compatibility)
+print("Test 3: Importing lcars (legacy for compatibility)...")
+try:
     import lcars
-    print("  ✓ lcars module imported successfully")
+    print("  ✓ lcars module imported successfully (legacy support OK)")
 except Exception as e:
     print(f"  ✗ Failed to import lcars: {e}", file=sys.stderr)
     sys.exit(1)
 
-# Test 3: Run diagnostics
-print("Test 3: Running diagnostics...")
+# Test 4: Run diagnostics
+print("Test 4: Running startup diagnostics...")
 try:
     result = run_diagnostics()
     print(f"  ✓ Diagnostics completed (result: {result})")
