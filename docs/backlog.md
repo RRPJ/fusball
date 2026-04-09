@@ -2,33 +2,44 @@
 
 Use this file to prioritize changes in small, safe slices.
 
-## Track A: Stabilize Existing Behavior
+## Completed Foundation (Done)
 
-- [ ] Add startup diagnostic logging for missing assets and db files.
-- [ ] Add a reproducible smoke test for ranking + persistence operations.
-- [ ] Add CI checks for install + smoke test.
-- [ ] Validate behavior with an archived production db snapshot.
+- [x] Add startup diagnostic logging for missing assets and db files.
+- [x] Add reproducible smoke checks for ranking/probability behavior.
+- [x] Add CI checks for lint + smoke test.
+- [x] Add lint/format tooling and pre-commit hooks.
+- [x] Create `fusball.py` as canonical entrypoint while keeping `lcars.py` compatibility.
+- [x] Extract service layer for player store, match logic, and match logging.
+- [x] Archive kiosk/touchscreen deployment files under `legacy/`.
 
-## Track B: Developer Experience
+## Next Priority: Track A2 (Targeted Test Coverage)
 
-- [ ] Pin dependency versions.
-- [ ] Add lint/format tooling and pre-commit hooks.
-- [ ] Add docs for screen flow and data model.
+- [ ] Add test for rating update transitions (win/loss and draw cycles).
+- [ ] Add test for match save flow (persistence + logfile entry format).
+- [ ] Add regression test for auto-balance lineup selection behavior.
 
-## Track C: UX Improvements
+## Next Priority: Track A2 (Screen Refactor)
 
-- [ ] Add clearer validation messages for invalid team composition.
-- [ ] Improve keyboard/search feedback in match entry.
-- [ ] Add compact leaderboard filters (time window / min games).
+- [ ] Split long methods in `app/screens/entermatch.py` into smaller helpers.
+- [ ] Split long methods in `app/screens/enteroutcome.py` into smaller helpers.
+- [ ] Add concise docstrings for complex screen/service methods.
+
+## Track C: Smartphone Access Path
+
+- [ ] Option 2 spike: add thin operator HTTP API (FastAPI/Flask) for leaderboard read and match submit.
+- [ ] Define auth and write-conflict rules between local UI and remote API calls.
+- [ ] Validate one end-to-end smartphone workflow (read leaderboard, submit result).
 
 ## Track D: Data Layer Modernization
 
-- [ ] Design portable storage model (SQLite recommended).
-- [ ] Build one-way migration from shelve to SQLite.
-- [ ] Keep compatibility reader for old backups.
+- [ ] Define portable storage model (SQLite recommended).
+- [ ] Add export/import snapshot path from shelve.
+- [ ] Add migration prototype (shelve -> SQLite) with rollback notes.
+- [ ] Keep compatibility reader for old backups until parity is verified.
 
-## Track E: Optional Features
+## Optional UX Enhancements
 
-- [ ] Multi-device score entry.
-- [ ] Network sync and conflict handling.
-- [ ] Match history analytics dashboard.
+- [ ] Improve validation messages for invalid team composition.
+- [ ] Improve keyboard/search feedback in match entry.
+- [ ] Add compact leaderboard filters (time window / min games).
+- [ ] Add match history analytics dashboard.
