@@ -99,6 +99,28 @@ See `docs/data-safety.md` for policy details.
 - The app is fullscreen and optimized for touchscreen kiosks.
 - For a complete setup and troubleshooting guide, see `docs/development.md`.
 
+## Phone Support (Read-Only Slice)
+
+The kiosk Pygame UI stays local and fixed-layout. Phone access is provided through a separate web/API path.
+
+Run the phone API from `app/`:
+
+```bash
+cd app
+python phone_api.py
+```
+
+Then open:
+
+- JSON API: `http://<host>:8080/api/leaderboard`
+- Mobile page: `http://<host>:8080/phone`
+
+At-home test idea:
+
+1. Run `phone_api.py` on your host machine.
+2. Open the `/phone` URL from your phone browser on the same secure network path (for example Tailscale).
+3. Confirm leaderboard rows match kiosk data.
+
 ## Repository Guide
 
 - Architecture: `docs/architecture.md`

@@ -15,11 +15,14 @@ Already completed in-repo:
 - Startup diagnostics exist (`app/startup.py`) and run from app startup.
 - CI runs lint/format checks and smoke checks (`.github/workflows/ci.yml`).
 - Tooling is in place (`ruff`, `black`, and pre-commit hooks).
+- Targeted behavior/regression tests exist for rating transitions, match save flow, and auto-balance behavior.
+- Screen-level A3 refactor slice is complete for `entermatch.py` and `enteroutcome.py` with docstrings.
+- Track C read-only phone slice exists (`app/phone_api.py`) with `/api/leaderboard` and `/phone`.
 
 Still open:
-- Targeted behavior/regression tests beyond the existing smoke check.
-- Screen-level maintainability refactor (especially `entermatch.py`).
 - Remote reachability implementation choice (Option 1/2/3).
+- End-to-end phone validation across network/security boundaries (for example firewall/Tailscale path).
+- Auth and write-conflict policy before any remote write endpoint.
 - Data portability and migration path beyond shelve.
 
 ## Change Cadence
@@ -64,6 +67,10 @@ Execution detail:
 
 ## Workstream C: Remote Reachability Options
 
+Constraint:
+- The current Pygame UI uses kiosk-oriented fixed layouts and should remain kiosk-only.
+- Phone support should be delivered through a separate web/API path, not by reusing Pygame screens directly.
+
 Option 1: Remote Desktop To Host Machine
 - Examples: Tailscale + RDP, AnyDesk, RustDesk.
 - Pros: fastest, no app changes, full UI preserved.
@@ -84,6 +91,15 @@ Recommended sequence:
 1. Start with Option 1 for immediate remote usability.
 2. Build Option 2 API for real operational remote workflows.
 3. Decide later whether Option 3 is worth full migration cost.
+
+Early rollout preference:
+1. Use Tailscale as the default secure connectivity layer for early phone testing.
+2. Start with read-only phone workflows before enabling write actions.
+
+Decision gates:
+1. Host runtime is stable (app starts reliably and backups are repeatable).
+2. Phone can read leaderboard from Android and iOS over the chosen secure path.
+3. Write path is enabled only after auth and conflict rules are validated.
 
 ## Workstream D: Data Layer Evolution
 

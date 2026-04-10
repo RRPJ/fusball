@@ -5,3 +5,4 @@ trueskill==0.4.5
 pyserial==3.5
 fuzzywuzzy==0.18.0
 psutil==7.1.2
+Flask>=3.0,<4
