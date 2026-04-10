@@ -7,6 +7,12 @@
 3. Run `python scripts/smoke_check.py` before opening a PR.
 4. Keep changes small and behavior-preserving unless intentionally changing gameplay.
 
+## Communication Expectation
+
+- For every code or documentation change, explain what changed and why.
+- Include a short validation note (what was run/checked) and any known trade-offs.
+- Write explanations for maintainers who are learning the codebase as changes land.
+
 ## Coding Standards
 
 - Install dev tools with `pip install -r requirements-dev.txt`.

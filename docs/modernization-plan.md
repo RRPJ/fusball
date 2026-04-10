@@ -2,6 +2,26 @@
 
 This plan keeps gameplay behavior stable while enabling steady modernization.
 
+## Scope Of This Document
+
+- This file is the long-horizon strategy (what and why).
+- The active execution queue lives in `docs/backlog.md` (what next, in order).
+- Keep this plan stable; update `docs/backlog.md` as work lands.
+
+## Current Status Snapshot (2026-04-10)
+
+Already completed in-repo:
+- Canonical entrypoint is `app/fusball.py` with `app/lcars.py` compatibility retained.
+- Startup diagnostics exist (`app/startup.py`) and run from app startup.
+- CI runs lint/format checks and smoke checks (`.github/workflows/ci.yml`).
+- Tooling is in place (`ruff`, `black`, and pre-commit hooks).
+
+Still open:
+- Targeted behavior/regression tests beyond the existing smoke check.
+- Screen-level maintainability refactor (especially `entermatch.py`).
+- Remote reachability implementation choice (Option 1/2/3).
+- Data portability and migration path beyond shelve.
+
 ## Change Cadence
 
 For each significant change set:
@@ -11,7 +31,7 @@ For each significant change set:
    - `python scripts/smoke_check.py`
 3. Run local app startup check:
    - `cd app`
-   - `python lcars.py`
+   - `python fusball.py`
 4. Human validation gate:
    - Verify at least one match flow manually in the UI.
    - Confirm leaderboard page still renders and updates.
@@ -24,30 +44,23 @@ Goals:
 - Standardize naming and import hygiene.
 - Improve maintainability without changing behavior.
 
-Phase A1 (safe, immediate):
-- Remove unused imports and obvious no-op code.
-- Document legacy files that are candidates for archive/removal.
-- Keep all behavior and data formats unchanged.
+Decision gates:
+1. No gameplay behavior drift versus smoke + manual checks.
+2. Reduced complexity in the highest-churn modules.
+3. Better confidence through focused regression coverage.
 
-Phase A2 (medium risk):
-- Split very long screen modules into smaller helpers.
-- Move ranking and persistence helpers into explicit service modules.
-- Add targeted tests around ranking transitions.
-
-Phase A3 (higher impact):
-- Introduce static tooling (ruff + formatting + pre-commit).
-- Add typed interfaces for core data paths.
+Execution detail:
+- Keep concrete task breakdown in `docs/backlog.md`.
 
 ## Workstream B: Performance And Reliability
 
-Near-term:
-- Add startup diagnostics for missing assets and db files.
-- Cache repeated expensive operations where safe.
-- Add explicit error logs for file/db failures.
+Goals:
+- Improve observability before optimization work.
+- Optimize only where profiling shows user-visible wins.
+- Protect correctness and data safety while improving runtime behavior.
 
-Mid-term:
-- Profile key UI update paths on realistic data sizes.
-- Reduce redundant shelve opens/reads in hot paths.
+Execution detail:
+- Keep concrete performance tasks and measurements in `docs/backlog.md`.
 
 ## Workstream C: Remote Reachability Options
 
@@ -82,9 +95,12 @@ Recommended path:
 2. Add SQLite schema and dual-write migration mode.
 3. Retire shelve only after verified parity and rollback plan.
 
-## First Backlog Slice (proposed)
+Decision gates:
+1. Repeatable backup and restore workflow is documented and tested.
+2. Parity checks cover ranking, recent players, tags, and logging behavior.
+3. Rollback path is validated before any destructive cutover.
 
-1. Safe code cleanup pass (imports + dead references).
-2. Add startup diagnostics for db/asset prerequisites.
-3. Validate with smoke check + manual launch.
-4. Add issue list for files pending archive/removal.
+## Execution Note
+
+- Use `docs/backlog.md` as the source of truth for the next concrete slice.
+- Keep this document focused on direction, risk, and sequencing rationale.

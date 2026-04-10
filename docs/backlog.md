@@ -2,6 +2,10 @@
 
 Use this file to prioritize changes in small, safe slices.
 
+Scope note:
+- This file is the execution queue (ordered next actions).
+- `docs/modernization-plan.md` is the longer-term strategy and rationale.
+
 ## Completed Foundation (Done)
 
 - [x] Add startup diagnostic logging for missing assets and db files.
@@ -18,7 +22,7 @@ Use this file to prioritize changes in small, safe slices.
 - [ ] Add test for match save flow (persistence + logfile entry format).
 - [ ] Add regression test for auto-balance lineup selection behavior.
 
-## Next Priority: Track A2 (Screen Refactor)
+## Next Priority: Track A3 (Screen Refactor)
 
 - [ ] Split long methods in `app/screens/entermatch.py` into smaller helpers.
 - [ ] Split long methods in `app/screens/enteroutcome.py` into smaller helpers.
