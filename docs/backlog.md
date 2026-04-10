@@ -24,9 +24,9 @@ Scope note:
 
 ## Next Priority: Track A3 (Screen Refactor)
 
-- [ ] Split long methods in `app/screens/entermatch.py` into smaller helpers.
-- [ ] Split long methods in `app/screens/enteroutcome.py` into smaller helpers.
-- [ ] Add concise docstrings for complex screen/service methods.
+- [x] Split long methods in `app/screens/entermatch.py` into smaller helpers.
+- [x] Split long methods in `app/screens/enteroutcome.py` into smaller helpers.
+- [x] Add concise docstrings for complex screen/service methods.
 
 ## Track C: Smartphone Access Path
 

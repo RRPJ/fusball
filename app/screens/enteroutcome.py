@@ -16,6 +16,8 @@ def pos(x,y):
 
 
 class ScreenEnterOutcome(LcarsScreen):
+    """Result-entry screen that previews and persists rating changes."""
+
     def __init__(self, team1, team2):
         self.team1 = list(team1)
         self.team2 = list(team2)
@@ -23,14 +25,15 @@ class ScreenEnterOutcome(LcarsScreen):
         self.team2score = None
         super().__init__()
 
-    def setup(self, all_sprites):
-        all_sprites.add(LcarsBackgroundImage("assets/lcars-kickers-resultscreen.png"), layer=0)
+    def _player_name_for_row(self, row):
+        """Map a scoreboard row index to its player name or None."""
+        team = [self.team1, self.team2][math.floor(row / 2)]
+        if row % 2 >= len(team):
+            return None
+        return team[row % 2]
 
-        print("drawing labels: {} against {}".format(self.team1, self.team2))
-
-
-        # buttons
-        all_sprites.add(LcarsButton2(colours.RED_BROWN, (4,708), (140, 40), "Cancel", self.cancelHandler), layer=1)
+    def _add_score_buttons(self, all_sprites):
+        """Create and register clickable score selectors for both teams."""
         self.scorebuttons1 = []
         self.scorebuttons2 = []
         for i in range(6):
@@ -41,18 +44,14 @@ class ScreenEnterOutcome(LcarsScreen):
             all_sprites.add(b1, layer=1)
             all_sprites.add(b2, layer=1)
 
-        self.saveButton = LcarsButton2(colours.ORANGE,   (740,520), (120, 68), "Save Result", self.saveHandler)
-        self.saveButton.setEnabled(False)
-        all_sprites.add(self.saveButton, layer=1)
-
-        # fixed text:
+    def _add_fixed_labels(self, all_sprites):
+        """Render static player name labels in both score and stats areas."""
         all_sprites.add(LcarsText(colours.BLACK, pos(316, 352), capwords(self.team1[0]), 20/19))
         all_sprites.add(LcarsText(colours.BLACK, pos(508, 352), capwords(self.team2[0]), 20/19))
         if len(self.team1)>1:
             all_sprites.add(LcarsText(colours.BLACK, pos(316, 316), capwords(self.team1[1]), 20/19))
         if len(self.team2)>1:
             all_sprites.add(LcarsText(colours.BLACK, pos(508, 316), capwords(self.team2[1]), 20/19))
-
 
         all_sprites.add(LcarsText(colours.BLACK, pos(200, 140), capwords(self.team1[0]), 20/19))
         all_sprites.add(LcarsText(colours.BLACK, pos(200, 68), capwords(self.team2[0]), 20/19))
@@ -61,8 +60,8 @@ class ScreenEnterOutcome(LcarsScreen):
         if len(self.team1) > 1:
             all_sprites.add(LcarsText(colours.BLACK, pos(200, 104), capwords(self.team1[1]), 20/19))
 
-        # game odds
-        # add a text object for the odds:
+    def _add_odds_display(self, all_sprites):
+        """Compute and render pre-match odds and likelihood placeholders."""
         with shelve.open('playerdb') as players:
             p, ratio = odds_ratio_for_teams(players, self.team1, self.team2)
         print("win probability: {}%".format(p * 100))
@@ -70,39 +69,82 @@ class ScreenEnterOutcome(LcarsScreen):
         all_sprites.add(LcarsText(colours.BLACK, pos(160, 460), str(ratio.split(':')[0]), 20/19, alignright=True))
         all_sprites.add(LcarsText(colours.BLACK, pos(180, 460), str(ratio.split(':')[1]), 20/19))
 
-        # add placeholders for likelihood
         self.lhtext1 = LcarsText(colours.BLACK, pos(160, 408), '', 20/19, alignright=True)
         self.lhtext2 = LcarsText(colours.BLACK, pos(180, 408), '', 20/19)
         all_sprites.add(self.lhtext1)
         all_sprites.add(self.lhtext2)
 
-
-        # adjustable texts:
+    def _init_text_grid(self, all_sprites):
+        """Initialize the before/after stats matrix shown on the result screen."""
         xs = [384, 428, 532, 636, 724, 768, 872, 976]
         ys = [140, 104, 68, 32]
-
         self.textLabels = [[None for y in ys] for x in xs]
 
-        # now accessible as self.textLabels[x][y]
-        for i,x in enumerate(xs):
-            for j,y in enumerate(ys):
-                self.textLabels[i][j] = LcarsText(colours.BLACK, pos(x,y), "?", 20/19)
+        for i, x in enumerate(xs):
+            for j, y in enumerate(ys):
+                self.textLabels[i][j] = LcarsText(colours.BLACK, pos(x, y), "?", 20/19)
                 all_sprites.add(self.textLabels[i][j])
 
-        # prefill the labels with 'before' values
+    def _prefill_before_values(self):
+        """Fill the left half of the stats matrix with current persisted ratings."""
         with shelve.open('playerdb') as players:
-            for j,y in enumerate(ys):
-                team = [self.team1, self.team2][math.floor(j/2)]
-                if j%2 >= len(team):
-                    continue
-                name = team[j%2]
-                if name not in players:
+            for row in range(4):
+                name = self._player_name_for_row(row)
+                if name is None or name not in players:
                     continue
                 player = players[name]
-                self.textLabels[0][j].setText(findRank(players, name))
-                self.textLabels[1][j].setText("{:.2f}/{:.2f}".format(player[0].mu, player[0].sigma))
-                self.textLabels[2][j].setText("{:.2f}/{:.2f}".format(player[1].mu, player[1].sigma))
-                self.textLabels[3][j].setText("{:d}".format(round(playerLevel(player))))
+                self.textLabels[0][row].setText(findRank(players, name))
+                self.textLabels[1][row].setText("{:.2f}/{:.2f}".format(player[0].mu, player[0].sigma))
+                self.textLabels[2][row].setText("{:.2f}/{:.2f}".format(player[1].mu, player[1].sigma))
+                self.textLabels[3][row].setText("{:d}".format(round(playerLevel(player))))
+
+    def _update_score_button_colors(self, buttons, score, active_color):
+        """Highlight score buttons up to the selected value."""
+        for i in range(6):
+            buttons[i].setColor(active_color if i <= score else (127,127,127))
+
+    def _set_save_enabled(self):
+        """Allow saving only for valid foosball end states (winner reaches 5)."""
+        minscore = min(self.team1score, self.team2score)
+        maxscore = max(self.team1score, self.team2score)
+        self.saveButton.setEnabled(maxscore == 5 and minscore != 5)
+
+    def _update_after_values(self, updated):
+        """Fill the right half of the stats matrix with projected updated ratings."""
+        for row in range(4):
+            name = self._player_name_for_row(row)
+            if name is None:
+                continue
+            player = updated[name]
+            self.textLabels[4][row].setText(findRank(updated, name))
+            self.textLabels[5][row].setText("{:.2f}/{:.2f}".format(player[0].mu, player[0].sigma))
+            self.textLabels[6][row].setText("{:.2f}/{:.2f}".format(player[1].mu, player[1].sigma))
+            self.textLabels[7][row].setText("{:d}".format(round(playerLevel(player))))
+
+    def _apply_rating_update(self, players):
+        """Persist computed rating updates for all players in both teams."""
+        for team in (self.team1, self.team2):
+            for name in team:
+                players[name] = self.ratingupdate[name]
+
+    def setup(self, all_sprites):
+        all_sprites.add(LcarsBackgroundImage("assets/lcars-kickers-resultscreen.png"), layer=0)
+
+        print("drawing labels: {} against {}".format(self.team1, self.team2))
+
+
+        # buttons
+        all_sprites.add(LcarsButton2(colours.RED_BROWN, (4,708), (140, 40), "Cancel", self.cancelHandler), layer=1)
+        self._add_score_buttons(all_sprites)
+
+        self.saveButton = LcarsButton2(colours.ORANGE,   (740,520), (120, 68), "Save Result", self.saveHandler)
+        self.saveButton.setEnabled(False)
+        all_sprites.add(self.saveButton, layer=1)
+
+        self._add_fixed_labels(all_sprites)
+        self._add_odds_display(all_sprites)
+        self._init_text_grid(all_sprites)
+        self._prefill_before_values()
 
 
 
@@ -122,24 +164,21 @@ class ScreenEnterOutcome(LcarsScreen):
         self.loadScreen(ScreenEnterMatch())
 
     def scoreHandler(self, team, score, item, event, clock):
+        """Handle score selection, compute updates, and refresh after-preview values."""
         # enable save button
         #self.saveButton.setEnabled(True)
         # highlight score
         if team==0:
             self.team1score = score
-            for i in range(6):
-                self.scorebuttons1[i].setColor(colours.RED_BROWN if i<= self.team1score else (127,127,127))
+            self._update_score_button_colors(self.scorebuttons1, self.team1score, colours.RED_BROWN)
         else:
             self.team2score = score
-            for i in range(6):
-                self.scorebuttons2[i].setColor(colours.BLUE      if i<= self.team2score else (127,127,127))
+            self._update_score_button_colors(self.scorebuttons2, self.team2score, colours.BLUE)
 
 
 
         if self.team1score is not None and self.team2score is not None:
-            minscore = min(self.team1score, self.team2score)
-            maxscore = max(self.team1score, self.team2score)
-            self.saveButton.setEnabled(maxscore==5 and minscore!=5)
+            self._set_save_enabled()
             with shelve.open('playerdb') as players:
                 updated = calculate_rating_update(
                     players,
@@ -150,19 +189,11 @@ class ScreenEnterOutcome(LcarsScreen):
                 )
 
             self.ratingupdate = updated
-            for i in range(4):
-                team = [self.team1, self.team2][math.floor(i/2)]
-                if i%2 >= len(team):
-                    continue
-                name = team[i%2]
-                player = updated[name]
-                self.textLabels[4][i].setText(findRank(updated, name))
-                self.textLabels[5][i].setText("{:.2f}/{:.2f}".format(player[0].mu, player[0].sigma))
-                self.textLabels[6][i].setText("{:.2f}/{:.2f}".format(player[1].mu, player[1].sigma))
-                self.textLabels[7][i].setText("{:d}".format(round(playerLevel(player))))
+            self._update_after_values(updated)
 
 
     def saveHandler(self, item, event, clock):
+        """Persist rating updates, append audit log entry, then return to match entry."""
         winningteam = self.team1 if self.team1score > self.team2score else self.team2
         with shelve.open('playerdb') as players:
             before_ratings = {
@@ -172,12 +203,7 @@ class ScreenEnterOutcome(LcarsScreen):
             }
 
             # update offensive and defensive skills
-            players[self.team1[0]] = self.ratingupdate[self.team1[0]]
-            players[self.team2[0]] = self.ratingupdate[self.team2[0]]
-            if len(self.team1) >= 2:
-                players[self.team1[1]] = self.ratingupdate[self.team1[1]]
-            if len(self.team2) >= 2:
-                players[self.team2[1]] = self.ratingupdate[self.team2[1]]
+            self._apply_rating_update(players)
 
             after_ratings = {
                 name: players[name]

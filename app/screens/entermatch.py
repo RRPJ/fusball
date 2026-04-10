@@ -147,13 +147,31 @@ class ScreenEnterMatch(LcarsScreen):
         #    self.lastClockUpdate = pygame.time.get_ticks()
         LcarsScreen.update(self, screenSurface, fpsClock)
 
-    def validate(self):
-        p0 = self.selectedPlayers[0].message.lower()
-        p1 = self.selectedPlayers[1].message.lower()
-        p2 = self.selectedPlayers[2].message.lower()
-        p3 = self.selectedPlayers[3].message.lower()
+    def _selected_names_lower(self):
+        """Return current slot selections normalized to lowercase."""
+        return [player.message.lower() for player in self.selectedPlayers]
 
-        team1 = set()  # makes unique
+    def _build_teams(self):
+        """Build team lists from UI slots using legacy offense/defense ordering."""
+        p0, p1, p2, p3 = self._selected_names_lower()
+        team1 = []
+        team2 = []
+        # Keep legacy slot mapping (A offense before A defense).
+        if p1 != '':
+            team1.append(p1)
+        if p0 != '':
+            team1.append(p0)
+        if p2 != '':
+            team2.append(p2)
+        if p3 != '':
+            team2.append(p3)
+        return team1, team2
+
+    def _is_valid_selection(self):
+        """Check that both teams are balanced and contain unique players."""
+        p0, p1, p2, p3 = self._selected_names_lower()
+
+        team1 = set()
         team2 = set()
         if p0 != '':
             team1.add(p0)
@@ -163,14 +181,17 @@ class ScreenEnterMatch(LcarsScreen):
             team2.add(p2)
         if p3 != '':
             team2.add(p3)
-        if (len(team1) == len(team2) and
-            len(team1) >= 1 and
-            len(team1) <= 2 and
-                len(team1.intersection(team2)) == 0):
 
-            self.startMatchButton.setEnabled(True)
-        else:
-            self.startMatchButton.setEnabled(False)
+        return (
+            len(team1) == len(team2)
+            and len(team1) >= 1
+            and len(team1) <= 2
+            and len(team1.intersection(team2)) == 0
+        )
+
+    def validate(self):
+        """Enable start only when the current selection is match-ready."""
+        self.startMatchButton.setEnabled(self._is_valid_selection())
 
     def handleEvents(self, event, fpsClock):
 
@@ -213,10 +234,8 @@ class ScreenEnterMatch(LcarsScreen):
             self.inputfocus[i].setTransparent(i != which)
 
     def updateOdds(self):
-        p0 = self.selectedPlayers[0].message.lower()
-        p1 = self.selectedPlayers[1].message.lower()
-        p2 = self.selectedPlayers[2].message.lower()
-        p3 = self.selectedPlayers[3].message.lower()
+        """Refresh displayed odds for the currently selected lineups."""
+        p0, p1, p2, p3 = self._selected_names_lower()
         with shelve.open('playerdb') as players:
             p, ratio = odds_ratio_for_teams(players, [p1, p0], [p2, p3])
         print("win probability: {}%".format(p * 100))
@@ -269,6 +288,7 @@ class ScreenEnterMatch(LcarsScreen):
         self.resetPlayerInput()
 
     def updatePlayerSelection(self):
+        """Populate candidate buttons from fuzzy search and recent-player history."""
         names = player_names()
         recentplayers = recent_player_names()
         candidates = []
@@ -282,8 +302,7 @@ class ScreenEnterMatch(LcarsScreen):
                 recentplayers.remove(c[0])
 
         # remove already selected players
-        for i in range(4):
-            p = self.selectedPlayers[i].message.lower()
+        for p in self._selected_names_lower():
             # recent players is easy
             if p in recentplayers:
                 recentplayers.remove(p)
@@ -291,8 +310,7 @@ class ScreenEnterMatch(LcarsScreen):
             candidates = [c for c in candidates if c[0] != p]
 
         # remove already chosen players from suggestions
-        for i in range(4):
-            s = self.selectedPlayers[i].message.lower()
+        for s in self._selected_names_lower():
             if s in recentplayers:
                 recentplayers.remove(s)
         print('recentplayers: ', recentplayers)
@@ -320,6 +338,7 @@ class ScreenEnterMatch(LcarsScreen):
                 self.matchedNames[i].setColor(colours.BEIGE, colours.WHITE)
 
     def keyboardHandler(self, item, event, clock):
+        """Apply keyboard input and update add-player affordance and suggestions."""
         print("keyboard event forwarded to match screen: {}".format(event))
         # update the input field with the new text:
         if isinstance(event, str):
@@ -359,22 +378,9 @@ class ScreenEnterMatch(LcarsScreen):
         self.loadScreen(ScreenMain())
 
     def startHandler(self, item, event, clock):
+        """Open the outcome screen with teams derived from current selection."""
         from screens.enteroutcome import ScreenEnterOutcome
-        p0 = self.selectedPlayers[0].message.lower()
-        p1 = self.selectedPlayers[1].message.lower()
-        p2 = self.selectedPlayers[2].message.lower()
-        p3 = self.selectedPlayers[3].message.lower()
-        team1 = []
-        team2 = []
-        # because of the input validator it is already impossible that there are 2 identical players
-        if p1 != '':
-            team1.append(p1)
-        if p0 != '':
-            team1.append(p0)
-        if p2 != '':
-            team2.append(p2)
-        if p3 != '':
-            team2.append(p3)
+        team1, team2 = self._build_teams()
         self.loadScreen(ScreenEnterOutcome(team1, team2))
         print("starting match")
 
@@ -431,12 +437,10 @@ class ScreenEnterMatch(LcarsScreen):
         self.updateOdds()
 
     def autoHandler(self, item, event, clock):
+        """Reorder selected players to the highest-quality balanced lineup."""
         # there are really only 3 combinations that teams can be assigned
         # there are 4 combinations of offense/defense for each.
-        p0 = self.selectedPlayers[0].message.lower() # defense team A
-        p1 = self.selectedPlayers[1].message.lower() # offense team A
-        p2 = self.selectedPlayers[2].message.lower() # offense team B
-        p3 = self.selectedPlayers[3].message.lower() # defense team B
+        p0, p1, p2, p3 = self._selected_names_lower() # def A, off A, off B, def B
         with shelve.open('playerdb') as players:
             names = best_balanced_lineup(players, p0, p1, p2, p3)
         if names is None:
