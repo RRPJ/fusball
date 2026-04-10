@@ -18,9 +18,9 @@ Scope note:
 
 ## Next Priority: Track A2 (Targeted Test Coverage)
 
-- [ ] Add test for rating update transitions (win/loss and draw cycles).
-- [ ] Add test for match save flow (persistence + logfile entry format).
-- [ ] Add regression test for auto-balance lineup selection behavior.
+- [x] Add test for rating update transitions (win/loss and draw cycles).
+- [x] Add test for match save flow (persistence + logfile entry format).
+- [x] Add regression test for auto-balance lineup selection behavior.
 
 ## Next Priority: Track A3 (Screen Refactor)
 
