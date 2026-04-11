@@ -129,3 +129,15 @@ At-home test idea:
 - Prioritized improvement backlog: `docs/backlog.md`
 - Modernization roadmap: `docs/modernization-plan.md`
 - Contribution workflow: `CONTRIBUTING.md`
+
+## Future Direction
+
+Planned future exploration is focused on extending the current kiosk-first app without disrupting core match entry.
+
+- Structured match history to support richer analytics beyond the current leaderboard.
+- Prediction and insight features such as expected-result context, head-to-head records, form, and progression over time.
+- Seasons, so current-season competition can reset cleanly while all-time rankings remain available.
+- Tournament support as a separate exploration track once season/history foundations are in place.
+- Authenticated phone workflows for remote match submission after auth and write-conflict rules are defined.
+
+See `docs/backlog.md` for near-term slices and `docs/modernization-plan.md` for longer-term sequencing and rationale.
