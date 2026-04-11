@@ -9,7 +9,9 @@ player database and exposes:
 
 from __future__ import annotations
 
+import argparse
 import os
+import re
 import shelve
 from pathlib import Path
 from string import capwords
@@ -119,6 +121,18 @@ def _validate_match_payload(db_dir: Path, payload: object) -> tuple[list[str], l
     return team1, team2, score1, score2
 
 
+def _validate_new_player_name(payload: object) -> str:
+    if not isinstance(payload, dict):
+        raise ValueError("request body must be a JSON object")
+
+    name = _normalize_player_name(payload.get("name"))
+    if len(name) < 2 or len(name) > 30:
+        raise ValueError("player name must be 2-30 characters")
+    if not re.fullmatch(r"[a-z][a-z\- ]+[a-z]", name):
+        raise ValueError("player name may contain only letters, spaces, and hyphens")
+    return name
+
+
 def _write_lock_path(db_dir: Path) -> Path:
     return db_dir / WRITE_LOCK_NAME
 
@@ -189,6 +203,24 @@ def _submit_match_result(
         "score1": score1,
         "score2": score2,
         "winner": winning_team,
+    }
+
+
+def _submit_new_player(db_dir: Path, player_name: str) -> dict[str, object]:
+    db_path = db_dir / "playerdb"
+    with shelve.open(str(db_path)) as players:
+        if player_name in players:
+            raise ValueError("player already exists")
+        players[player_name] = (_trueskill.Rating(), _trueskill.Rating())
+
+    with shelve.open(str(db_dir / "recentplayers")) as recent:
+        names = recent.get("names", [])
+        merged = [player_name] + [n for n in names if n != player_name]
+        recent["names"] = merged
+
+    return {
+        "ok": True,
+        "name": capwords(player_name),
     }
 
 
@@ -344,6 +376,8 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     .summary { font-size: 0.8rem; color: var(--muted); margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .sort-row { margin: 8px 0 10px; }
     .btn.sort { padding: 6px 10px; font-size: 0.78rem; min-height: 34px; }
+    .add-player { margin: 10px 0 0; }
+    .add-player .token { margin-top: 0; }
   </style>
 </head>
 <body>
@@ -421,6 +455,14 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         </thead>
         <tbody id='leaderboardBody'>__TABLE_ROWS__</tbody>
       </table>
+      <div class='add-player'>
+        <div class='muted'>Add player</div>
+        <div class='row' style='margin-top:6px;'>
+          <input id='newPlayerName' class='token' type='text' placeholder='New player name' maxlength='30' />
+          <button id='addPlayerBtn' class='btn small' type='button'>Add Player</button>
+        </div>
+        <div id='addPlayerStatus' class='status'></div>
+      </div>
     </section>
   </main>
 
@@ -474,6 +516,29 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       const node = document.getElementById('statusText');
       node.textContent = text;
       node.className = 'status' + (type ? ' ' + type : '');
+    }
+
+    function setAddPlayerStatus(text, type = '') {
+      const node = document.getElementById('addPlayerStatus');
+      node.textContent = text;
+      node.className = 'status' + (type ? ' ' + type : '');
+    }
+
+    function ensureOperatorToken() {
+      const tokenInput = document.getElementById('operatorToken');
+      let token = (tokenInput.value || '').trim();
+      if (token) {
+        return token;
+      }
+
+      const entered = (window.prompt('Enter operator token') || '').trim();
+      if (!entered) {
+        return '';
+      }
+
+      tokenInput.value = entered;
+      sessionStorage.setItem('fusball_token', entered);
+      return entered;
     }
 
     function setMode(mode) {
@@ -873,6 +938,42 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       setStep(2);
     }
 
+    async function addPlayer() {
+      const token = ensureOperatorToken();
+      if (!token) {
+        setAddPlayerStatus('Operator token is required to add players.', 'bad');
+        return;
+      }
+
+      const input = document.getElementById('newPlayerName');
+      const name = input.value.trim();
+      if (!name) {
+        setAddPlayerStatus('Enter a player name.', 'bad');
+        return;
+      }
+
+      setAddPlayerStatus('Adding player...');
+      const response = await fetch('/api/players', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Operator-Token': token,
+        },
+        body: JSON.stringify({ name }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setAddPlayerStatus(result.error || 'Could not add player.', 'bad');
+        return;
+      }
+
+      input.value = '';
+      setAddPlayerStatus(`Added ${result.name}.`, 'ok');
+      await loadPlayers();
+      await refreshLeaderboard();
+    }
+
     document.getElementById('modeSingles').addEventListener('click', () => setMode('singles'));
     document.getElementById('modeDoubles').addEventListener('click', () => setMode('doubles'));
     document.getElementById('slotRedOff').addEventListener('click', () => setActiveSlot('red_offense'));
@@ -887,6 +988,13 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     document.getElementById('sortTotalBtn').addEventListener('click', () => setLeaderboardSort('total'));
     document.getElementById('sortAtkBtn').addEventListener('click', () => setLeaderboardSort('offense'));
     document.getElementById('sortDefBtn').addEventListener('click', () => setLeaderboardSort('defense'));
+    document.getElementById('addPlayerBtn').addEventListener('click', () => addPlayer().catch((e) => setAddPlayerStatus(e.message, 'bad')));
+    document.getElementById('newPlayerName').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addPlayer().catch((err) => setAddPlayerStatus(err.message, 'bad'));
+      }
+    });
     document.getElementById('nextBtn').addEventListener('click', () => setStep(state.step + 1));
     document.getElementById('backBtn').addEventListener('click', () => setStep(state.step - 1));
     document.getElementById('submitBtn').addEventListener('click', () => submitMatch().catch((e) => setStatus(e.message, 'bad')));
@@ -950,6 +1058,35 @@ def create_app(db_dir: Path | None = None, operator_token: str | None = None) ->
     names = _load_player_names(data_dir)
     return jsonify({"count": len(names), "items": names})
 
+  @app.post("/api/players")
+  def add_player() -> object:
+    token = app.config.get("OPERATOR_TOKEN")
+    if not token:
+      return jsonify({"error": "write endpoint not configured"}), 503
+
+    provided_token = request.headers.get(OPERATOR_TOKEN_HEADER)
+    if provided_token != token:
+      return jsonify({"error": "unauthorized"}), 401
+
+    try:
+      player_name = _validate_new_player_name(request.get_json(silent=True))
+    except ValueError as exc:
+      return jsonify({"error": str(exc)}), 400
+
+    if not _acquire_write_lock(data_dir, owner="phone"):
+      return jsonify({"error": "another writer is active"}), 409
+
+    try:
+      result = _submit_new_player(data_dir, player_name)
+    except ValueError as exc:
+      return jsonify({"error": str(exc)}), 409
+    except Exception:
+      return jsonify({"error": "failed to persist player"}), 500
+    finally:
+      _release_write_lock(data_dir)
+
+    return jsonify(result), 201
+
   @app.get("/api/odds")
   def match_odds() -> object:
     red_off = request.args.get("red_off", "").strip().lower()
@@ -1011,8 +1148,17 @@ def create_app(db_dir: Path | None = None, operator_token: str | None = None) ->
 
 
 def main() -> None:
-    app = create_app(operator_token=os.environ.get("FUSBALL_PHONE_API_TOKEN"))
-    app.run(host="0.0.0.0", port=8080, debug=False)
+  parser = argparse.ArgumentParser(description="Run the phone API server")
+  parser.add_argument(
+    "--db-dir",
+    default=os.environ.get("FUSBALL_PHONE_API_DB_DIR"),
+    help="Directory containing playerdb/recentplayers/tagdb/logfile files",
+  )
+  args = parser.parse_args()
+
+  db_dir = Path(args.db_dir).resolve() if args.db_dir else ROOT_DIR
+  app = create_app(db_dir=db_dir, operator_token=os.environ.get("FUSBALL_PHONE_API_TOKEN"))
+  app.run(host="0.0.0.0", port=8080, debug=False)
 
 
 if __name__ == "__main__":

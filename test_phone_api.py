@@ -146,6 +146,44 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("Alice", payload["items"])
             self.assertIn("Bob", payload["items"])
 
+    def test_add_player_requires_operator_token(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+
+            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+            client = app.test_client()
+            response = client.post("/api/players", json={"name": "Rutger"})
+
+            self.assertEqual(response.status_code, 401)
+
+    def test_add_player_creates_player_and_rejects_duplicate(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+
+            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+            client = app.test_client()
+
+            create_response = client.post(
+                "/api/players",
+                json={"name": "Rutger"},
+                headers={"X-Operator-Token": self.operator_token},
+            )
+            self.assertEqual(create_response.status_code, 201)
+
+            payload = create_response.get_json()
+            assert payload is not None
+            self.assertEqual(payload["name"], "Rutger")
+
+            with shelve.open(str(tmp_path / "playerdb")) as players:
+                self.assertIn("rutger", players)
+
+            duplicate_response = client.post(
+                "/api/players",
+                json={"name": "rutger"},
+                headers={"X-Operator-Token": self.operator_token},
+            )
+            self.assertEqual(duplicate_response.status_code, 409)
+
     def test_match_submit_rejects_invalid_finished_score(self) -> None:
         with TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
