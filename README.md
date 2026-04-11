@@ -99,7 +99,7 @@ See `docs/data-safety.md` for policy details.
 - The app is fullscreen and optimized for touchscreen kiosks.
 - For a complete setup and troubleshooting guide, see `docs/development.md`.
 
-## Phone Support (Read-Only Slice)
+## Phone Support
 
 The kiosk Pygame UI stays local and fixed-layout. Phone access is provided through a separate web/API path.
 
@@ -110,10 +110,30 @@ cd app
 python phone_api.py
 ```
 
+To enable the minimal authenticated match-submit endpoint, set an operator token before starting the API.
+
+Windows PowerShell:
+
+```powershell
+$env:FUSBALL_PHONE_API_TOKEN = "replace-with-a-shared-secret"
+cd app
+python phone_api.py
+```
+
 Then open:
 
 - JSON API: `http://<host>:8080/api/leaderboard`
 - Mobile page: `http://<host>:8080/phone`
+- Match submit API: `POST http://<host>:8080/api/matches` with header `X-Operator-Token`
+
+Phone page workflow:
+
+1. Open `/phone`.
+2. Choose `Singles` or `Doubles`.
+3. Tap position buttons (`Red Offense`, `Red Defense`, `Blue Offense`, `Blue Defense`) and assign players from the player buttons list.
+4. Tap score buttons for red/blue.
+5. Enter operator token and tap `Submit Result`.
+6. Confirm status text and refreshed leaderboard.
 
 At-home test idea:
 
@@ -121,11 +141,25 @@ At-home test idea:
 2. Open the `/phone` URL from your phone browser on the same secure network path (for example Tailscale).
 3. Confirm leaderboard rows match kiosk data.
 
+Minimal match submit payload:
+
+```json
+{
+	"team1": ["alice"],
+	"team2": ["bob"],
+	"score1": 5,
+	"score2": 3
+}
+```
+
+The first write slice is intentionally limited to finished singles or doubles results using existing players only. See `docs/phone-write-policy.md` for the current auth and conflict rules.
+
 ## Repository Guide
 
 - Architecture: `docs/architecture.md`
 - Development setup: `docs/development.md`
 - Data safety and migration notes: `docs/data-safety.md`
+- Phone write policy for the first remote submit slice: `docs/phone-write-policy.md`
 - Prioritized improvement backlog: `docs/backlog.md`
 - Modernization roadmap: `docs/modernization-plan.md`
 - Contribution workflow: `CONTRIBUTING.md`

@@ -44,9 +44,9 @@ Sequencing note:
 - [x] Validate host-side read-only behavior (`/api/leaderboard` and `/phone`) against local player data.
 - [x] Resolve phone reachability path: Tailscale installed on laptop and Android phone; leaderboard loads on phone browser.
 - Goal of remaining Track C work: prove a minimal authenticated phone match-submit flow, not a broad remote feature set.
-- [ ] Define auth and write-conflict rules between local UI and remote API calls.
-- [ ] Add the smallest useful write endpoint for finished match submit only after auth/conflict rules are in place.
-- [ ] Keep the first write slice intentionally narrow: submit result, verify persistence/ranking update, and stop there.
+- [x] Define auth and write-conflict rules between local UI and remote API calls in `docs/phone-write-policy.md`.
+- [x] Add the smallest useful write endpoint for finished match submit only after auth/conflict rules are in place.
+- [x] Keep the first write slice intentionally narrow: submit result, verify persistence/ranking update, and stop there.
 - [ ] Run at-home validation on iOS: leaderboard read.
 - [ ] Run at-the-office validation via Tailscale: confirm leaderboard loads from phone on a different network.
 - [ ] Run end-to-end at-home validation: match submit from phone, then leaderboard refresh.
