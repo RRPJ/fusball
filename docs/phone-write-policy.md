@@ -3,16 +3,18 @@
 This document defines the minimum auth and write-conflict policy for the first phone write slice.
 
 Scope:
-- This policy applies only to the first remote write feature: submitting a finished match result from the phone path.
-- It does not attempt to define full remote administration, player creation, match editing, or live score entry.
+- This policy applies to the current remote operator baseline on the phone path.
+- It intentionally covers only two write operations: adding a player and submitting a finished match result.
+- It does not attempt to define full remote administration, match editing/deletion, or live score entry.
 
 ## First-Slice Goal
 
-Prove that a phone can submit a completed match result safely enough for early real-world use, without turning the phone path into a second full control surface.
+Prove that a phone can perform minimal operator writes safely enough for early real-world use, without turning the phone path into a second full control surface.
 
 The first write slice should stay intentionally narrow:
+- Add a new player (token-authenticated).
 - Submit a finished match only.
-- Use existing players only.
+- Match submit uses existing players only.
 - Apply the same score validity rules as the kiosk flow.
 - Persist the result, update rankings, and refresh read views.
 - Stop there until structured match history is in place.
@@ -38,11 +40,11 @@ Out of scope for the first slice:
 
 ## Write Scope Rules
 
-The first phone write endpoint should allow only this operation:
+The first phone write endpoints should allow only these operations:
+- Add one player name with default ratings.
 - Submit one finished singles or doubles result using existing player identities.
 
 The endpoint should reject:
-- New player creation.
 - Partial or in-progress matches.
 - Match edits or deletes.
 - Freeform player names that do not match existing stored players.
@@ -73,6 +75,11 @@ Before accepting a phone-submitted result:
 - Confirm team sizes are valid for supported match types.
 - Confirm the submitted score is a valid finished result under the current rules.
 
+Before creating a player from phone:
+- Confirm the name is non-empty and normalized consistently.
+- Confirm the name does not already exist.
+- Confirm basic format constraints (allowed characters and length).
+
 On success:
 - Persist the rating update.
 - Append the existing audit log entry.
@@ -100,6 +107,7 @@ The first phone write slice should ship with only a small validation surface:
 - One automated test for authorized successful submit.
 - One automated test for rejected unauthorized submit.
 - One automated test for rejected conflicting submit.
+- One automated test for player creation success and duplicate rejection.
 - One manual end-to-end check from phone to leaderboard refresh.
 
 After that proof works, priority should move to structured match history rather than expanding phone write scope.

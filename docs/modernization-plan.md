@@ -8,7 +8,7 @@ This plan keeps gameplay behavior stable while enabling steady modernization.
 - The active execution queue lives in `docs/backlog.md` (what next, in order).
 - Keep this plan stable; update `docs/backlog.md` as work lands.
 
-## Current Status Snapshot (2026-04-10)
+## Current Status Snapshot (2026-04-11)
 
 Already completed in-repo:
 - Canonical entrypoint is `app/fusball.py` with `app/lcars.py` compatibility retained.
@@ -18,11 +18,12 @@ Already completed in-repo:
 - Targeted behavior/regression tests exist for rating transitions, match save flow, and auto-balance behavior.
 - Screen-level A3 refactor slice is complete for `entermatch.py` and `enteroutcome.py` with docstrings.
 - Track C read-only phone slice exists (`app/phone_api.py`) with `/api/leaderboard` and `/phone`.
+- Track C write baseline exists with token-protected `POST /api/matches` and `POST /api/players`.
+- Phone page now uses a guided step flow and supports player onboarding from mobile.
+- Production/dev operational split exists for phone API launch (`run_phone_api_prod.bat`, `run_phone_api_dev.bat`, and `scripts/refresh_dev_sandbox.py`).
 
 Still open:
-- Remote reachability implementation choice (Option 1/2/3).
 - End-to-end phone validation across network/security boundaries (for example firewall/Tailscale path).
-- Auth and write-conflict policy before any remote write endpoint.
 - Data portability and migration path beyond shelve.
 - Structured match history needed for richer analytics, seasonal views, and future tournament features.
 

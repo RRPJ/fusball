@@ -110,6 +110,11 @@ cd app
 python phone_api.py
 ```
 
+Or use launchers from repo root:
+
+- Production data: `run_phone_api_prod.bat`
+- Development sandbox data: `run_phone_api_dev.bat`
+
 To enable the minimal authenticated match-submit endpoint, set an operator token before starting the API.
 
 Windows PowerShell:
@@ -125,15 +130,28 @@ Then open:
 - JSON API: `http://<host>:8080/api/leaderboard`
 - Mobile page: `http://<host>:8080/phone`
 - Match submit API: `POST http://<host>:8080/api/matches` with header `X-Operator-Token`
+- Player API: `GET/POST http://<host>:8080/api/players` with header `X-Operator-Token` for `POST`
+
+Prod vs dev data safety:
+
+- Production launcher reads/writes `app/` data and creates a backup on startup.
+- Development launcher runs against `sandbox/dev-data` so test matches do not affect real rankings.
+- Refresh the dev sandbox manually when needed with `python scripts/refresh_dev_sandbox.py`.
 
 Phone page workflow:
 
 1. Open `/phone`.
+2. (Optional) Add missing players from the leaderboard section (`Add Player`).
 2. Choose `Singles` or `Doubles`.
 3. Tap position buttons (`Red Offense`, `Red Defense`, `Blue Offense`, `Blue Defense`) and assign players from the player buttons list.
 4. Tap score buttons for red/blue.
 5. Enter operator token and tap `Submit Result`.
 6. Confirm status text and refreshed leaderboard.
+
+Token behavior:
+
+- Token is stored in session storage for the current tab session.
+- If you add a player before reaching step 4, the page prompts for the token once and reuses it.
 
 At-home test idea:
 
@@ -172,6 +190,6 @@ Planned future exploration is focused on extending the current kiosk-first app w
 - Prediction and insight features such as expected-result context, head-to-head records, form, and progression over time.
 - Seasons, so current-season competition can reset cleanly while all-time rankings remain available.
 - Tournament support as a separate exploration track once season/history foundations are in place.
-- Authenticated phone workflows for remote match submission after auth and write-conflict rules are defined.
+- Broader authenticated phone workflows beyond the current baseline (for example match correction/admin operations) after structured history and stronger data guarantees are in place.
 
 See `docs/backlog.md` for near-term slices and `docs/modernization-plan.md` for longer-term sequencing and rationale.

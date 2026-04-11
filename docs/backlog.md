@@ -47,6 +47,9 @@ Sequencing note:
 - [x] Define auth and write-conflict rules between local UI and remote API calls in `docs/phone-write-policy.md`.
 - [x] Add the smallest useful write endpoint for finished match submit only after auth/conflict rules are in place.
 - [x] Keep the first write slice intentionally narrow: submit result, verify persistence/ranking update, and stop there.
+- [x] Add authenticated phone-side player creation (`POST /api/players`) for real-world onboarding from mobile.
+- [x] Add production/development launcher split so real rankings and dev testing data stay isolated.
+- [x] Add startup backup in production phone launcher before serving.
 - [ ] Run at-home validation on iOS: leaderboard read.
 - [ ] Run at-the-office validation via Tailscale: confirm leaderboard loads from phone on a different network.
 - [ ] Run end-to-end at-home validation: match submit from phone, then leaderboard refresh.
