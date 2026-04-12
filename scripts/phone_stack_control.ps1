@@ -93,7 +93,7 @@ function Resolve-Token {
 
 function Start-ApiProcess {
     Write-Host 'Starting phone API in PROD mode (manual service)...'
-    $proc = Start-Process -FilePath 'py' -ArgumentList 'phone_api.py' -WorkingDirectory $appDir -RedirectStandardOutput $outLogFile -RedirectStandardError $errLogFile -PassThru
+    $proc = Start-Process -FilePath 'py' -ArgumentList 'phone_api.py' -WorkingDirectory $appDir -WindowStyle Hidden -RedirectStandardOutput $outLogFile -RedirectStandardError $errLogFile -PassThru
     Set-Content -Path $apiPidFile -Value $proc.Id
     return $proc
 }
@@ -123,7 +123,7 @@ function Start-Watchdog {
         'watchdog'
     )
 
-    $watchdogProc = Start-Process -FilePath 'PowerShell' -ArgumentList $watchdogArgs -WorkingDirectory $root -RedirectStandardOutput $watchdogOutLogFile -RedirectStandardError $watchdogErrLogFile -PassThru
+    $watchdogProc = Start-Process -FilePath 'PowerShell' -ArgumentList $watchdogArgs -WorkingDirectory $root -WindowStyle Hidden -RedirectStandardOutput $watchdogOutLogFile -RedirectStandardError $watchdogErrLogFile -PassThru
     Set-Content -Path $watchdogPidFile -Value $watchdogProc.Id
     return $watchdogProc
 }
