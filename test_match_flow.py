@@ -14,6 +14,7 @@ if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
 from services.match_log import append_match_log  # noqa: E402
+from services.match_history import append_match_history  # noqa: E402
 from services.match_service import best_balanced_lineup, calculate_rating_update  # noqa: E402
 
 
@@ -89,6 +90,17 @@ class MatchFlowTests(unittest.TestCase):
                 }
 
             append_match_log(log_path, team1, team2, team1, before_ratings, after_ratings)
+            append_match_history(
+                tmp_path,
+                team1,
+                team2,
+                team1,
+                5,
+                3,
+                before_ratings,
+                after_ratings,
+                source="test",
+            )
 
             with shelve.open(db_path) as players:
                 self.assertNotEqual(players["alice"][0].mu, before_ratings["alice"][0].mu)
@@ -100,6 +112,18 @@ class MatchFlowTests(unittest.TestCase):
             for name in ("alice", "bob", "carol", "dave"):
                 self.assertIn(f": {name}: offensive before:", log_text)
                 self.assertIn(f": {name}: defensive before:", log_text)
+
+            with shelve.open(str(tmp_path / "match_history")) as history:
+                self.assertEqual(len(history), 1)
+                key = next(iter(history.keys()))
+                record = history[key]
+                self.assertEqual(record["team1"], team1)
+                self.assertEqual(record["team2"], team2)
+                self.assertEqual(record["winner"], team1)
+                self.assertEqual(record["score1"], 5)
+                self.assertEqual(record["score2"], 3)
+                self.assertEqual(record["source"], "test")
+                self.assertEqual(len(record["players"]), 4)
 
     def test_auto_balance_lineup_behavior(self) -> None:
         players = {

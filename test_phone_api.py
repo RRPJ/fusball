@@ -127,6 +127,17 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("match played between ['alice'] and ['bob']", log_text)
             self.assertIn("won by ['alice']", log_text)
 
+            with shelve.open(str(tmp_path / "match_history")) as history:
+                self.assertEqual(len(history), 1)
+                key = next(iter(history.keys()))
+                record = history[key]
+                self.assertEqual(record["team1"], ["alice"])
+                self.assertEqual(record["team2"], ["bob"])
+                self.assertEqual(record["winner"], ["alice"])
+                self.assertEqual(record["score1"], 5)
+                self.assertEqual(record["score2"], 3)
+                self.assertEqual(record["source"], "phone_api")
+
     def test_players_api_returns_names(self) -> None:
         with TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)

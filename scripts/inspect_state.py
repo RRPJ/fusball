@@ -21,6 +21,18 @@ def inspect_shelf(name: str) -> None:
             elif name == "playerdb":
                 for k in keys[:10]:
                     print(f"player: {k}")
+            elif name == "match_history":
+                for k in keys[-3:]:
+                    record = db[k]
+                    print(
+                        "history: {} {} {}:{} -> winner {}".format(
+                            record.get("timestamp", "?"),
+                            record.get("team1", []),
+                            record.get("score1", "?"),
+                            record.get("score2", "?"),
+                            record.get("winner", []),
+                        )
+                    )
             else:
                 print(f"keys sample: {keys[:10]}")
     except Exception as exc:
@@ -29,7 +41,7 @@ def inspect_shelf(name: str) -> None:
 
 def inspect_files() -> None:
     print("== app data files ==")
-    for pattern in ("playerdb*", "recentplayers*", "tagdb*", "logfile.log"):
+    for pattern in ("playerdb*", "recentplayers*", "tagdb*", "match_history*", "logfile.log"):
         for p in sorted(APP_DIR.glob(pattern)):
             if p.is_file():
                 print(f"{p.name}\t{p.stat().st_size} bytes")
@@ -38,6 +50,6 @@ def inspect_files() -> None:
 if __name__ == "__main__":
     inspect_files()
     print()
-    for shelf_name in ("playerdb", "recentplayers", "tagdb"):
+    for shelf_name in ("playerdb", "recentplayers", "tagdb", "match_history"):
         inspect_shelf(shelf_name)
         print()

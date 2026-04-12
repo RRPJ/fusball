@@ -4,6 +4,7 @@ from functools import partial
 from string import capwords
 
 from odds import findRank, playerLevel
+from services.match_history import append_match_history
 from services.match_log import append_match_log
 from services.match_service import calculate_rating_update, odds_ratio_for_teams
 from ui.widgets.background import LcarsBackgroundImage
@@ -195,6 +196,7 @@ class ScreenEnterOutcome(LcarsScreen):
     def saveHandler(self, item, event, clock):
         """Persist rating updates, append audit log entry, then return to match entry."""
         winningteam = self.team1 if self.team1score > self.team2score else self.team2
+        db_path = 'playerdb'
         with shelve.open('playerdb') as players:
             before_ratings = {
                 name: players[name]
@@ -210,15 +212,31 @@ class ScreenEnterOutcome(LcarsScreen):
                 for team in (self.team1, self.team2)
                 for name in team
             }
-
-        append_match_log(
-            'logfile.log',
-            self.team1,
-            self.team2,
-            winningteam,
-            before_ratings,
-            after_ratings,
-        )
+        try:
+            append_match_log(
+                'logfile.log',
+                self.team1,
+                self.team2,
+                winningteam,
+                before_ratings,
+                after_ratings,
+            )
+            append_match_history(
+                '.',
+                self.team1,
+                self.team2,
+                winningteam,
+                self.team1score,
+                self.team2score,
+                before_ratings,
+                after_ratings,
+                source='kiosk',
+            )
+        except Exception:
+            with shelve.open(db_path) as players:
+                for name, rating in before_ratings.items():
+                    players[name] = rating
+            raise
         # return to match screen:
         from screens.entermatch import ScreenEnterMatch
         self.loadScreen(ScreenEnterMatch())

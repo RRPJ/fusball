@@ -59,9 +59,9 @@ Sequencing note:
 
 Start this immediately after the minimal phone write proof is working, before broader remote workflows.
 
-- [ ] Add structured match history storage alongside `logfile.log` so analytics do not depend on log parsing.
-- [ ] Keep the existing audit log append behavior for rollback/debugging while structured history is introduced.
-- [ ] Add a small inspection/smoke path that verifies persisted match history matches ranking-impacting results.
+- [x] Add structured match history storage alongside `logfile.log` so analytics do not depend on log parsing.
+- [x] Keep the existing audit log append behavior for rollback/debugging while structured history is introduced.
+- [x] Add a small inspection/smoke path that verifies persisted match history matches ranking-impacting results.
 
 ## Track C3: Prediction And Insights
 

@@ -20,6 +20,7 @@ from flask import Flask, jsonify, request
 
 from odds import playerLevel
 import trueskill as _trueskill
+from services.match_history import append_match_history
 from services.match_log import append_match_log
 from services.match_service import calculate_rating_update
 from services.player_store import rank_labels_by_name, ranked_players
@@ -160,50 +161,61 @@ def _submit_match_result(
     score1: int,
     score2: int,
 ) -> dict[str, object]:
-    db_path = db_dir / "playerdb"
-    logfile_path = db_dir / "logfile.log"
-    winning_team = team1 if score1 > score2 else team2
+  db_path = db_dir / "playerdb"
+  logfile_path = db_dir / "logfile.log"
+  winning_team = team1 if score1 > score2 else team2
 
-    with shelve.open(str(db_path)) as players:
-        before_ratings = {
-            name: players[name]
-            for team in (team1, team2)
-            for name in team
-        }
-        updated = calculate_rating_update(players, team1, team2, score1, score2)
-
-        for name in team1 + team2:
-            players[name] = updated[name]
-
-        after_ratings = {
-            name: players[name]
-            for team in (team1, team2)
-            for name in team
-        }
-
-    try:
-        append_match_log(
-            str(logfile_path),
-            team1,
-            team2,
-            winning_team,
-            before_ratings,
-            after_ratings,
-        )
-    except Exception:
-        with shelve.open(str(db_path)) as players:
-            for name, rating in before_ratings.items():
-                players[name] = rating
-        raise
-
-    return {
-        "ok": True,
-        "team1": team1,
-        "team2": team2,
-        "score1": score1,
-        "score2": score2,
-        "winner": winning_team,
+  with shelve.open(str(db_path)) as players:
+    before_ratings = {
+      name: players[name]
+      for team in (team1, team2)
+      for name in team
     }
+    updated = calculate_rating_update(players, team1, team2, score1, score2)
+
+    for name in team1 + team2:
+      players[name] = updated[name]
+
+    after_ratings = {
+      name: players[name]
+      for team in (team1, team2)
+      for name in team
+    }
+
+  try:
+    append_match_log(
+      str(logfile_path),
+      team1,
+      team2,
+      winning_team,
+      before_ratings,
+      after_ratings,
+    )
+    append_match_history(
+      db_dir,
+      team1,
+      team2,
+      winning_team,
+      score1,
+      score2,
+      before_ratings,
+      after_ratings,
+      source="phone_api",
+    )
+  except Exception:
+    with shelve.open(str(db_path)) as players:
+      for name, rating in before_ratings.items():
+        players[name] = rating
+    raise
+
+  return {
+    "ok": True,
+    "team1": team1,
+    "team2": team2,
+    "score1": score1,
+    "score2": score2,
+    "winner": winning_team,
+  }
 
 
 def _submit_new_player(db_dir: Path, player_name: str) -> dict[str, object]:
