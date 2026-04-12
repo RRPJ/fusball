@@ -13,6 +13,7 @@ import argparse
 import os
 import re
 import shelve
+import time
 from pathlib import Path
 from string import capwords
 
@@ -25,6 +26,7 @@ from services.match_history import (
     query_h2h,
     query_player_stats,
     query_rating_snapshots,
+  replay_scope_ratings,
 )
 from services.match_log import append_match_log
 from services.match_service import calculate_rating_update
@@ -34,6 +36,8 @@ from services.player_store import rank_labels_by_name, ranked_players
 ROOT_DIR = Path(__file__).resolve().parent
 WRITE_LOCK_NAME = "phone_api_write.lock"
 OPERATOR_TOKEN_HEADER = "X-Operator-Token"
+MATCH_DUPLICATE_WINDOW_SECONDS = 60.0
+_RECENT_MATCH_SIGNATURES: dict[str, float] = {}
 
 
 def _playerdb_exists(db_dir: Path) -> bool:
@@ -41,32 +45,54 @@ def _playerdb_exists(db_dir: Path) -> bool:
     return any(db_dir.glob("playerdb*"))
 
 
-def _load_leaderboard(db_dir: Path, limit: int = 50) -> list[dict[str, object]]:
+def _load_leaderboard(db_dir: Path, limit: int = 50, scope: str = "all") -> list[dict[str, object]]:
     db_path = db_dir / "playerdb"
-    if not _playerdb_exists(db_dir):
+
+    if scope == "all" and not _playerdb_exists(db_dir):
         return []
 
-    with shelve.open(str(db_path)) as players:
-        ranked = ranked_players(players.items())
+    if scope == "all":
+        with shelve.open(str(db_path)) as players:
+            ranked = ranked_players(players.items())
+            labels = rank_labels_by_name(ranked)
+    else:
+        scoped_ratings = replay_scope_ratings(db_dir, scope)
+        ranked = ranked_players(scoped_ratings.items())
         labels = rank_labels_by_name(ranked)
 
-        rows = []
-        for index, (name, rating) in enumerate(ranked[:limit], start=1):
-            rows.append(
-                {
-                    "position": index,
-                    "name": capwords(name),
-                    "rank": labels[name],
-                    "level": round(playerLevel(rating), 2),
-                    "offense_level": round(_trueskill.expose(rating[0]), 2),
-                    "defense_level": round(_trueskill.expose(rating[1]), 2),
-                    "offense_mu": round(rating[0].mu, 2),
-                    "offense_sigma": round(rating[0].sigma, 2),
-                    "defense_mu": round(rating[1].mu, 2),
-                    "defense_sigma": round(rating[1].sigma, 2),
-                }
-            )
-        return rows
+    rows = []
+    for index, (name, rating) in enumerate(ranked[:limit], start=1):
+        rows.append(
+            {
+                "position": index,
+                "name": capwords(name),
+                "rank": labels[name],
+                "level": round(playerLevel(rating), 2),
+                "offense_level": round(_trueskill.expose(rating[0]), 2),
+                "defense_level": round(_trueskill.expose(rating[1]), 2),
+                "offense_mu": round(rating[0].mu, 2),
+                "offense_sigma": round(rating[0].sigma, 2),
+                "defense_mu": round(rating[1].mu, 2),
+                "defense_sigma": round(rating[1].sigma, 2),
+            }
+        )
+    return rows
+
+
+def _match_signature(team1: list[str], team2: list[str], score1: int, score2: int) -> str:
+    return f"{','.join(team1)}|{','.join(team2)}|{score1}|{score2}"
+
+
+def _is_recent_duplicate(signature: str, now_monotonic: float) -> bool:
+    expiry = now_monotonic - MATCH_DUPLICATE_WINDOW_SECONDS
+    stale = [sig for sig, ts in _RECENT_MATCH_SIGNATURES.items() if ts < expiry]
+    for sig in stale:
+        del _RECENT_MATCH_SIGNATURES[sig]
+    return signature in _RECENT_MATCH_SIGNATURES
+
+
+def _remember_match_signature(signature: str, now_monotonic: float) -> None:
+    _RECENT_MATCH_SIGNATURES[signature] = now_monotonic
 
 
 def _load_player_names(db_dir: Path) -> list[str]:
@@ -491,9 +517,10 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       </div>
       <div class='row filter-row'>
         <button id='filterAllBtn' class='btn sort active' type='button'>All</button>
-        <button id='filterMin5Btn' class='btn sort' type='button'>Min 5 games</button>
-        <button id='filterRecent30Btn' class='btn sort' type='button'>Last 30d</button>
+        <button id='filterThisMonthBtn' class='btn sort' type='button'>This month</button>
+        <button id='filterThisWeekBtn' class='btn sort' type='button'>This week</button>
       </div>
+      <div id='metricHint' class='muted'></div>
       <table aria-label='Leaderboard'>
         <thead>
           <tr><th>#</th><th>Player</th><th id='lbMetricHeader'>Total</th></tr>
@@ -549,6 +576,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       playerStats: null,
       expandedPlayer: null,
       h2hOpen: false,
+      isSubmitting: false,
       players: [],
       selectionHistory: [],
       selected: {
@@ -821,24 +849,13 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     }
 
     function applyLeaderboardFilter(items) {
-      if (state.leaderboardFilter === 'all' || !state.playerStats) return items;
-      const s = state.playerStats;
-      const now = Date.now();
-      const ms30d = 30 * 24 * 60 * 60 * 1000;
-      return items.filter(row => {
-        const k = row.name.toLowerCase();
-        const ps = s[k];
-        if (!ps) return false;
-        if (state.leaderboardFilter === 'min5') return ps.games >= 5;
-        if (state.leaderboardFilter === 'recent30') {
-          if (!ps.last_match) return false;
-          return (now - new Date(ps.last_match).getTime()) <= ms30d;
-        }
-        return true;
-      });
+      return items;
     }
 
     function setLeaderboardSort(mode) {
+      if (mode === 'improved' && state.leaderboardFilter === 'all') {
+        return;
+      }
       state.leaderboardSort = mode;
       const ids = ['sortTotalBtn','sortAtkBtn','sortDefBtn','sortFormBtn','sortStreakBtn','sortImprovedBtn'];
       const modes = ['total','offense','defense','form','streak','improved'];
@@ -846,9 +863,17 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       ids.forEach((id, i) => document.getElementById(id).classList.toggle('active', modes[i] === mode));
       const hdr = document.getElementById('lbMetricHeader');
       if (hdr) hdr.textContent = headers[modes.indexOf(mode)] || 'Total';
+      const hint = document.getElementById('metricHint');
+      if (hint) {
+        hint.textContent = mode === 'improved'
+          ? 'Improved: delta on all-time leaderboard baseline.'
+          : '';
+      }
       const statsNeeded = ['form','streak','improved'].includes(mode);
       if (statsNeeded && !state.playerStats) {
-        fetch('/api/stats').then(r => r.json()).then(data => { state.playerStats = data; renderLeaderboard(state.leaderboardItems); });
+        fetch('/api/stats?scope=' + encodeURIComponent(state.leaderboardFilter))
+          .then(r => r.json())
+          .then(data => { state.playerStats = data; renderLeaderboard(state.leaderboardItems); });
       } else {
         renderLeaderboard(state.leaderboardItems);
       }
@@ -857,13 +882,22 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     function setLeaderboardFilter(f) {
       state.leaderboardFilter = f;
       document.getElementById('filterAllBtn').classList.toggle('active', f === 'all');
-      document.getElementById('filterMin5Btn').classList.toggle('active', f === 'min5');
-      document.getElementById('filterRecent30Btn').classList.toggle('active', f === 'recent30');
-      const needsStats = f !== 'all';
-      if (needsStats && !state.playerStats) {
-        fetch('/api/stats').then(r => r.json()).then(data => { state.playerStats = data; renderLeaderboard(state.leaderboardItems); });
-      } else {
-        renderLeaderboard(state.leaderboardItems);
+      document.getElementById('filterThisMonthBtn').classList.toggle('active', f === 'this_month');
+      document.getElementById('filterThisWeekBtn').classList.toggle('active', f === 'this_week');
+
+      const improvedBtn = document.getElementById('sortImprovedBtn');
+      improvedBtn.disabled = f === 'all';
+      if (f === 'all' && state.leaderboardSort === 'improved') {
+        setLeaderboardSort('total');
+      }
+
+      refreshLeaderboard().catch(() => undefined);
+
+      const needsStats = ['form', 'streak', 'improved'].includes(state.leaderboardSort);
+      if (needsStats) {
+        fetch('/api/stats?scope=' + encodeURIComponent(state.leaderboardFilter))
+          .then(r => r.json())
+          .then(data => { state.playerStats = data; renderLeaderboard(state.leaderboardItems); });
       }
     }
 
@@ -995,7 +1029,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     }
 
     async function refreshLeaderboard() {
-      const response = await fetch('/api/leaderboard?limit=50');
+      const response = await fetch('/api/leaderboard?limit=50&scope=' + encodeURIComponent(state.leaderboardFilter));
       if (!response.ok) {
         throw new Error('Could not refresh leaderboard.');
       }
@@ -1115,6 +1149,11 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     }
 
     async function submitMatch() {
+      if (state.isSubmitting) {
+        setStatus('Submission already in progress...', 'bad');
+        return;
+      }
+
       const token = document.getElementById('operatorToken').value.trim();
       if (!token) {
         setStatus('Enter operator token first.', 'bad');
@@ -1129,25 +1168,37 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         return;
       }
 
+      state.isSubmitting = true;
+      const submitBtn = document.getElementById('submitBtn');
+      const originalSubmitLabel = submitBtn.textContent;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting...';
       setStatus('Submitting result...');
-      const response = await fetch('/api/matches', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Operator-Token': token,
-        },
-        body: JSON.stringify(payload),
-      });
 
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setStatus(result.error || 'Submit failed.', 'bad');
-        return;
+      try {
+        const response = await fetch('/api/matches', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Operator-Token': token,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          setStatus(result.error || 'Submit failed.', 'bad');
+          return;
+        }
+
+        setStatus('Result submitted. Leaderboard refreshed.', 'ok');
+        await refreshLeaderboard();
+        setStep(2);
+      } finally {
+        state.isSubmitting = false;
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalSubmitLabel;
       }
-
-      setStatus('Result submitted. Leaderboard refreshed.', 'ok');
-      await refreshLeaderboard();
-      setStep(2);
     }
 
     async function addPlayer() {
@@ -1204,8 +1255,8 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     document.getElementById('sortStreakBtn').addEventListener('click', () => setLeaderboardSort('streak'));
     document.getElementById('sortImprovedBtn').addEventListener('click', () => setLeaderboardSort('improved'));
     document.getElementById('filterAllBtn').addEventListener('click', () => setLeaderboardFilter('all'));
-    document.getElementById('filterMin5Btn').addEventListener('click', () => setLeaderboardFilter('min5'));
-    document.getElementById('filterRecent30Btn').addEventListener('click', () => setLeaderboardFilter('recent30'));
+    document.getElementById('filterThisMonthBtn').addEventListener('click', () => setLeaderboardFilter('this_month'));
+    document.getElementById('filterThisWeekBtn').addEventListener('click', () => setLeaderboardFilter('this_week'));
     document.getElementById('addPlayerBtn').addEventListener('click', () => addPlayer().catch((e) => setAddPlayerStatus(e.message, 'bad')));
     document.getElementById('newPlayerName').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
@@ -1227,7 +1278,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     renderSlots();
     updateSummary();
     updateReview();
-    refreshLeaderboard().catch(() => undefined);
+    setLeaderboardFilter('all');
     loadPlayers().catch((e) => setStatus(e.message, 'bad'));
 
     const tokenInput = document.getElementById('operatorToken');
@@ -1259,6 +1310,7 @@ def create_app(db_dir: Path | None = None, operator_token: str | None = None) ->
   app = Flask(__name__)
   data_dir = db_dir or ROOT_DIR
   app.config["OPERATOR_TOKEN"] = operator_token
+  _RECENT_MATCH_SIGNATURES.clear()
 
   @app.get("/api/health")
   def health() -> object:
@@ -1268,7 +1320,10 @@ def create_app(db_dir: Path | None = None, operator_token: str | None = None) ->
   def leaderboard() -> object:
     limit = request.args.get("limit", default=50, type=int)
     limit = max(1, min(limit, 200))
-    rows = _load_leaderboard(data_dir, limit)
+    scope = request.args.get("scope", default="all", type=str)
+    if scope not in {"all", "this_month", "this_week"}:
+      return jsonify({"error": "invalid scope"}), 400
+    rows = _load_leaderboard(data_dir, limit, scope=scope)
     return jsonify({"count": len(rows), "items": rows})
 
   @app.get("/api/players")
@@ -1315,7 +1370,10 @@ def create_app(db_dir: Path | None = None, operator_token: str | None = None) ->
 
   @app.get("/api/stats")
   def player_stats() -> object:
-    return jsonify(query_player_stats(data_dir))
+    scope = request.args.get("scope", default="all", type=str)
+    if scope not in {"all", "this_month", "this_week"}:
+      return jsonify({"error": "invalid scope"}), 400
+    return jsonify(query_player_stats(data_dir, scope=scope))
 
   @app.get("/api/player/<name>/history")
   def player_history(name: str) -> object:
@@ -1365,11 +1423,19 @@ def create_app(db_dir: Path | None = None, operator_token: str | None = None) ->
     except ValueError as exc:
       return jsonify({"error": str(exc)}), 400
 
+    signature = _match_signature(team1, team2, score1, score2)
+    now_monotonic = time.monotonic()
+    if _is_recent_duplicate(signature, now_monotonic):
+      return jsonify({"error": "duplicate match submission detected"}), 409
+
     if not _acquire_write_lock(data_dir, owner="phone"):
       return jsonify({"error": "another writer is active"}), 409
 
     try:
+      if _is_recent_duplicate(signature, time.monotonic()):
+        return jsonify({"error": "duplicate match submission detected"}), 409
       result = _submit_match_result(data_dir, team1, team2, score1, score2)
+      _remember_match_signature(signature, time.monotonic())
     except Exception:
       return jsonify({"error": "failed to persist match result"}), 500
     finally:

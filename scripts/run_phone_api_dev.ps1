@@ -30,9 +30,11 @@ try {
         py @refreshArgs
     } else {
         Write-Host "Using existing DEV sandbox data in: $sandboxDir"
-        if (-not (Test-Path (Join-Path $sandboxDir 'playerdb.dir'))) {
-            Write-Host "No sandbox found — seeding demo players..."
-            py scripts/refresh_dev_sandbox.py --seed-demo
+        # Check for any playerdb artifact (single-file on Python 3.14, .dir/.dat/.bak on older)
+        $sandboxExists = (Get-ChildItem -Path $sandboxDir -Filter 'playerdb*' -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0
+        if (-not $sandboxExists) {
+            Write-Host "No sandbox found — seeding demo players only..."
+            py scripts/refresh_dev_sandbox.py --only-seed
         }
     }
 }

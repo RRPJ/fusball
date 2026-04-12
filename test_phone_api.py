@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import shelve
 import sys
 import unittest
@@ -138,6 +139,13 @@ class PhoneApiTests(unittest.TestCase):
                 self.assertEqual(record["score2"], 3)
                 self.assertEqual(record["source"], "phone_api")
 
+            duplicate = client.post(
+                "/api/matches",
+                json={"team1": ["alice"], "team2": ["bob"], "score1": 5, "score2": 3},
+                headers={"X-Operator-Token": self.operator_token},
+            )
+            self.assertEqual(duplicate.status_code, 409)
+
     def test_players_api_returns_names(self) -> None:
         with TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
@@ -216,6 +224,30 @@ class PhoneApiTests(unittest.TestCase):
 
 class C3AnalyticsApiTests(unittest.TestCase):
     operator_token = "secret-token"
+
+    @staticmethod
+    def _write_history_record(
+        tmpdir: Path,
+        timestamp: datetime,
+        team1: list[str],
+        team2: list[str],
+        winner: list[str],
+        score1: int,
+        score2: int,
+        players: list[dict] | None = None,
+    ) -> None:
+        key = f"{timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}_test"
+        with shelve.open(str(tmpdir / "match_history")) as history:
+            history[key] = {
+                "timestamp": timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
+                "source": "test",
+                "team1": team1,
+                "team2": team2,
+                "winner": winner,
+                "score1": score1,
+                "score2": score2,
+                "players": players or [],
+            }
 
     def _app_with_history(self, tmpdir: Path):
         from services.match_history import append_match_history
@@ -301,6 +333,133 @@ class C3AnalyticsApiTests(unittest.TestCase):
             payload = response.get_json()
             assert payload is not None
             self.assertEqual(payload["count"], 0)
+
+    def test_scoped_leaderboard_hides_inactive_players(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+
+            now = datetime.now(timezone.utc)
+            this_week_ts = now - timedelta(days=1)
+            this_month_ts = now - timedelta(days=10)
+            previous_month_ts = (now.replace(day=1, hour=12, minute=0, second=0, microsecond=0) - timedelta(days=1))
+
+            self._write_history_record(tmp_path, previous_month_ts, ["alice"], ["bob"], ["alice"], 5, 3)
+            self._write_history_record(tmp_path, this_month_ts, ["carol"], ["dave"], ["carol"], 5, 2)
+            self._write_history_record(tmp_path, this_week_ts, ["eve"], ["frank"], ["eve"], 5, 1)
+
+            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+            client = app.test_client()
+
+            month_resp = client.get("/api/leaderboard?scope=this_month")
+            self.assertEqual(month_resp.status_code, 200)
+            month_payload = month_resp.get_json()
+            assert month_payload is not None
+            month_names = {item["name"].lower() for item in month_payload["items"]}
+            self.assertIn("carol", month_names)
+            self.assertIn("dave", month_names)
+            self.assertIn("eve", month_names)
+            self.assertIn("frank", month_names)
+            self.assertNotIn("alice", month_names)
+            self.assertNotIn("bob", month_names)
+
+            week_resp = client.get("/api/leaderboard?scope=this_week")
+            self.assertEqual(week_resp.status_code, 200)
+            week_payload = week_resp.get_json()
+            assert week_payload is not None
+            week_names = {item["name"].lower() for item in week_payload["items"]}
+            self.assertIn("eve", week_names)
+            self.assertIn("frank", week_names)
+            self.assertNotIn("carol", week_names)
+            self.assertNotIn("dave", week_names)
+
+    def test_leaderboard_rejects_invalid_scope(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+            client = app.test_client()
+            response = client.get("/api/leaderboard?scope=unknown")
+            self.assertEqual(response.status_code, 400)
+
+    def test_stats_improved_uses_scope_baseline_to_current_all_level(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            now = datetime.now(timezone.utc)
+            start_week = (now - timedelta(days=now.weekday())).replace(
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+            start_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+            # A pre-month match moves all-time level to 12.0
+            self._write_history_record(
+                tmp_path,
+                start_month - timedelta(days=1),
+                ["alice"],
+                ["bob"],
+                ["alice"],
+                5,
+                3,
+                players=[
+                    {
+                        "name": "alice",
+                        "before": {"offense_mu": 25.0, "offense_sigma": 8.333, "defense_mu": 25.0, "defense_sigma": 8.333},
+                        "after": {"offense_mu": 31.0, "offense_sigma": 8.0, "defense_mu": 31.0, "defense_sigma": 8.0},
+                    }
+                ],
+            )
+
+            # First this-month match baseline starts at 12.0 and ends at 20.0 (+8 this month)
+            self._write_history_record(
+                tmp_path,
+                start_month + timedelta(days=1),
+                ["alice"],
+                ["bob"],
+                ["alice"],
+                5,
+                1,
+                players=[
+                    {
+                        "name": "alice",
+                        "before": {"offense_mu": 31.0, "offense_sigma": 8.0, "defense_mu": 31.0, "defense_sigma": 8.0},
+                        "after": {"offense_mu": 35.0, "offense_sigma": 7.5, "defense_mu": 35.0, "defense_sigma": 7.5},
+                    }
+                ],
+            )
+
+            # This-week match baseline starts at 20.0 and ends at 23.0 (+3 this week)
+            self._write_history_record(
+                tmp_path,
+                max(start_week + timedelta(days=1), start_month + timedelta(days=2)),
+                ["alice"],
+                ["bob"],
+                ["alice"],
+                5,
+                0,
+                players=[
+                    {
+                        "name": "alice",
+                        "before": {"offense_mu": 35.0, "offense_sigma": 7.5, "defense_mu": 35.0, "defense_sigma": 7.5},
+                        "after": {"offense_mu": 37.0, "offense_sigma": 7.0, "defense_mu": 37.0, "defense_sigma": 7.0},
+                    }
+                ],
+            )
+
+            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+            client = app.test_client()
+
+            month_stats = client.get("/api/stats?scope=this_month")
+            self.assertEqual(month_stats.status_code, 200)
+            month_payload = month_stats.get_json()
+            assert month_payload is not None
+            self.assertAlmostEqual(month_payload["alice"]["improved"], 18.0, places=2)
+
+            week_stats = client.get("/api/stats?scope=this_week")
+            self.assertEqual(week_stats.status_code, 200)
+            week_payload = week_stats.get_json()
+            assert week_payload is not None
+            self.assertAlmostEqual(week_payload["alice"]["improved"], 7.0, places=2)
 
 
 if __name__ == "__main__":

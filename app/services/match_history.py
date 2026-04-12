@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import shelve
 from typing import Mapping, Sequence
 from uuid import uuid4
+
+import trueskill
+
+from services.match_service import calculate_rating_update
 
 PlayerName = str
 PlayerRating = tuple
@@ -81,6 +85,95 @@ def _all_records(db_dir: str | Path) -> list[dict]:
         return [history[k] for k in sorted(history.keys())]
 
 
+def _level_from_rating_dict(rating: dict) -> float:
+    return (
+        (float(rating.get("offense_mu", 25.0)) - 3.0 * float(rating.get("offense_sigma", 8.333)))
+        + (float(rating.get("defense_mu", 25.0)) - 3.0 * float(rating.get("defense_sigma", 8.333)))
+    )
+
+
+def _parse_timestamp_utc(value: str) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+    except ValueError:
+        return None
+
+
+def _scope_window_utc(scope: str, now_utc: datetime | None = None) -> tuple[datetime, datetime] | None:
+    if scope == "all":
+        return None
+
+    now_utc = now_utc or datetime.now(timezone.utc)
+    local_now = now_utc.astimezone()
+
+    if scope == "this_month":
+        start_local = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    elif scope == "this_week":
+        start_local = (local_now - timedelta(days=local_now.weekday())).replace(
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+    else:
+        raise ValueError(f"unsupported scope: {scope}")
+
+    return start_local.astimezone(timezone.utc), now_utc
+
+
+def records_for_scope(db_dir: str | Path, scope: str, now_utc: datetime | None = None) -> list[dict]:
+    records = _all_records(db_dir)
+    window = _scope_window_utc(scope, now_utc)
+    if window is None:
+        return records
+
+    start_utc, end_utc = window
+    filtered: list[dict] = []
+    for record in records:
+        ts = _parse_timestamp_utc(record.get("timestamp", ""))
+        if ts is None:
+            continue
+        if start_utc <= ts <= end_utc:
+            filtered.append(record)
+    return filtered
+
+
+def replay_scope_ratings(
+    db_dir: str | Path,
+    scope: str,
+    now_utc: datetime | None = None,
+) -> dict[str, PlayerRating]:
+    """Replay ratings from fresh defaults using only matches in the selected scope."""
+    scoped_records = records_for_scope(db_dir, scope, now_utc)
+    active_players: set[str] = set()
+    for record in scoped_records:
+        active_players.update(name.lower() for name in record.get("team1", []))
+        active_players.update(name.lower() for name in record.get("team2", []))
+
+    ratings: dict[str, PlayerRating] = {
+        name: (trueskill.Rating(), trueskill.Rating())
+        for name in sorted(active_players)
+    }
+
+    for record in scoped_records:
+        team1 = [name.lower() for name in record.get("team1", [])]
+        team2 = [name.lower() for name in record.get("team2", [])]
+        score1 = int(record.get("score1", 0))
+        score2 = int(record.get("score2", 0))
+        if not team1 or not team2:
+            continue
+        if any(name not in ratings for name in team1 + team2):
+            continue
+
+        updated = calculate_rating_update(ratings, team1, team2, score1, score2)
+        for name in team1 + team2:
+            ratings[name] = updated[name]
+
+    return ratings
+
+
 def query_h2h(db_dir: str | Path, p1: str, p2: str) -> dict:
     """Return head-to-head stats for two players playing on opposing teams."""
     p1, p2 = p1.lower(), p2.lower()
@@ -124,11 +217,19 @@ def query_h2h(db_dir: str | Path, p1: str, p2: str) -> dict:
     }
 
 
-def query_player_stats(db_dir: str | Path) -> dict[str, dict]:
-    """Return aggregate stats per player from all history records."""
-    player_matches: dict[str, list[dict]] = {}
+def query_player_stats(db_dir: str | Path, scope: str = "all") -> dict[str, dict]:
+    """Return aggregate stats per player and scope-aware improved delta."""
+    if scope not in {"all", "this_month", "this_week"}:
+        raise ValueError(f"unsupported scope: {scope}")
 
-    for record in _all_records(db_dir):
+    all_records = _all_records(db_dir)
+    scoped_records = records_for_scope(db_dir, scope)
+
+    player_matches: dict[str, list[dict]] = {}
+    latest_level_after: dict[str, float] = {}
+    scope_baseline_level: dict[str, float] = {}
+
+    for record in all_records:
         winner_team = [n.lower() for n in record.get("winner", [])]
         all_names = [n.lower() for n in record.get("team1", []) + record.get("team2", [])]
         entries = {e["name"].lower(): e for e in record.get("players", [])}
@@ -136,15 +237,21 @@ def query_player_stats(db_dir: str | Path) -> dict[str, dict]:
         for name in all_names:
             entry = entries.get(name, {})
             after = entry.get("after", {})
-            level = (
-                (after.get("offense_mu", 25.0) - 3.0 * after.get("offense_sigma", 8.333)) +
-                (after.get("defense_mu", 25.0) - 3.0 * after.get("defense_sigma", 8.333))
-            )
+            level = _level_from_rating_dict(after)
             player_matches.setdefault(name, []).append({
                 "won": name in winner_team,
                 "timestamp": record.get("timestamp", ""),
                 "level_after": round(level, 2),
             })
+            latest_level_after[name] = level
+
+    for record in scoped_records:
+        entries = {e["name"].lower(): e for e in record.get("players", [])}
+        for name, entry in entries.items():
+            if name in scope_baseline_level:
+                continue
+            before = entry.get("before", {})
+            scope_baseline_level[name] = _level_from_rating_dict(before)
 
     result: dict[str, dict] = {}
     for name, matches in player_matches.items():
@@ -156,8 +263,9 @@ def query_player_stats(db_dir: str | Path) -> dict[str, dict]:
                 streak += 1
             else:
                 break
-        recent = matches[-10:]
-        improved = round(recent[-1]["level_after"] - recent[0]["level_after"], 2) if len(recent) >= 2 else 0.0
+        improved = 0.0
+        if scope != "all" and name in scope_baseline_level:
+            improved = round(latest_level_after.get(name, 0.0) - scope_baseline_level[name], 2)
         recent_form_5 = "".join("W" if m["won"] else "L" for m in matches[-5:])
         last_match = matches[-1]["timestamp"] if matches else None
 

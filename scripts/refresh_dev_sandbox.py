@@ -70,24 +70,34 @@ def main() -> None:
         action="store_true",
         help="Delete existing sandbox data files before copying",
     )
+    parser.add_argument(
+        "--only-seed",
+        action="store_true",
+        help="Clear sandbox and seed demo players only; skip copying from source entirely",
+    )
     args = parser.parse_args()
 
-    source_dir = Path(args.source).resolve()
     target_dir = Path(args.target).resolve()
-
-    if not source_dir.exists():
-        raise SystemExit(f"Source directory does not exist: {source_dir}")
-
     target_dir.mkdir(parents=True, exist_ok=True)
 
     removed = 0
-    if args.fresh:
+    copied = 0
+
+    if args.only_seed:
         removed = clear_data(target_dir)
-
-    copied = copy_data(source_dir, target_dir)
-
-    if args.seed_demo:
         seed_demo_players(target_dir)
+    else:
+        source_dir = Path(args.source).resolve()
+        if not source_dir.exists():
+            raise SystemExit(f"Source directory does not exist: {source_dir}")
+
+        if args.fresh:
+            removed = clear_data(target_dir)
+
+        copied = copy_data(source_dir, target_dir)
+
+        if args.seed_demo:
+            seed_demo_players(target_dir)
 
     print(f"Sandbox target: {target_dir}")
     print(f"Files removed: {removed}")
