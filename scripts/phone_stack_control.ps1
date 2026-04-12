@@ -19,9 +19,18 @@ $outLogFile = Join-Path $logDir 'phone_api.out.log'
 $errLogFile = Join-Path $logDir 'phone_api.err.log'
 $watchdogOutLogFile = Join-Path $logDir 'phone_api_watchdog.out.log'
 $watchdogErrLogFile = Join-Path $logDir 'phone_api_watchdog.err.log'
+$tailscaleAppPath = 'C:\Program Files\Tailscale\tailscale-ipn.exe'
 
 $healthCheckIntervalSeconds = 5
 $maxUnhealthyChecks = 3
+
+function Get-TailscaleService {
+    return Get-Service -Name 'Tailscale' -ErrorAction SilentlyContinue
+}
+
+function Get-TailscaleAppProcess {
+    return Get-Process -Name 'tailscale-ipn' -ErrorAction SilentlyContinue
+}
 
 function Ensure-RuntimePaths {
     if (-not (Test-Path $runtimeDir)) {
@@ -70,6 +79,85 @@ function Test-Health {
     }
     catch {
         return $false
+    }
+}
+
+function Show-TailscaleStatus {
+    $tailscaleService = Get-TailscaleService
+    if (-not $tailscaleService) {
+        Write-Host 'Tailscale service status: not installed'
+        Write-Host 'Tailscale app status: unknown'
+        return $false
+    }
+
+    $tailscaleApp = Get-TailscaleAppProcess
+    $tailscaleAppText = if ($tailscaleApp) { 'running' } else { 'not running' }
+
+    Write-Host "Tailscale service status: $($tailscaleService.Status)"
+    Write-Host "Tailscale app status: $tailscaleAppText"
+    return ($tailscaleService.Status -eq 'Running')
+}
+
+function Ensure-TailscaleRunning {
+    $tailscaleService = Get-TailscaleService
+    if (-not $tailscaleService) {
+        Write-Host 'Tailscale service not found. Continuing without automatic Tailscale startup.'
+        return
+    }
+
+    if ($tailscaleService.Status -eq 'Running') {
+        Write-Host 'Tailscale service already running.'
+        return
+    }
+
+    Write-Host 'Starting Tailscale service...'
+    try {
+        Start-Service -Name 'Tailscale' -ErrorAction Stop
+        Start-Sleep -Milliseconds 500
+        $tailscaleService = Get-TailscaleService
+        if ($tailscaleService -and $tailscaleService.Status -eq 'Running') {
+            Write-Host 'Tailscale service started.'
+            return
+        }
+
+        Write-Host 'Tailscale service did not reach Running state yet.'
+    }
+    catch {
+        Write-Host "Could not start Tailscale service automatically: $($_.Exception.Message)"
+    }
+}
+
+function Ensure-TailscaleAppRunning {
+    $tailscaleApp = Get-TailscaleAppProcess
+    if ($tailscaleApp) {
+        Write-Host 'Tailscale app already running.'
+        return
+    }
+
+    if (-not (Test-Path $tailscaleAppPath)) {
+        Write-Host 'Tailscale app executable not found. Continuing without opening the app.'
+        return
+    }
+
+    Write-Host 'Opening Tailscale app...'
+    try {
+        Start-Process -FilePath $tailscaleAppPath
+    }
+    catch {
+        Write-Host "Could not open Tailscale app automatically: $($_.Exception.Message)"
+    }
+}
+
+function Stop-TailscaleApp {
+    $tailscaleApps = @(Get-TailscaleAppProcess)
+    if (-not $tailscaleApps -or $tailscaleApps.Count -eq 0) {
+        Write-Host 'Tailscale app is not running.'
+        return
+    }
+
+    foreach ($tailscaleApp in $tailscaleApps) {
+        Write-Host "Closing Tailscale app (PID $($tailscaleApp.Id))..."
+        Stop-Process -Id $tailscaleApp.Id -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -139,6 +227,8 @@ function Start-PhoneApi {
     Resolve-Token
 
     Ensure-RuntimePaths
+    Ensure-TailscaleRunning
+    Ensure-TailscaleAppRunning
 
     Push-Location $root
     try {
@@ -176,10 +266,13 @@ function Stop-PhoneApi {
         Write-Host "Stopping phone API (PID $($existingApi.Id))..."
     }
     Stop-ApiProcess
+    Stop-TailscaleApp
     Write-Host 'Phone API service stopped.'
 }
 
 function Show-Status {
+    Show-TailscaleStatus | Out-Null
+
     $existingWatchdog = Get-TrackedProcess -PidPath $watchdogPidFile
     $watchdogText = if ($existingWatchdog) { "running (PID $($existingWatchdog.Id))" } else { 'stopped' }
     Write-Host "Watchdog status: $watchdogText"

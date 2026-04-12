@@ -101,11 +101,12 @@ Function documentation tip:
 Preferred production phone API service flow is manual and double-click driven:
 
 - Start production phone API (prompts token): `start_phone_api_service.bat`
-- Stop production phone API: `stop_phone_api_service.bat`
+- Stop production phone API (also closes the Tailscale app): `stop_phone_api_service.bat`
 - Check watchdog/API status: `status_phone_api_service.bat`
 
 Behavior notes:
 
-- Start performs a production backup before launching.
+- Start ensures the Windows Tailscale service is running, opens the Tailscale app when installed, then performs a production backup before launching.
 - A watchdog process keeps the phone API service running and restarts it after repeated `/health` failures.
+- Stop shuts down the watchdog, phone API, and Tailscale app process, but does not disable or uninstall the Windows Tailscale service.
 - Production writes target `app/` data; development flow remains `run_phone_api_dev.bat` with `sandbox/dev-data`.

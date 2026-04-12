@@ -57,7 +57,7 @@ The kiosk Pygame UI stays local and fixed-layout. Phone access is provided throu
 Preferred production phone API service flow (manual, double-click):
 
 - Start (with token prompt + watchdog): `start_phone_api_service.bat`
-- Stop: `stop_phone_api_service.bat`
+- Stop (also closes the Tailscale app): `stop_phone_api_service.bat`
 - Status: `status_phone_api_service.bat`
 
 Compatibility launchers:
@@ -93,8 +93,9 @@ Primary URLs:
 
 Prod vs dev data safety:
 
-- Production service start script reads/writes `app/` data and creates a backup on startup.
+- Production service start script ensures the Windows Tailscale service is running and opens the Tailscale app when installed, then reads/writes `app/` data and creates a backup on startup.
 - Production service watchdog monitors `/health` and restarts the API after repeated failures.
+- Production service stop closes the Tailscale app when it was opened for phone access, but leaves the Windows Tailscale service installed/runnable.
 - Development launcher runs against `sandbox/dev-data` so test matches do not affect real rankings.
 - Refresh the dev sandbox manually when needed with `python scripts/refresh_dev_sandbox.py`.
 
