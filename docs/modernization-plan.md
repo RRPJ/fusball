@@ -18,7 +18,7 @@ Already completed in-repo:
 - Targeted behavior/regression tests exist for rating transitions, match save flow, and auto-balance behavior.
 - Screen-level A3 refactor slice is complete for `entermatch.py` and `enteroutcome.py` with docstrings.
 - Track C read-only phone slice exists (`app/phone_api.py`) with `/api/leaderboard` and `/phone`.
-- Track C write baseline exists with token-protected `POST /api/matches` and `POST /api/players`.
+- Track C write baseline is shipped with token-protected `POST /api/matches` and `POST /api/players`; field validation items remain open in `docs/backlog.md`.
 - Phone page now uses a guided step flow and supports player onboarding from mobile.
 - Production/dev operational split exists for phone API launch (`run_phone_api_prod.bat`, `run_phone_api_dev.bat`, and `scripts/refresh_dev_sandbox.py`).
 
@@ -33,7 +33,7 @@ For each significant change set:
 
 1. Implement one focused slice.
 2. Run automated smoke check:
-   - `python scripts/smoke_check.py`
+   - See `docs/development.md` for the current command.
 3. Run local app startup check:
    - `cd app`
    - `python fusball.py`

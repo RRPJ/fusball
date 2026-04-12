@@ -13,9 +13,14 @@ This directory contains files specific to the original Raspberry Pi kiosk deploy
 
 ## Future Access Plan
 
-The project is being modernized to support **smartphone access** instead of kiosk hardware. This will likely use:
-- A thin HTTP API (FastAPI/Flask) for remote score entry and leaderboard
-- SQLite or similar for data persistence and cloud sync
-- Web/mobile client for score entry and viewing
+The project now supports a kiosk-first model with a separate **smartphone web/API path**.
+Current implementation includes a thin HTTP API and mobile page for leaderboard access and authenticated write slices.
+
+Near-term modernization continues with:
+- Structured match history and safer portability/migration paths
+- Expanded analytics and season/tournament foundations
+- Additional remote workflows after validation and data-model hardening
+
+See `README.md`, `docs/backlog.md`, and `docs/modernization-plan.md` for current status and sequencing.
 
 If you need to revive kiosk support in the future, these files provide a reference for the original architecture.

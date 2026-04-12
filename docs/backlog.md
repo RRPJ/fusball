@@ -21,7 +21,7 @@ Sequencing note:
 - [x] Add lint/format tooling and pre-commit hooks.
 - [x] Create `fusball.py` as canonical entrypoint while keeping `lcars.py` compatibility.
 - [x] Extract service layer for player store, match logic, and match logging.
-- [x] Archive kiosk/touchscreen deployment files under `legacy/`.
+- [x] Archive Raspberry Pi kiosk/touchscreen deployment files under `legacy/`.
 
 ## Completed: Track A2 (Targeted Test Coverage)
 
@@ -50,9 +50,10 @@ Sequencing note:
 - [x] Add authenticated phone-side player creation (`POST /api/players`) for real-world onboarding from mobile.
 - [x] Add production/development launcher split so real rankings and dev testing data stay isolated.
 - [x] Add startup backup in production phone launcher before serving.
+- [x] Run end-to-end at-home validation: match submit from phone, then leaderboard refresh (validated 2026-04-11).
 - [ ] Run at-home validation on iOS: leaderboard read.
 - [ ] Run at-the-office validation via Tailscale: confirm leaderboard loads from phone on a different network.
-- [ ] Run end-to-end at-home validation: match submit from phone, then leaderboard refresh.
+
 
 ## Track C2: Structured Match History And Analytics Foundation
 

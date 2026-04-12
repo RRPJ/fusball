@@ -15,10 +15,7 @@
 
 ## Coding Standards
 
-- Install dev tools with `pip install -r requirements-dev.txt`.
-- Run lint: `ruff check app/startup.py app/fusball.py scripts`.
-- Run formatting check: `black --check app/startup.py app/fusball.py scripts`.
-- Enable local hooks: `pre-commit install`.
+- Use `docs/development.md` as the source of truth for dev-tool installation, lint/format commands, and pre-commit setup.
 - For changed functions, add concise docstrings when intent is not immediately obvious.
 
 ## Naming Policy

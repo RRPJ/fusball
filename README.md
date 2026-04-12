@@ -61,24 +61,8 @@ python scripts/smoke_check.py
 
 ## Coding Standards
 
-Install dev tooling:
-
-```bash
-pip install -r requirements-dev.txt
-```
-
-Run checks manually:
-
-```bash
-ruff check app/startup.py app/fusball.py scripts
-black --check app/startup.py app/fusball.py scripts
-```
-
-Enable local pre-commit checks:
-
-```bash
-pre-commit install
-```
+Coding standards, lint/format commands, and pre-commit setup are maintained in `docs/development.md`.
+Use that file as the source of truth to avoid drift.
 
 ## Data Safety
 
@@ -181,6 +165,12 @@ The first write slice is intentionally limited to finished singles or doubles re
 - Prioritized improvement backlog: `docs/backlog.md`
 - Modernization roadmap: `docs/modernization-plan.md`
 - Contribution workflow: `CONTRIBUTING.md`
+
+## Documentation Source Of Truth
+
+- Strategy, rationale, and sequencing principles: `docs/modernization-plan.md`
+- Ordered execution status and next slices: `docs/backlog.md`
+- Setup, smoke check, lint/format, and pre-commit commands: `docs/development.md`
 
 ## Future Direction
 
