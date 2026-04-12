@@ -439,6 +439,11 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     }
     .btn.small { padding: 8px 10px; font-size: 0.82rem; }
     .btn.active { border-color: var(--accent); color: var(--accent); }
+    .btn.score { padding: 10px 14px; font-size: 1rem; min-height: 48px; }
+    .btn.score.red-team { border-color: rgba(180, 60, 60, 0.55); }
+    .btn.score.blue-team { border-color: rgba(60, 100, 180, 0.55); }
+    .btn.score.red-team.active { background: #b43c3c; border-color: #b43c3c; color: #fff; font-weight: 700; }
+    .btn.score.blue-team.active { background: #3c64b4; border-color: #3c64b4; color: #fff; font-weight: 700; }
     .btn.primary { background: #ef8a17; border-color: #ef8a17; color: #0b1721; font-weight: 700; }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .slot { min-width: 144px; text-align: left; }
@@ -792,6 +797,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
 
     function setStatus(text, type = '') {
       const node = document.getElementById('statusText');
+      if (!node) return;
       node.textContent = text;
       node.className = 'status' + (type ? ' ' + type : '');
     }
@@ -1151,14 +1157,14 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       for (let i = 0; i <= 5; i += 1) {
         const redBtn = document.createElement('button');
         redBtn.type = 'button';
-        redBtn.className = 'btn small' + (state.score1 === i ? ' active' : '');
+        redBtn.className = 'btn score red-team' + (state.score1 === i ? ' active' : '');
         redBtn.textContent = String(i);
         redBtn.addEventListener('click', () => setScore('red', i));
         redPanel.appendChild(redBtn);
 
         const blueBtn = document.createElement('button');
         blueBtn.type = 'button';
-        blueBtn.className = 'btn small' + (state.score2 === i ? ' active' : '');
+        blueBtn.className = 'btn score blue-team' + (state.score2 === i ? ' active' : '');
         blueBtn.textContent = String(i);
         blueBtn.addEventListener('click', () => setScore('blue', i));
         bluePanel.appendChild(blueBtn);
@@ -1607,13 +1613,23 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         return;
       }
 
-      let extra = '';
+      let topLine = `Predicted: ${state.latestOdds.predicted}`;
       if (state.score1 !== null && state.score2 !== null) {
-        extra = ' Final: ' + state.score1 + '-' + state.score2 + '.';
+        topLine += `  |  Final: ${state.score1}-${state.score2}`;
       }
+      node.innerHTML = '';
+      const topNode = document.createElement('div');
+      topNode.textContent = topLine;
+      node.appendChild(topNode);
       const quip = resolveCurrentQuip();
-      const quipText = quip ? ` Talk: ${quip.text}` : '';
-      node.textContent = `Pre-match odds ${state.latestOdds.ratio}. Predicted score: ${state.latestOdds.predicted}.${extra}${quipText}`;
+      if (quip) {
+        const quipNode = document.createElement('div');
+        quipNode.style.marginTop = '10px';
+        const em = document.createElement('em');
+        em.textContent = quip.text;
+        quipNode.appendChild(em);
+        node.appendChild(quipNode);
+      }
     }
 
     function updateReview() {
