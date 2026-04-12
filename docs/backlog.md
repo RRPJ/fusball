@@ -65,12 +65,12 @@ Start this immediately after the minimal phone write proof is working, before br
 
 ## Track C3: Prediction And Insights
 
-- [ ] Surface expected result context from existing odds logic (predicted winner / closeness / upset indicator).
-- [ ] Add head-to-head records between players and common doubles pairings.
-- [ ] Add recent-form views (for example last 10 matches) for players and teams.
-- [ ] Add progression-over-time views for rating, including separate offense and defense trends.
-- [ ] Add richer leaderboard modes: streaks, form, most improved, and upset performance.
-- [ ] Extend compact leaderboard filters with time window / min games / season scope.
+- [x] Surface expected result context from existing odds logic (predicted winner / closeness / upset indicator).
+- [x] Add head-to-head records between players and common doubles pairings.
+- [x] Add recent-form views (for example last 10 matches) for players and teams.
+- [x] Add progression-over-time views for rating, including separate offense and defense trends.
+- [x] Add richer leaderboard modes: streaks, form, most improved, and upset performance.
+- [x] Extend compact leaderboard filters with time window / min games / season scope.
 
 ## Track D: Data Layer Modernization
 

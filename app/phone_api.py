@@ -20,7 +20,12 @@ from flask import Flask, jsonify, request
 
 from odds import playerLevel
 import trueskill as _trueskill
-from services.match_history import append_match_history
+from services.match_history import (
+    append_match_history,
+    query_h2h,
+    query_player_stats,
+    query_rating_snapshots,
+)
 from services.match_log import append_match_log
 from services.match_service import calculate_rating_update
 from services.player_store import rank_labels_by_name, ranked_players
@@ -390,6 +395,22 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     .btn.sort { padding: 6px 10px; font-size: 0.78rem; min-height: 34px; }
     .add-player { margin: 10px 0 0; }
     .add-player .token { margin-top: 0; }
+    .badge { display:inline-block; font-size:0.7rem; padding:2px 6px; border-radius:5px; font-weight:700; margin-left:6px; text-transform:uppercase; letter-spacing:0.04em; vertical-align:middle; }
+    .badge-ok { background:rgba(42,166,117,0.15); color:var(--ok); border:1px solid var(--ok); }
+    .badge-accent { background:rgba(239,138,23,0.15); color:var(--accent); border:1px solid var(--accent); }
+    .badge-bad { background:rgba(180,81,81,0.15); color:var(--bad); border:1px solid var(--bad); }
+    .badge-muted { background:rgba(159,179,196,0.08); color:var(--muted); border:1px solid var(--line); }
+    .h2h-card { margin-top:8px; display:none; }
+    .h2h-card.open { display:block; }
+    .form-w { color:var(--ok); font-weight:700; }
+    .form-l { color:var(--bad); }
+    .expand-panel { padding:10px 8px; background:rgba(8,20,30,0.85); border-top:1px solid var(--line); font-size:0.82rem; color:var(--muted); }
+    .expand-panel .delta-pos { color:var(--ok); }
+    .expand-panel .delta-neg { color:var(--bad); }
+    .expand-panel .kv { margin-bottom:4px; }
+    .lrow { cursor:pointer; }
+    .lrow:active td { background:rgba(239,138,23,0.06); }
+    .filter-row { margin: 0 0 8px; }
   </style>
 </head>
 <body>
@@ -431,6 +452,10 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       </div>
       <div id='playersPanel' class='row players'></div>
       <div id='oddsText' class='status' style='margin-top:8px;'></div>
+      <div id='h2hToggleRow' class='row' style='margin-top:6px;display:none;'>
+        <button id='h2hToggleBtn' class='btn small' type='button' onclick='toggleH2H()'>H2H &#9660;</button>
+      </div>
+      <div id='h2hCard' class='h2h-card review-card'></div>
     </section>
 
     <section id='step3' class='section'>
@@ -460,10 +485,18 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         <button id='sortTotalBtn' class='btn sort active' type='button'>Total</button>
         <button id='sortAtkBtn' class='btn sort' type='button'>Offense</button>
         <button id='sortDefBtn' class='btn sort' type='button'>Defense</button>
+        <button id='sortFormBtn' class='btn sort' type='button'>Form</button>
+        <button id='sortStreakBtn' class='btn sort' type='button'>Streak</button>
+        <button id='sortImprovedBtn' class='btn sort' type='button'>Improved</button>
+      </div>
+      <div class='row filter-row'>
+        <button id='filterAllBtn' class='btn sort active' type='button'>All</button>
+        <button id='filterMin5Btn' class='btn sort' type='button'>Min 5 games</button>
+        <button id='filterRecent30Btn' class='btn sort' type='button'>Last 30d</button>
       </div>
       <table aria-label='Leaderboard'>
         <thead>
-          <tr><th>#</th><th>Player</th><th>Total</th></tr>
+          <tr><th>#</th><th>Player</th><th id='lbMetricHeader'>Total</th></tr>
         </thead>
         <tbody id='leaderboardBody'>__TABLE_ROWS__</tbody>
       </table>
@@ -511,7 +544,11 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       mode: 'singles',
       activeSlot: 'red_offense',
       leaderboardSort: 'total',
+      leaderboardFilter: 'all',
       leaderboardItems: [],
+      playerStats: null,
+      expandedPlayer: null,
+      h2hOpen: false,
       players: [],
       selectionHistory: [],
       selected: {
@@ -754,34 +791,134 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     }
 
     function leaderboardSortValue(row) {
+      const s = state.playerStats;
+      const k = row.name.toLowerCase();
       if (state.leaderboardSort === 'offense') return Number(row.offense_level || 0);
       if (state.leaderboardSort === 'defense') return Number(row.defense_level || 0);
+      if (state.leaderboardSort === 'form') return s && s[k] ? Number(s[k].win_rate || 0) : 0;
+      if (state.leaderboardSort === 'streak') return s && s[k] ? Number(s[k].streak || 0) : 0;
+      if (state.leaderboardSort === 'improved') return s && s[k] ? Number(s[k].improved || 0) : 0;
       return Number(row.level || 0);
+    }
+
+    function leaderboardMetric(row) {
+      const s = state.playerStats;
+      const k = row.name.toLowerCase();
+      if (state.leaderboardSort === 'offense') return String(row.offense_level);
+      if (state.leaderboardSort === 'defense') return String(row.defense_level);
+      if (state.leaderboardSort === 'form') {
+        if (!s || !s[k]) return '\u2014';
+        const f = s[k].recent_form_5;
+        return f.split('').map(c => `<span class='form-${c.toLowerCase()}'>${c}</span>`).join(' ');
+      }
+      if (state.leaderboardSort === 'streak') return s && s[k] ? String(s[k].streak) : '\u2014';
+      if (state.leaderboardSort === 'improved') {
+        if (!s || !s[k]) return '\u2014';
+        const v = s[k].improved;
+        return `<span class='${v >= 0 ? "delta-pos" : "delta-neg"}'>${v >= 0 ? '+' : ''}${v}</span>`;
+      }
+      return String(row.level);
+    }
+
+    function applyLeaderboardFilter(items) {
+      if (state.leaderboardFilter === 'all' || !state.playerStats) return items;
+      const s = state.playerStats;
+      const now = Date.now();
+      const ms30d = 30 * 24 * 60 * 60 * 1000;
+      return items.filter(row => {
+        const k = row.name.toLowerCase();
+        const ps = s[k];
+        if (!ps) return false;
+        if (state.leaderboardFilter === 'min5') return ps.games >= 5;
+        if (state.leaderboardFilter === 'recent30') {
+          if (!ps.last_match) return false;
+          return (now - new Date(ps.last_match).getTime()) <= ms30d;
+        }
+        return true;
+      });
     }
 
     function setLeaderboardSort(mode) {
       state.leaderboardSort = mode;
-      document.getElementById('sortTotalBtn').classList.toggle('active', mode === 'total');
-      document.getElementById('sortAtkBtn').classList.toggle('active', mode === 'offense');
-      document.getElementById('sortDefBtn').classList.toggle('active', mode === 'defense');
-      renderLeaderboard(state.leaderboardItems);
+      const ids = ['sortTotalBtn','sortAtkBtn','sortDefBtn','sortFormBtn','sortStreakBtn','sortImprovedBtn'];
+      const modes = ['total','offense','defense','form','streak','improved'];
+      const headers = ['Total','Offense','Defense','Form','Streak','Improved'];
+      ids.forEach((id, i) => document.getElementById(id).classList.toggle('active', modes[i] === mode));
+      const hdr = document.getElementById('lbMetricHeader');
+      if (hdr) hdr.textContent = headers[modes.indexOf(mode)] || 'Total';
+      const statsNeeded = ['form','streak','improved'].includes(mode);
+      if (statsNeeded && !state.playerStats) {
+        fetch('/api/stats').then(r => r.json()).then(data => { state.playerStats = data; renderLeaderboard(state.leaderboardItems); });
+      } else {
+        renderLeaderboard(state.leaderboardItems);
+      }
+    }
+
+    function setLeaderboardFilter(f) {
+      state.leaderboardFilter = f;
+      document.getElementById('filterAllBtn').classList.toggle('active', f === 'all');
+      document.getElementById('filterMin5Btn').classList.toggle('active', f === 'min5');
+      document.getElementById('filterRecent30Btn').classList.toggle('active', f === 'recent30');
+      const needsStats = f !== 'all';
+      if (needsStats && !state.playerStats) {
+        fetch('/api/stats').then(r => r.json()).then(data => { state.playerStats = data; renderLeaderboard(state.leaderboardItems); });
+      } else {
+        renderLeaderboard(state.leaderboardItems);
+      }
     }
 
     function renderLeaderboard(items) {
       state.leaderboardItems = items || [];
       const body = document.getElementById('leaderboardBody');
-      if (!state.leaderboardItems || state.leaderboardItems.length === 0) {
+      const filtered = applyLeaderboardFilter(state.leaderboardItems);
+      if (!filtered || filtered.length === 0) {
         body.innerHTML = "<tr><td colspan='3'>No players found.</td></tr>";
         return;
       }
-      const ordered = [...state.leaderboardItems].sort((a, b) => {
+      const ordered = [...filtered].sort((a, b) => {
         const diff = leaderboardSortValue(b) - leaderboardSortValue(a);
         if (diff !== 0) return diff;
         return Number(a.position || 999) - Number(b.position || 999);
       });
-      body.innerHTML = ordered.map((row) =>
-        `<tr><td>${row.position}</td><td><div>${row.name}</div><div class="sub">Off\u00a0${row.offense_level} \u00b7 Def\u00a0${row.defense_level}</div></td><td>${row.level}</td></tr>`
-      ).join('');
+      body.innerHTML = ordered.map((row, idx) => {
+        const playerKey = row.name.toLowerCase();
+        const metric = leaderboardMetric(row);
+        const rank = idx + 1;
+        return `<tr class='lrow' onclick='togglePlayerHistory(this, "${playerKey}")'><td>${rank}</td><td><div>${row.name}</div><div class="sub">Off\u00a0${row.offense_level} \u00b7 Def\u00a0${row.defense_level}</div></td><td>${metric}</td></tr>`;
+      }).join('');
+    }
+
+    async function togglePlayerHistory(rowEl, playerKey) {
+      const nextEl = rowEl.nextElementSibling;
+      if (nextEl && nextEl.classList.contains('expand-row')) {
+        nextEl.remove();
+        if (state.expandedPlayer === playerKey) { state.expandedPlayer = null; return; }
+      }
+      state.expandedPlayer = playerKey;
+      const tr = document.createElement('tr');
+      tr.className = 'expand-row';
+      const td = document.createElement('td');
+      td.colSpan = 3;
+      td.className = 'expand-panel';
+      td.innerHTML = '<div class="kv">Loading progression…</div>';
+      tr.appendChild(td);
+      rowEl.after(tr);
+      try {
+        const resp = await fetch(`/api/player/${encodeURIComponent(playerKey)}/history?n=6`);
+        if (!resp.ok) { td.innerHTML = '<div class="kv">No history available.</div>'; return; }
+        const data = await resp.json();
+        if (!data.snapshots || data.snapshots.length === 0) { td.innerHTML = '<div class="kv">No matches recorded yet.</div>'; return; }
+        const rows = data.snapshots.slice(-5).reverse().map(s => {
+          const dOff = (s.after.offense_mu - s.before.offense_mu).toFixed(1);
+          const dDef = (s.after.defense_mu - s.before.defense_mu).toFixed(1);
+          const offStr = `<span class='${dOff >= 0 ? "delta-pos" : "delta-neg"}'>${dOff >= 0 ? '+' : ''}${dOff}</span>`;
+          const defStr = `<span class='${dDef >= 0 ? "delta-pos" : "delta-neg"}'>${dDef >= 0 ? '+' : ''}${dDef}</span>`;
+          const result = s.won ? `<span class='form-w'>W</span>` : `<span class='form-l'>L</span>`;
+          const date = s.timestamp ? s.timestamp.slice(0, 10) : '?';
+          return `<div class='kv'>${result} ${date} Off ${offStr} Def ${defStr}</div>`;
+        }).join('');
+        td.innerHTML = `<div style='font-size:0.75rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em;'>Last ${data.snapshots.length} matches</div>${rows}`;
+      } catch { td.innerHTML = '<div class="kv">Could not load history.</div>'; }
     }
 
     function updateSummary() {
@@ -877,12 +1014,70 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       return prob >= 0.5 ? `5-${loser}` : `${loser}-5`;
     }
 
+    function oddsLabel(prob) {
+      const p = Math.max(prob, 1 - prob);
+      if (p >= 0.70) return { text: 'Strong Fav', cls: 'badge-accent' };
+      if (p >= 0.55) return { text: 'Favorite', cls: 'badge-ok' };
+      return { text: 'Even', cls: 'badge-muted' };
+    }
+
+    function hasUpsetRisk(prob) {
+      const redOff = state.selected.red_offense;
+      const blueOff = state.selected.blue_offense;
+      if (!redOff || !blueOff || !state.leaderboardItems.length) return false;
+      const ri = state.leaderboardItems.find(r => r.name.toLowerCase() === redOff.toLowerCase());
+      const bi = state.leaderboardItems.find(r => r.name.toLowerCase() === blueOff.toLowerCase());
+      if (!ri || !bi) return false;
+      const redPos = Number(ri.position);
+      const bluePos = Number(bi.position);
+      return (redPos > bluePos && prob > 0.52) || (bluePos > redPos && prob < 0.48);
+    }
+
+    function refreshH2H() {
+      const redOff = state.selected.red_offense;
+      const blueOff = state.selected.blue_offense;
+      const card = document.getElementById('h2hCard');
+      const toggleRow = document.getElementById('h2hToggleRow');
+      if (!redOff || !blueOff) {
+        toggleRow.style.display = 'none';
+        card.classList.remove('open');
+        return;
+      }
+      toggleRow.style.display = '';
+      if (!state.h2hOpen) return;
+      card.innerHTML = '<span class="muted">Loading\u2026</span>';
+      fetch(`/api/h2h?p1=${encodeURIComponent(redOff.toLowerCase())}&p2=${encodeURIComponent(blueOff.toLowerCase())}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.matches === 0) {
+            card.innerHTML = '<span class="muted">No recorded matches between these players yet.</span>';
+          } else {
+            const last = d.last_match ? d.last_match.slice(0, 10) : '?';
+            card.innerHTML =
+              `<div><strong>${redOff}</strong> ${d.p1_wins}\u2013${d.p2_wins} <strong>${blueOff}</strong>` +
+              (d.draws ? ` (${d.draws} draw${d.draws > 1 ? 's' : ''})` : '') +
+              `</div><div class='muted' style='margin-top:4px;'>` +
+              `${d.matches} match${d.matches > 1 ? 'es' : ''} \u00b7 last ${last}</div>`;
+          }
+        })
+        .catch(() => { card.innerHTML = '<span class="muted">Could not load H2H data.</span>'; });
+    }
+
+    function toggleH2H() {
+      state.h2hOpen = !state.h2hOpen;
+      const card = document.getElementById('h2hCard');
+      const btn = document.getElementById('h2hToggleBtn');
+      card.classList.toggle('open', state.h2hOpen);
+      btn.textContent = state.h2hOpen ? 'H2H \u25b4' : 'H2H \u25be';
+      if (state.h2hOpen) refreshH2H();
+    }
+
     async function refreshOdds() {
       const redOff = state.selected.red_offense;
       const blueOff = state.selected.blue_offense;
       const node = document.getElementById('oddsText');
       if (!node) return;
-      if (!redOff || !blueOff) { node.textContent = ''; node.className = 'status'; return; }
+      if (!redOff || !blueOff) { node.textContent = ''; node.className = 'status'; refreshH2H(); return; }
       const params = new URLSearchParams({ red_off: redOff.toLowerCase(), blue_off: blueOff.toLowerCase(), mode: state.mode });
       if (state.mode === 'doubles') {
         if (state.selected.red_defense) params.set('red_def', state.selected.red_defense.toLowerCase());
@@ -896,8 +1091,13 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         const bluePct = 100 - redPct;
         const score = predictedScore(data.probability);
         const [favored, favoredPct] = redPct >= 50 ? [redOff + ' side', redPct] : [blueOff + ' side', bluePct];
-        node.textContent = `Odds: ${data.ratio} — ${favored} favored (${favoredPct}%) — Predicted: ${score}`;
+        const label = oddsLabel(data.probability);
+        const upset = hasUpsetRisk(data.probability);
+        const badgeHtml = `<span class='badge ${label.cls}'>${label.text}</span>` +
+          (upset ? `<span class='badge badge-bad'>Upset Risk</span>` : '');
+        node.innerHTML = `Odds: ${data.ratio} \u2014 ${favored} favored (${favoredPct}%) \u2014 Predicted: ${score} ${badgeHtml}`;
         node.className = 'status ok';
+        refreshH2H();
       } catch {
         node.textContent = '';
         node.className = 'status';
@@ -1000,6 +1200,12 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     document.getElementById('sortTotalBtn').addEventListener('click', () => setLeaderboardSort('total'));
     document.getElementById('sortAtkBtn').addEventListener('click', () => setLeaderboardSort('offense'));
     document.getElementById('sortDefBtn').addEventListener('click', () => setLeaderboardSort('defense'));
+    document.getElementById('sortFormBtn').addEventListener('click', () => setLeaderboardSort('form'));
+    document.getElementById('sortStreakBtn').addEventListener('click', () => setLeaderboardSort('streak'));
+    document.getElementById('sortImprovedBtn').addEventListener('click', () => setLeaderboardSort('improved'));
+    document.getElementById('filterAllBtn').addEventListener('click', () => setLeaderboardFilter('all'));
+    document.getElementById('filterMin5Btn').addEventListener('click', () => setLeaderboardFilter('min5'));
+    document.getElementById('filterRecent30Btn').addEventListener('click', () => setLeaderboardFilter('recent30'));
     document.getElementById('addPlayerBtn').addEventListener('click', () => addPlayer().catch((e) => setAddPlayerStatus(e.message, 'bad')));
     document.getElementById('newPlayerName').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
@@ -1098,6 +1304,26 @@ def create_app(db_dir: Path | None = None, operator_token: str | None = None) ->
       _release_write_lock(data_dir)
 
     return jsonify(result), 201
+
+  @app.get("/api/h2h")
+  def h2h() -> object:
+    p1 = request.args.get("p1", "").strip().lower()
+    p2 = request.args.get("p2", "").strip().lower()
+    if not p1 or not p2 or p1 == p2:
+      return jsonify({"error": "two distinct player names required"}), 400
+    return jsonify(query_h2h(data_dir, p1, p2))
+
+  @app.get("/api/stats")
+  def player_stats() -> object:
+    return jsonify(query_player_stats(data_dir))
+
+  @app.get("/api/player/<name>/history")
+  def player_history(name: str) -> object:
+    name = name.strip().lower()
+    n = request.args.get("n", default=10, type=int)
+    n = max(1, min(n, 50))
+    snapshots = query_rating_snapshots(data_dir, name, n)
+    return jsonify({"player": name, "count": len(snapshots), "snapshots": snapshots})
 
   @app.get("/api/odds")
   def match_odds() -> object:

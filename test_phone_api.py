@@ -214,5 +214,94 @@ class PhoneApiTests(unittest.TestCase):
             self.assertEqual(response.status_code, 400)
 
 
+class C3AnalyticsApiTests(unittest.TestCase):
+    operator_token = "secret-token"
+
+    def _app_with_history(self, tmpdir: Path):
+        from services.match_history import append_match_history
+        from services.match_service import calculate_rating_update
+
+        db_path = str(tmpdir / "playerdb")
+        with shelve.open(db_path) as players:
+            players["alice"] = (trueskill.Rating(mu=34, sigma=6), trueskill.Rating(mu=33, sigma=6))
+            players["bob"] = (trueskill.Rating(mu=30, sigma=6), trueskill.Rating(mu=30, sigma=6))
+
+        with shelve.open(db_path) as players:
+            before = {n: players[n] for n in ["alice", "bob"]}
+            updated = calculate_rating_update(players, ["alice"], ["bob"], 5, 3)
+            for n in ["alice", "bob"]:
+                players[n] = updated[n]
+            after = {n: players[n] for n in ["alice", "bob"]}
+
+        append_match_history(tmpdir, ["alice"], ["bob"], ["alice"], 5, 3, before, after, source="test")
+
+        return create_app(db_dir=tmpdir, operator_token=self.operator_token)
+
+    def test_h2h_returns_match_count(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            app = self._app_with_history(tmp_path)
+            client = app.test_client()
+            response = client.get("/api/h2h?p1=alice&p2=bob")
+            self.assertEqual(response.status_code, 200)
+            payload = response.get_json()
+            assert payload is not None
+            self.assertEqual(payload["matches"], 1)
+            self.assertEqual(payload["p1_wins"], 1)
+            self.assertEqual(payload["p2_wins"], 0)
+            self.assertEqual(payload["p1"], "alice")
+
+    def test_h2h_rejects_missing_params(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+            client = app.test_client()
+            self.assertEqual(client.get("/api/h2h?p1=alice").status_code, 400)
+
+    def test_stats_returns_per_player_entry(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            app = self._app_with_history(tmp_path)
+            client = app.test_client()
+            response = client.get("/api/stats")
+            self.assertEqual(response.status_code, 200)
+            payload = response.get_json()
+            assert payload is not None
+            self.assertIn("alice", payload)
+            self.assertEqual(payload["alice"]["games"], 1)
+            self.assertEqual(payload["alice"]["wins"], 1)
+            self.assertEqual(payload["alice"]["streak"], 1)
+            self.assertIn("bob", payload)
+            self.assertEqual(payload["bob"]["streak"], 0)
+
+    def test_player_history_returns_snapshots(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            app = self._app_with_history(tmp_path)
+            client = app.test_client()
+            response = client.get("/api/player/alice/history")
+            self.assertEqual(response.status_code, 200)
+            payload = response.get_json()
+            assert payload is not None
+            self.assertEqual(payload["player"], "alice")
+            self.assertEqual(payload["count"], 1)
+            snap = payload["snapshots"][0]
+            self.assertTrue(snap["won"])
+            self.assertIn("before", snap)
+            self.assertIn("after", snap)
+            self.assertIn("offense_mu", snap["after"])
+
+    def test_player_history_empty_when_no_history(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+            client = app.test_client()
+            response = client.get("/api/player/alice/history")
+            self.assertEqual(response.status_code, 200)
+            payload = response.get_json()
+            assert payload is not None
+            self.assertEqual(payload["count"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
