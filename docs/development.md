@@ -4,12 +4,13 @@ This document describes how to set up and run the project on modern developer ma
 
 ## Supported Baseline
 
-- Python: 3.11
+- Python: 3.14 preferred on Windows; 3.11+ supported baseline
 - OS: Windows 11 and Ubuntu 22.04+ (headless CI uses Ubuntu)
 
-Additional supported path:
+Python package note:
 
-- Python 3.14 on Windows is supported using `pygame-ce` (selected automatically from `requirements.txt`).
+- Python 3.14 on Windows uses `pygame-ce` (selected automatically from `requirements.txt`).
+- Python 3.13 and older use `pygame`.
 
 ## 1) Create a Virtual Environment
 
@@ -82,6 +83,8 @@ Enable pre-commit hooks:
 ```bash
 pre-commit install
 ```
+
+Hook configuration lives in `.pre-commit-config.yaml`.
 
 Function documentation tip:
 - The inline function documentation you asked about is called a `docstring`.

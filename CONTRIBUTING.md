@@ -20,15 +20,20 @@
 
 ## Naming Policy
 
-- `fusball.py` is the canonical entrypoint for new docs/scripts.
-- `lcars.py` remains for backward compatibility during migration.
+- Entry-point and compatibility policy is documented in `docs/architecture.md`.
 - Avoid broad symbol renames from `Lcars*` unless part of an explicit migration slice.
 
 ## Data Safety Requirements
 
-- Before modifying persistence logic, create a backup:
-  - `python scripts/backup_state.py`
+- Before modifying persistence logic, run `python scripts/backup_state.py`.
 - Document migration impact in [docs/data-safety.md](docs/data-safety.md).
+
+## Automated Checks
+
+CI runs lint/format checks and smoke checks on push/PR.
+
+- Workflow: `.github/workflows/ci.yml`
+- Runbook and local commands: `docs/development.md`
 
 ## Pull Request Checklist
 

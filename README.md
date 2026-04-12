@@ -5,34 +5,15 @@ It tracks player skill separately for offense and defense using TrueSkill.
 
 ## Quick Start
 
-1. Create and activate a virtual environment.
+Setup and run instructions are maintained in `docs/development.md`.
+
+Canonical flow:
+1. Create/activate a venv.
 2. Install dependencies.
-3. Run smoke check.
-4. Start the app from the `app/` directory.
+3. Run `python scripts/smoke_check.py`.
+4. Launch from `app/` with `python fusball.py`.
 
-Windows PowerShell:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-python scripts/smoke_check.py
-cd app
-python fusball.py
-```
-
-Linux/macOS:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-python scripts/smoke_check.py
-cd app
-python fusball.py
-```
+See `docs/development.md` for platform-specific commands.
 
 Windows double-click launcher:
 
@@ -40,29 +21,15 @@ Windows double-click launcher:
 - On first run it creates `.venv`, installs dependencies, and starts the app.
 - On later runs it launches directly.
 
-Python 3.14 note:
+Advanced launcher option:
 
-- On Python 3.14, this repository uses `pygame-ce` (which provides the `pygame` module).
-- On Python 3.13 and older, it uses `pygame`.
+- Set `FUSBALL_NO_LAUNCH=1` to perform setup checks without starting the app.
+
+Python version guidance:
+
+- Python 3.14 is supported on Windows using `pygame-ce`.
+- Python 3.11+ is supported for baseline development.
 - Dependency selection is automatic via environment markers in `requirements.txt`.
-
-## What The Smoke Check Covers
-
-- Ranking sort behavior on seeded sample data.
-- Rank label generation.
-- Win probability range checks.
-- Basic shelve read/write assumptions.
-
-Run it with:
-
-```bash
-python scripts/smoke_check.py
-```
-
-## Coding Standards
-
-Coding standards, lint/format commands, and pre-commit setup are maintained in `docs/development.md`.
-Use that file as the source of truth to avoid drift.
 
 ## Data Safety
 
@@ -81,27 +48,31 @@ See `docs/data-safety.md` for policy details.
 
 - Development mode is enabled by default (`DEV_MODE = True` in `app/config.py`).
 - The app is fullscreen and optimized for touchscreen kiosks.
-- For a complete setup and troubleshooting guide, see `docs/development.md`.
+- Coding standards, lint/format, pre-commit setup, and troubleshooting live in `docs/development.md`.
 
 ## Phone Support
 
 The kiosk Pygame UI stays local and fixed-layout. Phone access is provided through a separate web/API path.
 
-Run the phone API from `app/`:
+Run from repo root using launchers:
+
+- Production data: `run_phone_api_prod.bat`
+- Development sandbox data: `run_phone_api_dev.bat`
+
+Direct run is also supported:
 
 ```bash
 cd app
 python phone_api.py
 ```
 
-Or use launchers from repo root:
+Operator token setup options:
 
-- Production data: `run_phone_api_prod.bat`
-- Development sandbox data: `run_phone_api_dev.bat`
+1. Pass token to launcher scripts (PowerShell wrappers).
+2. Set environment variable `FUSBALL_PHONE_API_TOKEN`.
+3. Use launcher prompt when no token is preconfigured.
 
-To enable the minimal authenticated match-submit endpoint, set an operator token before starting the API.
-
-Windows PowerShell:
+Env-var example (Windows PowerShell):
 
 ```powershell
 $env:FUSBALL_PHONE_API_TOKEN = "replace-with-a-shared-secret"
@@ -109,12 +80,10 @@ cd app
 python phone_api.py
 ```
 
-Then open:
+Primary URLs:
 
-- JSON API: `http://<host>:8080/api/leaderboard`
 - Mobile page: `http://<host>:8080/phone`
-- Match submit API: `POST http://<host>:8080/api/matches` with header `X-Operator-Token`
-- Player API: `GET/POST http://<host>:8080/api/players` with header `X-Operator-Token` for `POST`
+- Leaderboard API: `http://<host>:8080/api/leaderboard`
 
 Prod vs dev data safety:
 
@@ -122,46 +91,16 @@ Prod vs dev data safety:
 - Development launcher runs against `sandbox/dev-data` so test matches do not affect real rankings.
 - Refresh the dev sandbox manually when needed with `python scripts/refresh_dev_sandbox.py`.
 
-Phone page workflow:
-
-1. Open `/phone`.
-2. (Optional) Add missing players from the leaderboard section (`Add Player`).
-2. Choose `Singles` or `Doubles`.
-3. Tap position buttons (`Red Offense`, `Red Defense`, `Blue Offense`, `Blue Defense`) and assign players from the player buttons list.
-4. Tap score buttons for red/blue.
-5. Enter operator token and tap `Submit Result`.
-6. Confirm status text and refreshed leaderboard.
-
-Token behavior:
-
-- Token is stored in session storage for the current tab session.
-- If you add a player before reaching step 4, the page prompts for the token once and reuses it.
-
-At-home test idea:
-
-1. Run `phone_api.py` on your host machine.
-2. Open the `/phone` URL from your phone browser on the same secure network path (for example Tailscale).
-3. Confirm leaderboard rows match kiosk data.
-
-Minimal match submit payload:
-
-```json
-{
-	"team1": ["alice"],
-	"team2": ["bob"],
-	"score1": 5,
-	"score2": 3
-}
-```
-
-The first write slice is intentionally limited to finished singles or doubles results using existing players only. See `docs/phone-write-policy.md` for the current auth and conflict rules.
+For endpoint-level request/response details, see `docs/phone-api.md`.
+For auth/conflict behavior, see `docs/phone-write-policy.md`.
 
 ## Repository Guide
 
 - Architecture: `docs/architecture.md`
 - Development setup: `docs/development.md`
 - Data safety and migration notes: `docs/data-safety.md`
-- Phone write policy for the first remote submit slice: `docs/phone-write-policy.md`
+- Phone API endpoint reference: `docs/phone-api.md`
+- Phone write auth/conflict policy: `docs/phone-write-policy.md`
 - Prioritized improvement backlog: `docs/backlog.md`
 - Modernization roadmap: `docs/modernization-plan.md`
 - Contribution workflow: `CONTRIBUTING.md`

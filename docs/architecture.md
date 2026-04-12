@@ -30,7 +30,35 @@
   - `playerdb`: player ratings and leaderboard source
   - `recentplayers`: recent player names for entry UX
   - `tagdb`: badge/tag to player mapping
-- A plain text audit trail is appended to `logfile.log`.
+  - `match_history`: structured match records for analytics/history replay
+- A plain text audit trail is appended to `logfile.log` for legacy/debug continuity.
+
+Structured match-history record shape includes:
+- Timestamp and source marker
+- Teams, winner, and final score
+- Per-player before/after offense and defense ratings
+
+## Service Layer
+
+Core domain services live under `app/services/`:
+
+- `match_service.py`: odds, rating updates, lineup balancing
+- `match_history.py`: structured match-history append/query/replay helpers
+- `match_log.py`: legacy text audit log append
+- `player_store.py`: ranking helpers and player list utilities
+
+Support modules:
+
+- `app/datasources/`: external/network data adapters
+- `scripts/`: operational utilities (backup, inspect, sandbox refresh, smoke)
+- repo-root `test_*.py`: regression and API behavior tests
+
+## See Also
+
+- `docs/development.md`
+- `docs/data-safety.md`
+- `docs/phone-api.md`
+- `docs/backlog.md`
 
 ## Known Legacy Constraints
 

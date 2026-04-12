@@ -21,6 +21,6 @@ Near-term modernization continues with:
 - Expanded analytics and season/tournament foundations
 - Additional remote workflows after validation and data-model hardening
 
-See `README.md`, `docs/backlog.md`, and `docs/modernization-plan.md` for current status and sequencing.
+See `README.md`, `docs/development.md`, `docs/architecture.md`, `docs/backlog.md`, and `docs/modernization-plan.md` for current status and sequencing.
 
 If you need to revive kiosk support in the future, these files provide a reference for the original architecture.

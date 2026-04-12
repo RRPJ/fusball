@@ -8,7 +8,7 @@ This plan keeps gameplay behavior stable while enabling steady modernization.
 - The active execution queue lives in `docs/backlog.md` (what next, in order).
 - Keep this plan stable; update `docs/backlog.md` as work lands.
 
-## Current Status Snapshot (2026-04-11)
+## Current Status Snapshot (2026-04-12)
 
 Already completed in-repo:
 - Canonical entrypoint is `app/fusball.py` with `app/lcars.py` compatibility retained.

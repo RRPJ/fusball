@@ -1,33 +1,33 @@
 # Phone Match Submit Policy
 
-This document defines the minimum auth and write-conflict policy for the first phone write slice.
+This document defines the implemented auth and write-conflict baseline for phone write operations.
 
 Scope:
 - This policy applies to the current remote operator baseline on the phone path.
 - It intentionally covers only two write operations: adding a player and submitting a finished match result.
 - It does not attempt to define full remote administration, match editing/deletion, or live score entry.
 
-## First-Slice Goal
+## Implemented Baseline
 
-Prove that a phone can perform minimal operator writes safely enough for early real-world use, without turning the phone path into a second full control surface.
+The current phone write path supports minimal operator writes without turning the phone UI into a second full control surface.
 
-The first write slice should stay intentionally narrow:
+The implemented write scope is intentionally narrow:
 - Add a new player (token-authenticated).
 - Submit a finished match only.
 - Match submit uses existing players only.
 - Apply the same score validity rules as the kiosk flow.
 - Persist the result, update rankings, and refresh read views.
-- Stop there until structured match history is in place.
+- Keep additional remote-admin workflows out of scope for now.
 
 ## Auth Policy
 
-Minimum policy for the first slice:
+Implemented policy:
 - No anonymous write access.
 - Require an explicit operator credential on every write request.
 - For the first rollout, a shared operator secret is acceptable.
 - Tailscale or local-network reachability is not sufficient by itself; transport access and write authorization are separate concerns.
 
-Recommended first implementation:
+Current implementation:
 - Use a single shared operator token configured locally on the host.
 - Send it with the request in a dedicated auth header.
 - Reject missing or invalid credentials with `401 Unauthorized`.
@@ -40,11 +40,11 @@ Out of scope for the first slice:
 
 ## Write Scope Rules
 
-The first phone write endpoints should allow only these operations:
+The current phone write endpoints allow only these operations:
 - Add one player name with default ratings.
 - Submit one finished singles or doubles result using existing player identities.
 
-The endpoint should reject:
+The endpoints reject:
 - Partial or in-progress matches.
 - Match edits or deletes.
 - Freeform player names that do not match existing stored players.
@@ -52,20 +52,24 @@ The endpoint should reject:
 
 ## Conflict Policy
 
-The first slice should assume a single active writer at a time.
+The write path assumes a single active writer at a time.
 
 Rules:
 - If the kiosk is in the middle of a local write-sensitive flow, remote submit should be rejected.
 - If a phone submit is already being processed, a second concurrent submit should be rejected.
 - Conflict responses should be explicit and non-destructive.
 
-Recommended first implementation:
+Current implementation:
 - Introduce a short-lived write lock owned by either `kiosk` or `phone`.
 - Acquire the lock before mutating shelve state.
 - Release it immediately after persistence and ranking update complete.
 - Return `409 Conflict` when the lock is already held.
+- Use duplicate-submit detection for a short time window to reject accidental retries.
 
-The initial lock can be simple as long as it is reliable enough for a single-host deployment.
+Implementation notes from `app/phone_api.py`:
+- Lock file name: `phone_api_write.lock`
+- Auth header name: `X-Operator-Token`
+- Duplicate-submit window: 60 seconds (`MATCH_DUPLICATE_WINDOW_SECONDS`)
 
 ## Validation Rules
 
@@ -103,11 +107,17 @@ If persistence fails partway through:
 
 ## Verification Expectations
 
-The first phone write slice should ship with only a small validation surface:
+The first phone write slice ships with a small validation surface:
 - One automated test for authorized successful submit.
 - One automated test for rejected unauthorized submit.
 - One automated test for rejected conflicting submit.
 - One automated test for player creation success and duplicate rejection.
 - One manual end-to-end check from phone to leaderboard refresh.
 
-After that proof works, priority should move to structured match history rather than expanding phone write scope.
+Priority remains on history/model hardening before expanding write scope. See `docs/backlog.md` for next slices.
+
+## See Also
+
+- API endpoint reference: `docs/phone-api.md`
+- Execution status and sequencing: `docs/backlog.md`
+- Strategy and rationale: `docs/modernization-plan.md`
