@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import re
 import shelve
 import sys
 import unittest
@@ -15,6 +16,7 @@ if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
 from phone_api import WRITE_LOCK_NAME, create_app  # noqa: E402
+from services.match_service import best_balanced_lineup  # noqa: E402
 
 
 class PhoneApiTests(unittest.TestCase):
@@ -56,6 +58,35 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("Dustin Fusball Phone Console", html)
             self.assertIn("Leaderboard", html)
             self.assertIn("Alice", html)
+
+    def test_phone_page_includes_quip_catalog_with_variety(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            db_path = str(tmp_path / "playerdb")
+            with shelve.open(db_path) as players:
+                players["alice"] = (trueskill.Rating(), trueskill.Rating())
+
+            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+            client = app.test_client()
+            response = client.get("/phone")
+            self.assertEqual(response.status_code, 200)
+
+            html = response.get_data(as_text=True)
+            categories = [
+                "expected_blowout",
+                "expected_close_win",
+                "upset_win",
+                "nail_biter",
+                "total_stomp",
+                "even_match_outcome",
+            ]
+            for category in categories:
+                pattern = rf"{category}: \[(.*?)\]"
+                match = re.search(pattern, html, re.DOTALL)
+                self.assertIsNotNone(match)
+                assert match is not None
+                lines = re.findall(r"'[^']+'", match.group(1))
+                self.assertGreaterEqual(len(lines), 10)
 
     def test_match_submit_requires_operator_token(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -164,6 +195,103 @@ class PhoneApiTests(unittest.TestCase):
             self.assertEqual(payload["count"], 2)
             self.assertIn("Alice", payload["items"])
             self.assertIn("Bob", payload["items"])
+
+    def test_presence_api_tracks_active_players(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            db_path = str(tmp_path / "playerdb")
+            with shelve.open(db_path) as players:
+                players["alice"] = (trueskill.Rating(), trueskill.Rating())
+                players["bob"] = (trueskill.Rating(), trueskill.Rating())
+
+            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+            client = app.test_client()
+
+            empty = client.get("/api/presence")
+            self.assertEqual(empty.status_code, 200)
+            empty_payload = empty.get_json()
+            assert empty_payload is not None
+            self.assertEqual(empty_payload["count"], 0)
+
+            add_active = client.post("/api/presence", json={"name": "alice", "active": True})
+            self.assertEqual(add_active.status_code, 200)
+
+            presence = client.get("/api/presence")
+            payload = presence.get_json()
+            assert payload is not None
+            self.assertEqual(payload["count"], 1)
+            self.assertEqual(payload["items"], ["Alice"])
+
+            clear = client.post("/api/presence/clear")
+            self.assertEqual(clear.status_code, 200)
+            cleared = client.get("/api/presence")
+            cleared_payload = cleared.get_json()
+            assert cleared_payload is not None
+            self.assertEqual(cleared_payload["count"], 0)
+
+    def test_random_lineup_uses_only_active_players(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            db_path = str(tmp_path / "playerdb")
+            with shelve.open(db_path) as players:
+                for name in ["alice", "bob", "carol", "dave", "eve"]:
+                    players[name] = (trueskill.Rating(), trueskill.Rating())
+
+            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+            client = app.test_client()
+
+            for name in ["alice", "bob", "carol", "dave"]:
+                response = client.post("/api/presence", json={"name": name, "active": True})
+                self.assertEqual(response.status_code, 200)
+
+            lineup_resp = client.post("/api/lineup/random", json={"mode": "doubles"})
+            self.assertEqual(lineup_resp.status_code, 200)
+            payload = lineup_resp.get_json()
+            assert payload is not None
+            selected = payload["selected"]
+            chosen = {selected["red_defense"], selected["red_offense"], selected["blue_defense"], selected["blue_offense"]}
+            self.assertEqual(len(chosen), 4)
+            self.assertTrue(chosen.issubset({"alice", "bob", "carol", "dave"}))
+
+    def test_auto_lineup_reorders_to_best_balance(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            db_path = str(tmp_path / "playerdb")
+            with shelve.open(db_path) as players:
+                players["alice"] = (trueskill.Rating(mu=38, sigma=4), trueskill.Rating(mu=28, sigma=4))
+                players["bob"] = (trueskill.Rating(mu=30, sigma=4), trueskill.Rating(mu=36, sigma=4))
+                players["carol"] = (trueskill.Rating(mu=34, sigma=4), trueskill.Rating(mu=30, sigma=4))
+                players["dave"] = (trueskill.Rating(mu=26, sigma=4), trueskill.Rating(mu=34, sigma=4))
+                expected = best_balanced_lineup(
+                    players,
+                    defense_a="alice",
+                    offense_a="bob",
+                    offense_b="carol",
+                    defense_b="dave",
+                )
+
+            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+            client = app.test_client()
+            response = client.post(
+                "/api/lineup/auto",
+                json={
+                    "mode": "doubles",
+                    "selected": {
+                        "red_defense": "alice",
+                        "red_offense": "bob",
+                        "blue_offense": "carol",
+                        "blue_defense": "dave",
+                    },
+                },
+            )
+            self.assertEqual(response.status_code, 200)
+            payload = response.get_json()
+            assert payload is not None
+            selected = payload["selected"]
+            self.assertEqual(
+                [selected["red_defense"], selected["red_offense"], selected["blue_offense"], selected["blue_defense"]],
+                expected,
+            )
 
     def test_add_player_requires_operator_token(self) -> None:
         with TemporaryDirectory() as tmpdir:

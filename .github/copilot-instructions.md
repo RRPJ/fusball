@@ -26,6 +26,7 @@
 - Keep logic changes localized; avoid unrelated formatting churn.
 - Use clear names and small helper functions for ranking/data transforms.
 - Add comments only where intent is non-obvious.
+- Take extra care with indentation when writing or editing code; indentation errors are a common regression source and must be checked before finalizing changes.
 
 ## Data Handling Rules
 

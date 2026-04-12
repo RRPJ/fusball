@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import random
 import re
 import shelve
 import time
@@ -29,7 +30,7 @@ from services.match_history import (
   replay_scope_ratings,
 )
 from services.match_log import append_match_log
-from services.match_service import calculate_rating_update
+from services.match_service import best_balanced_lineup, calculate_rating_update
 from services.player_store import rank_labels_by_name, ranked_players
 
 
@@ -102,6 +103,70 @@ def _load_player_names(db_dir: Path) -> list[str]:
 
     with shelve.open(str(db_path)) as players:
         return sorted(capwords(name) for name in players.keys())
+
+
+def _load_player_keys(db_dir: Path) -> list[str]:
+    db_path = db_dir / "playerdb"
+    if not _playerdb_exists(db_dir):
+        return []
+
+    with shelve.open(str(db_path)) as players:
+        return sorted(players.keys())
+
+
+def _default_selected_slots() -> dict[str, str | None]:
+    return {
+        "red_offense": None,
+        "red_defense": None,
+        "blue_offense": None,
+        "blue_defense": None,
+    }
+
+
+def _required_slots_for_mode(mode: str) -> list[str]:
+    if mode == "doubles":
+        return ["red_defense", "red_offense", "blue_defense", "blue_offense"]
+    if mode == "singles":
+        return ["red_offense", "blue_offense"]
+    raise ValueError("mode must be 'singles' or 'doubles'")
+
+
+def _lineup_from_active_players(active_players: set[str], mode: str) -> dict[str, str | None]:
+    required_slots = _required_slots_for_mode(mode)
+    if len(active_players) < len(required_slots):
+        raise ValueError(f"need at least {len(required_slots)} active players for {mode}")
+
+    picked = random.sample(sorted(active_players), len(required_slots))
+    selected = _default_selected_slots()
+    for index, slot in enumerate(required_slots):
+        selected[slot] = picked[index]
+    return selected
+
+
+def _validate_auto_payload(payload: object) -> dict[str, str]:
+    if not isinstance(payload, dict):
+        raise ValueError("request body must be a JSON object")
+
+    mode = payload.get("mode")
+    if mode != "doubles":
+        raise ValueError("auto lineup is only available for doubles")
+
+    selected_raw = payload.get("selected")
+    if not isinstance(selected_raw, dict):
+        raise ValueError("selected must be an object")
+
+    slots = ["red_defense", "red_offense", "blue_defense", "blue_offense"]
+    selected: dict[str, str] = {}
+    for slot in slots:
+        value = selected_raw.get(slot)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("auto lineup requires all four selected players")
+        selected[slot] = _normalize_player_name(value)
+
+    if len(set(selected.values())) != 4:
+        raise ValueError("auto lineup requires four unique players")
+
+    return selected
 
 
 def _normalize_player_name(value: object) -> str:
@@ -389,6 +454,31 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       font-size: 0.9rem;
     }
     .players { max-height: 220px; overflow: auto; padding-right: 4px; }
+    .presence-list { width: 100%; margin-top: 8px; }
+    .presence-list h3 {
+      margin: 0 0 6px;
+      font-size: 0.73rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+    .player-item { width: 100%; margin-bottom: 6px; }
+    .player-item.present-row { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+    .player-item .btn { width: 100%; text-align: left; }
+    .player-item .btn.present-player { border-color: rgba(42, 166, 117, 0.45); }
+    .player-item .btn.away-player { opacity: 0.72; }
+    .player-item .btn.demote {
+      width: 40px;
+      text-align: center;
+      padding: 8px 0;
+      border-color: rgba(180, 81, 81, 0.45);
+      color: #ffd4d4;
+      font-weight: 700;
+    }
+    .presence-toggle { margin-top: 6px; }
+    .presence-collapsed { display: none; }
+    .btn.present { border-color: var(--ok); color: var(--ok); }
+    .btn.assign-off { opacity: 0.55; }
     .score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; align-items: center; }
     .status { margin-top: 8px; font-size: 0.84rem; min-height: 18px; color: var(--muted); }
     .status.ok { color: var(--ok); }
@@ -437,6 +527,19 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     .lrow { cursor:pointer; }
     .lrow:active td { background:rgba(239,138,23,0.06); }
     .filter-row { margin: 0 0 8px; }
+    .offline-banner {
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid var(--bad);
+      border-radius: 10px;
+      background: rgba(180, 81, 81, 0.12);
+      color: #ffd4d4;
+      font-size: 0.83rem;
+    }
+    body.offline section[id^='step'] { display: none !important; }
+    body.offline .sticky { display: none; }
+    .review-score { font-size: 1.05rem; font-weight: 700; color: var(--accent); margin-top: 6px; }
+    .review-quip { margin-top: 8px; color: var(--accent); font-weight: 600; }
   </style>
 </head>
 <body>
@@ -444,6 +547,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     <header>
       <h1>Dustin Fusball Phone Console</h1>
       <div class='muted'>Button-driven setup, score, confirm, submit</div>
+      <div id='offlineBanner' class='offline-banner' style='display:none;'>API offline. Showing leaderboard snapshot only.</div>
       <div class='progress'>
         <button id='stepBtn1' type='button' class='active'>1 Mode</button>
         <button id='stepBtn2' type='button'>2 Players</button>
@@ -473,11 +577,22 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         <button id='swapSidesBtn' class='btn small' type='button'>Swap Sides</button>
         <button id='swapRedBtn' class='btn small' type='button'>Swap Red</button>
         <button id='swapBlueBtn' class='btn small' type='button'>Swap Blue</button>
+        <button id='randomBtn' class='btn small' type='button'>Random</button>
+        <button id='autoBtn' class='btn small' type='button'>Auto</button>
         <button id='undoBtn' class='btn small' type='button'>Undo Last Pick</button>
         <button id='clearBtn' class='btn small' type='button'>Clear</button>
       </div>
-      <div id='playersPanel' class='row players'></div>
-      <div id='oddsText' class='status' style='margin-top:8px;'></div>
+      <div id='oddsText' class='status' style='margin-top:2px;'></div>
+      <div id='presenceStatus' class='status'>No active players selected.</div>
+      <div class='presence-list'>
+        <h3>Present Players (tap to assign)</h3>
+        <div id='presentPlayersPanel' class='row players'></div>
+      </div>
+      <button id='awayToggleBtn' class='btn small presence-toggle' type='button'>Away Players ▾</button>
+      <div id='awayListWrap' class='presence-list presence-collapsed'>
+        <h3>Away Players (tap to mark present)</h3>
+        <div id='awayPlayersPanel' class='row players'></div>
+      </div>
       <div id='h2hToggleRow' class='row' style='margin-top:6px;display:none;'>
         <button id='h2hToggleBtn' class='btn small' type='button' onclick='toggleH2H()'>H2H &#9660;</button>
       </div>
@@ -492,6 +607,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         <div id='scoreRed' class='row'></div>
         <div id='scoreBlue' class='row'></div>
       </div>
+      <div id='scoreHint' class='muted' style='margin-top:10px;'></div>
       <div id='statusText' class='status'></div>
     </section>
 
@@ -577,7 +693,17 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       expandedPlayer: null,
       h2hOpen: false,
       isSubmitting: false,
+      offline: false,
+      healthTimerId: null,
+      inFlightGetControllers: new Set(),
+      awayOpen: false,
       players: [],
+      activePlayers: [],
+      latestOdds: null,
+      currentQuipKey: null,
+      currentQuipText: null,
+      currentQuipCategory: null,
+      lastQuipIndexByCategory: {},
       selectionHistory: [],
       selected: {
         red_offense: null,
@@ -587,6 +713,81 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       },
       score1: null,
       score2: null,
+    };
+
+    const QUIPS_BY_CATEGORY = {
+      expected_blowout: [
+        'Called it. That one came with a warranty.',
+        'Spreadsheet said easy and spreadsheet never lies.',
+        'Pre-match forecast: pain. Outcome: accurate.',
+        'That was not a match, that was a tutorial.',
+        'Odds said cruise control and you set autopilot.',
+        'Big favorite energy, fully delivered.',
+        'You promised fireworks and brought a flamethrower.',
+        'That scoreline was signed in advance.',
+        'Expected business completed with zero drama.',
+        'They queued confidence and shipped dominance.',
+      ],
+      expected_close_win: [
+        'Favorite got the job done, just with extra paperwork.',
+        'Predicted edge, sweaty execution.',
+        'You won, but the stress meter also won.',
+        'Expected W, unexpected cardio session.',
+        'Victory arrived exactly on schedule, barely.',
+        'That was a controlled burn, mostly controlled.',
+        'Odds were right by a hairline margin.',
+        'Close call, clean brag rights.',
+        'You edged it. Style points pending review.',
+        'Win confirmed, blood pressure not confirmed.',
+      ],
+      upset_win: [
+        'Underdog just sent the rankings a breakup text.',
+        'Prediction model is filing a formal complaint.',
+        'That was theft in broad daylight and on camera.',
+        'Upset served hot and with extra spice.',
+        'You ignored the odds and wrote your own patch notes.',
+        'Favorite status revoked effective immediately.',
+        'That scoreboard just heckled the pre-game math.',
+        'Underdog mode activated, chaos mode completed.',
+        'The script was wrong and you made sure it knew.',
+        'Odds got cooked and plated.',
+      ],
+      nail_biter: [
+        'One ball either way and history changes.',
+        'That finish was held together by nerves and denial.',
+        'Clutch meter just exploded.',
+        'Photo finish energy. No survivors.',
+        'That was not clean, but it was legendary.',
+        'Five-four: the universal language of panic.',
+        'Everyone lost years off their lifespan there.',
+        'You did not win calmly and that is okay.',
+        'Last-ball drama sponsored by pure stubbornness.',
+        'Nail-biter certified. Hands still shaking.',
+      ],
+      total_stomp: [
+        'Mercy rule vibes without the mercy.',
+        'That scoreline should come with parental guidance.',
+        'Clean sweep, zero crumbs left.',
+        'You speedran that lobby.',
+        'They queued for a game and got a lecture instead.',
+        'That was domination with subtitles.',
+        'No comeback arc, only credits.',
+        'Brutal efficiency and a tiny bit of disrespect.',
+        'One side played foosball, the other took notes.',
+        'That was an uninstall-level result.',
+      ],
+      even_match_outcome: [
+        'Even odds, uneven confidence by the end.',
+        'Coin flip matchup, loaded dice finish.',
+        'Fifty-fifty on paper, spicy in practice.',
+        'Balanced start, unbalanced bragging rights.',
+        'That matchup was level until somebody snapped.',
+        'Perfectly even pre-game, perfectly loud post-game.',
+        'Model said toss-up, table said throwdown.',
+        'Equal ratings, unequal celebrations.',
+        'That was parity with extra attitude.',
+        'Even matchup resolved by pure audacity.',
+      ],
     };
 
     function setStatus(text, type = '') {
@@ -599,6 +800,127 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       const node = document.getElementById('addPlayerStatus');
       node.textContent = text;
       node.className = 'status' + (type ? ' ' + type : '');
+    }
+
+    function cacheLeaderboard(items) {
+      try {
+        localStorage.setItem('fusball_leaderboard_snapshot', JSON.stringify(items || []));
+      } catch {
+        // Ignore storage failures on private mode/storage-restricted browsers.
+      }
+    }
+
+    function readCachedLeaderboard() {
+      try {
+        const raw = localStorage.getItem('fusball_leaderboard_snapshot');
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function setOfflineMode(reason = 'API offline.') {
+      if (state.offline) return;
+      state.offline = true;
+      abortInFlightGets();
+      document.body.classList.add('offline');
+      const banner = document.getElementById('offlineBanner');
+      if (banner) {
+        banner.style.display = 'block';
+        banner.textContent = `${reason} Showing leaderboard snapshot only.`;
+      }
+      const cached = readCachedLeaderboard();
+      if (cached.length) {
+        renderLeaderboard(cached);
+      }
+      setStatus('API offline. Match entry is disabled.', 'bad');
+    }
+
+    function clearOfflineMode() {
+      if (!state.offline) return;
+      state.offline = false;
+      document.body.classList.remove('offline');
+      const banner = document.getElementById('offlineBanner');
+      if (banner) {
+        banner.style.display = 'none';
+      }
+      setStatus('API online again.', 'ok');
+    }
+
+    function abortInFlightGets() {
+      for (const controller of state.inFlightGetControllers) {
+        controller.abort();
+      }
+      state.inFlightGetControllers.clear();
+    }
+
+    function startHealthMonitor() {
+      if (state.healthTimerId) {
+        window.clearInterval(state.healthTimerId);
+      }
+
+      const check = async () => {
+        try {
+          const response = await apiFetch('/api/health', {
+            allowOffline: true,
+            timeoutMs: 1200,
+          });
+          if (response.ok) {
+            clearOfflineMode();
+            return;
+          }
+          setOfflineMode('API offline.');
+        } catch {
+          setOfflineMode('API offline.');
+        }
+      };
+
+      check();
+      state.healthTimerId = window.setInterval(check, 5000);
+    }
+
+    async function apiFetch(url, options = {}) {
+      const method = (options.method || 'GET').toUpperCase();
+      if (state.offline && !options.allowOffline) {
+        throw new Error('API offline.');
+      }
+
+      const timeoutMs = typeof options.timeoutMs === 'number'
+        ? options.timeoutMs
+        : (method === 'GET' ? 2200 : 5000);
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+      if (method === 'GET') {
+        state.inFlightGetControllers.add(controller);
+      }
+
+      try {
+        const response = await fetch(url, {
+          ...options,
+          signal: controller.signal,
+          cache: method === 'GET' ? 'no-store' : options.cache,
+        });
+        if (response.status === 503) {
+          setOfflineMode('API offline.');
+        }
+        return response;
+      } catch (error) {
+        if (error && error.name === 'AbortError') {
+          if (state.offline && !options.allowOffline) {
+            throw new Error('API offline.');
+          }
+          throw new Error('Request timed out.');
+        }
+        setOfflineMode('API offline.');
+        throw new Error('API offline.');
+      } finally {
+        window.clearTimeout(timeoutId);
+        if (method === 'GET') {
+          state.inFlightGetControllers.delete(controller);
+        }
+      }
     }
 
     function ensureOperatorToken() {
@@ -619,6 +941,10 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     }
 
     function setMode(mode) {
+      if (state.offline) {
+        setStatus('API offline. Leaderboard cache only.', 'bad');
+        return;
+      }
       state.mode = mode;
       document.getElementById('modeSingles').classList.toggle('active', mode === 'singles');
       document.getElementById('modeDoubles').classList.toggle('active', mode === 'doubles');
@@ -639,6 +965,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       updateSummary();
       updateReview();
       refreshOdds();
+      renderPresenceStatus();
     }
 
     function setActiveSlot(slot) {
@@ -666,6 +993,10 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     }
 
     function assignPlayer(playerName) {
+      if (!state.activePlayers.includes(playerName.toLowerCase())) {
+        setStatus(playerName + ' is not marked active.', 'bad');
+        return;
+      }
       state.selectionHistory.push(JSON.stringify(state.selected));
       for (const slot of slots) {
         if (state.selected[slot] === playerName) {
@@ -727,16 +1058,77 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     }
 
     function renderPlayerButtons() {
-      const panel = document.getElementById('playersPanel');
-      panel.innerHTML = '';
+      const presentPanel = document.getElementById('presentPlayersPanel');
+      const awayPanel = document.getElementById('awayPlayersPanel');
+      presentPanel.innerHTML = '';
+      awayPanel.innerHTML = '';
+
+      const presentNames = [];
+      const awayNames = [];
       for (const name of state.players) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'btn small';
-        button.textContent = name;
-        button.addEventListener('click', () => assignPlayer(name));
-        panel.appendChild(button);
+        const key = name.toLowerCase();
+        if (state.activePlayers.includes(key)) {
+          presentNames.push(name);
+        } else {
+          awayNames.push(name);
+        }
       }
+
+      for (const name of presentNames) {
+        const row = document.createElement('div');
+        row.className = 'player-item present-row';
+        const assignBtn = document.createElement('button');
+        assignBtn.type = 'button';
+        assignBtn.className = 'btn small present-player';
+        assignBtn.textContent = name;
+        assignBtn.addEventListener('click', () => assignPlayer(name));
+
+        const demoteBtn = document.createElement('button');
+        demoteBtn.type = 'button';
+        demoteBtn.className = 'btn small demote';
+        demoteBtn.textContent = '−';
+        demoteBtn.title = `Mark ${name} away`;
+        demoteBtn.addEventListener('click', () => togglePresence(name, false));
+
+        row.appendChild(assignBtn);
+        row.appendChild(demoteBtn);
+        presentPanel.appendChild(row);
+      }
+
+      for (const name of awayNames) {
+        const row = document.createElement('div');
+        row.className = 'player-item';
+        const activateBtn = document.createElement('button');
+        activateBtn.type = 'button';
+        activateBtn.className = 'btn small away-player';
+        activateBtn.textContent = name;
+        activateBtn.addEventListener('click', () => togglePresence(name, true));
+        row.appendChild(activateBtn);
+        awayPanel.appendChild(row);
+      }
+
+      const awayToggle = document.getElementById('awayToggleBtn');
+      const awayWrap = document.getElementById('awayListWrap');
+      awayWrap.classList.toggle('presence-collapsed', !state.awayOpen);
+      awayToggle.textContent = state.awayOpen ? `Away Players ▴ (${awayNames.length})` : `Away Players ▾ (${awayNames.length})`;
+
+      if (presentNames.length === 0) {
+        presentPanel.innerHTML = "<div class='muted'>No present players yet.</div>";
+      }
+      if (awayNames.length === 0) {
+        awayPanel.innerHTML = "<div class='muted'>No away players.</div>";
+      }
+
+      renderPresenceStatus();
+    }
+
+    function renderPresenceStatus() {
+      const node = document.getElementById('presenceStatus');
+      const required = state.mode === 'doubles' ? 4 : 2;
+      node.textContent = `${state.activePlayers.length} active player(s). Need ${required} for ${state.mode}.`;
+      node.className = 'status' + (state.activePlayers.length >= required ? ' ok' : '');
+      document.getElementById('randomBtn').disabled = state.activePlayers.length < required;
+      document.getElementById('autoBtn').disabled = state.mode !== 'doubles';
     }
 
     function setScore(side, score) {
@@ -748,6 +1140,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       renderScoreButtons();
       updateSummary();
       updateReview();
+      updateScoreHint();
     }
 
     function renderScoreButtons() {
@@ -816,6 +1209,114 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       updateSummary();
       updateReview();
       refreshOdds();
+      updateScoreHint();
+    }
+
+    function displayNameForKey(playerName) {
+      const found = state.players.find((candidate) => candidate.toLowerCase() === playerName.toLowerCase());
+      return found || playerName;
+    }
+
+    async function refreshPresence() {
+      if (state.offline) {
+        return;
+      }
+      const response = await apiFetch('/api/presence');
+      if (!response.ok) {
+        throw new Error('Could not load active players.');
+      }
+      const payload = await response.json();
+      state.activePlayers = (payload.items || []).map((name) => name.toLowerCase());
+      renderPlayerButtons();
+    }
+
+    function toggleAwayList() {
+      state.awayOpen = !state.awayOpen;
+      const wrap = document.getElementById('awayListWrap');
+      wrap.classList.toggle('presence-collapsed', !state.awayOpen);
+      renderPlayerButtons();
+    }
+
+    async function togglePresence(playerName, forceActive = null) {
+      const key = playerName.toLowerCase();
+      const nextActive = forceActive === null ? !state.activePlayers.includes(key) : !!forceActive;
+      const response = await apiFetch('/api/presence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: key, active: nextActive }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setStatus(payload.error || 'Could not update active players.', 'bad');
+        return;
+      }
+      await refreshPresence();
+      setStatus(`${payload.name} marked ${payload.active ? 'active' : 'away'}.`, 'ok');
+    }
+
+    function selectedKeysPayload() {
+      return {
+        red_offense: state.selected.red_offense ? state.selected.red_offense.toLowerCase() : null,
+        red_defense: state.selected.red_defense ? state.selected.red_defense.toLowerCase() : null,
+        blue_offense: state.selected.blue_offense ? state.selected.blue_offense.toLowerCase() : null,
+        blue_defense: state.selected.blue_defense ? state.selected.blue_defense.toLowerCase() : null,
+      };
+    }
+
+    function applySelectedFromApi(selected) {
+      state.selectionHistory.push(JSON.stringify(state.selected));
+      state.selected = {
+        red_offense: selected.red_offense ? displayNameForKey(selected.red_offense) : null,
+        red_defense: selected.red_defense ? displayNameForKey(selected.red_defense) : null,
+        blue_offense: selected.blue_offense ? displayNameForKey(selected.blue_offense) : null,
+        blue_defense: selected.blue_defense ? displayNameForKey(selected.blue_defense) : null,
+      };
+      renderSlots();
+      updateSummary();
+      updateReview();
+      refreshOdds();
+    }
+
+    async function randomizeLineup() {
+      if (state.offline) {
+        setStatus('API offline. Leaderboard cache only.', 'bad');
+        return;
+      }
+      const response = await apiFetch('/api/lineup/random', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: state.mode }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setStatus(payload.error || 'Could not build random lineup.', 'bad');
+        return;
+      }
+      applySelectedFromApi(payload.selected || {});
+      setStatus('Random lineup assigned from active players.', 'ok');
+    }
+
+    async function autoBalanceLineup() {
+      if (state.offline) {
+        setStatus('API offline. Leaderboard cache only.', 'bad');
+        return;
+      }
+      if (state.mode !== 'doubles') {
+        setStatus('Auto balance is available in doubles mode.', 'bad');
+        return;
+      }
+      const response = await apiFetch('/api/lineup/auto', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: state.mode, selected: selectedKeysPayload() }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setStatus(payload.error || 'Could not auto-balance lineup.', 'bad');
+        return;
+      }
+      applySelectedFromApi(payload.selected || {});
+      setStatus('Lineup auto-balanced for best match quality.', 'ok');
     }
 
     function leaderboardSortValue(row) {
@@ -871,9 +1372,10 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       }
       const statsNeeded = ['form','streak','improved'].includes(mode);
       if (statsNeeded && !state.playerStats) {
-        fetch('/api/stats?scope=' + encodeURIComponent(state.leaderboardFilter))
-          .then(r => r.json())
-          .then(data => { state.playerStats = data; renderLeaderboard(state.leaderboardItems); });
+        apiFetch('/api/stats?scope=' + encodeURIComponent(state.leaderboardFilter))
+          .then(r => r.ok ? r.json() : {})
+          .then(data => { state.playerStats = data; renderLeaderboard(state.leaderboardItems); })
+          .catch(() => undefined);
       } else {
         renderLeaderboard(state.leaderboardItems);
       }
@@ -891,13 +1393,16 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         setLeaderboardSort('total');
       }
 
-      refreshLeaderboard().catch(() => undefined);
+      if (!state.offline) {
+        refreshLeaderboard().catch(() => undefined);
+      }
 
       const needsStats = ['form', 'streak', 'improved'].includes(state.leaderboardSort);
-      if (needsStats) {
-        fetch('/api/stats?scope=' + encodeURIComponent(state.leaderboardFilter))
-          .then(r => r.json())
-          .then(data => { state.playerStats = data; renderLeaderboard(state.leaderboardItems); });
+      if (needsStats && !state.offline) {
+        apiFetch('/api/stats?scope=' + encodeURIComponent(state.leaderboardFilter))
+          .then(r => r.ok ? r.json() : {})
+          .then(data => { state.playerStats = data; renderLeaderboard(state.leaderboardItems); })
+          .catch(() => undefined);
       }
     }
 
@@ -923,6 +1428,9 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     }
 
     async function togglePlayerHistory(rowEl, playerKey) {
+      if (state.offline) {
+        return;
+      }
       const nextEl = rowEl.nextElementSibling;
       if (nextEl && nextEl.classList.contains('expand-row')) {
         nextEl.remove();
@@ -938,7 +1446,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       tr.appendChild(td);
       rowEl.after(tr);
       try {
-        const resp = await fetch(`/api/player/${encodeURIComponent(playerKey)}/history?n=6`);
+        const resp = await apiFetch(`/api/player/${encodeURIComponent(playerKey)}/history?n=6`);
         if (!resp.ok) { td.innerHTML = '<div class="kv">No history available.</div>'; return; }
         const data = await resp.json();
         if (!data.snapshots || data.snapshots.length === 0) { td.innerHTML = '<div class="kv">No matches recorded yet.</div>'; return; }
@@ -993,22 +1501,150 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       return true;
     }
 
+    function isFinishedScore(score1, score2) {
+      if (score1 === null || score2 === null) {
+        return false;
+      }
+      return Math.max(score1, score2) === 5 && Math.min(score1, score2) !== 5;
+    }
+
+    function parsePredictedLosingGoals(predicted) {
+      if (!predicted || typeof predicted !== 'string') {
+        return null;
+      }
+      const parts = predicted.split('-').map((value) => Number.parseInt(value, 10));
+      if (parts.length !== 2 || Number.isNaN(parts[0]) || Number.isNaN(parts[1])) {
+        return null;
+      }
+      return Math.min(parts[0], parts[1]);
+    }
+
+    function classifyQuipCategory(probability, predicted, score1, score2) {
+      if (!isFinishedScore(score1, score2)) {
+        return null;
+      }
+
+      const winnerGoals = Math.max(score1, score2);
+      const loserGoals = Math.min(score1, score2);
+      const margin = winnerGoals - loserGoals;
+      const redFavored = probability >= 0.5;
+      const redWon = score1 > score2;
+      const upset = redWon !== redFavored;
+      const confidence = Math.max(probability, 1 - probability);
+      const predictedLosingGoals = parsePredictedLosingGoals(predicted);
+
+      if (winnerGoals === 5 && loserGoals <= 1) {
+        return 'total_stomp';
+      }
+      if (margin === 1) {
+        return 'nail_biter';
+      }
+      if (upset) {
+        return 'upset_win';
+      }
+      if (Math.abs(probability - 0.5) <= 0.06) {
+        return 'even_match_outcome';
+      }
+      if (confidence >= 0.7 && (margin >= 3 || (predictedLosingGoals !== null && loserGoals <= predictedLosingGoals))) {
+        return 'expected_blowout';
+      }
+      return 'expected_close_win';
+    }
+
+    function selectQuipForCategory(category) {
+      const options = QUIPS_BY_CATEGORY[category] || [];
+      if (!options.length) {
+        return 'Table speaks louder than predictions.';
+      }
+
+      let index = Math.floor(Math.random() * options.length);
+      const previous = state.lastQuipIndexByCategory[category];
+      if (options.length > 1 && previous === index) {
+        index = (index + 1 + Math.floor(Math.random() * (options.length - 1))) % options.length;
+      }
+
+      state.lastQuipIndexByCategory[category] = index;
+      return options[index];
+    }
+
+    function resolveCurrentQuip() {
+      if (!state.latestOdds) {
+        state.currentQuipKey = null;
+        state.currentQuipText = null;
+        state.currentQuipCategory = null;
+        return null;
+      }
+
+      const category = classifyQuipCategory(
+        state.latestOdds.probability,
+        state.latestOdds.predicted,
+        state.score1,
+        state.score2,
+      );
+      if (!category) {
+        state.currentQuipKey = null;
+        state.currentQuipText = null;
+        state.currentQuipCategory = null;
+        return null;
+      }
+
+      const key = `${category}|${state.latestOdds.predicted}|${state.score1}-${state.score2}`;
+      if (state.currentQuipKey === key && state.currentQuipText) {
+        return { category: state.currentQuipCategory, text: state.currentQuipText };
+      }
+
+      state.currentQuipCategory = category;
+      state.currentQuipKey = key;
+      state.currentQuipText = selectQuipForCategory(category);
+      return { category: category, text: state.currentQuipText };
+    }
+
+    function updateScoreHint() {
+      const node = document.getElementById('scoreHint');
+      if (!node) return;
+      if (!state.latestOdds) {
+        node.textContent = 'Pick players to see odds and matchup context.';
+        return;
+      }
+
+      let extra = '';
+      if (state.score1 !== null && state.score2 !== null) {
+        extra = ' Final: ' + state.score1 + '-' + state.score2 + '.';
+      }
+      const quip = resolveCurrentQuip();
+      const quipText = quip ? ` Talk: ${quip.text}` : '';
+      node.textContent = `Pre-match odds ${state.latestOdds.ratio}. Predicted score: ${state.latestOdds.predicted}.${extra}${quipText}`;
+    }
+
     function updateReview() {
       const review = document.getElementById('reviewText');
       try {
         const payload = buildPayload();
         const winner = payload.score1 > payload.score2 ? payload.team1.join(' + ') : payload.team2.join(' + ');
+        const oddsText = state.latestOdds
+          ? `<div><strong>Odds:</strong> ${state.latestOdds.ratio} (${Math.round(state.latestOdds.probability * 100)}% red-side win)</div>`
+          : '';
+        const quipState = resolveCurrentQuip();
+        const quip = quipState
+          ? `<div class='review-quip'>${quipState.text}</div>`
+          : '';
         review.innerHTML =
           `<div><strong>Red:</strong> ${payload.team1.join(' + ')}</div>` +
           `<div><strong>Blue:</strong> ${payload.team2.join(' + ')}</div>` +
-          `<div><strong>Score:</strong> ${payload.score1} - ${payload.score2}</div>` +
-          `<div><strong>Winner:</strong> ${winner}</div>`;
+          `<div class='review-score'>Final Score: ${payload.score1} - ${payload.score2}</div>` +
+          `<div><strong>Winner:</strong> ${winner}</div>` +
+          oddsText +
+          quip;
       } catch {
         review.textContent = 'Complete lineup and score to enable submit.';
       }
     }
 
     function setStep(step) {
+      if (state.offline) {
+        setStatus('API offline. Leaderboard cache only.', 'bad');
+        return;
+      }
       const target = Math.max(1, Math.min(step, 4));
       for (let i = 1; i < target; i++) {
         if (!isStepComplete(i)) return;
@@ -1029,12 +1665,19 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     }
 
     async function refreshLeaderboard() {
-      const response = await fetch('/api/leaderboard?limit=50&scope=' + encodeURIComponent(state.leaderboardFilter));
+      if (state.offline) {
+        const cached = readCachedLeaderboard();
+        renderLeaderboard(cached);
+        return;
+      }
+      const response = await apiFetch('/api/leaderboard?limit=50&scope=' + encodeURIComponent(state.leaderboardFilter));
       if (!response.ok) {
         throw new Error('Could not refresh leaderboard.');
       }
       const payload = await response.json();
-      renderLeaderboard(payload.items || []);
+      const items = payload.items || [];
+      renderLeaderboard(items);
+      cacheLeaderboard(items);
     }
 
     function predictedScore(prob) {
@@ -1080,7 +1723,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       toggleRow.style.display = '';
       if (!state.h2hOpen) return;
       card.innerHTML = '<span class="muted">Loading\u2026</span>';
-      fetch(`/api/h2h?p1=${encodeURIComponent(redOff.toLowerCase())}&p2=${encodeURIComponent(blueOff.toLowerCase())}`)
+      apiFetch(`/api/h2h?p1=${encodeURIComponent(redOff.toLowerCase())}&p2=${encodeURIComponent(blueOff.toLowerCase())}`)
         .then(r => r.json())
         .then(d => {
           if (d.matches === 0) {
@@ -1107,23 +1750,39 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     }
 
     async function refreshOdds() {
+      if (state.offline) {
+        return;
+      }
       const redOff = state.selected.red_offense;
       const blueOff = state.selected.blue_offense;
       const node = document.getElementById('oddsText');
       if (!node) return;
-      if (!redOff || !blueOff) { node.textContent = ''; node.className = 'status'; refreshH2H(); return; }
+      if (!redOff || !blueOff) {
+        state.latestOdds = null;
+        node.textContent = '';
+        node.className = 'status';
+        updateScoreHint();
+        refreshH2H();
+        return;
+      }
       const params = new URLSearchParams({ red_off: redOff.toLowerCase(), blue_off: blueOff.toLowerCase(), mode: state.mode });
       if (state.mode === 'doubles') {
         if (state.selected.red_defense) params.set('red_def', state.selected.red_defense.toLowerCase());
         if (state.selected.blue_defense) params.set('blue_def', state.selected.blue_defense.toLowerCase());
       }
       try {
-        const resp = await fetch('/api/odds?' + params.toString());
-        if (!resp.ok) { node.textContent = ''; return; }
+        const resp = await apiFetch('/api/odds?' + params.toString());
+        if (!resp.ok) {
+          state.latestOdds = null;
+          node.textContent = '';
+          updateScoreHint();
+          return;
+        }
         const data = await resp.json();
         const redPct = Math.round(data.probability * 100);
         const bluePct = 100 - redPct;
         const score = predictedScore(data.probability);
+        state.latestOdds = { probability: data.probability, ratio: data.ratio, predicted: score };
         const [favored, favoredPct] = redPct >= 50 ? [redOff + ' side', redPct] : [blueOff + ' side', bluePct];
         const label = oddsLabel(data.probability);
         const upset = hasUpsetRisk(data.probability);
@@ -1131,15 +1790,18 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
           (upset ? `<span class='badge badge-bad'>Upset Risk</span>` : '');
         node.innerHTML = `Odds: ${data.ratio} \u2014 ${favored} favored (${favoredPct}%) \u2014 Predicted: ${score} ${badgeHtml}`;
         node.className = 'status ok';
+        updateScoreHint();
         refreshH2H();
       } catch {
+        state.latestOdds = null;
         node.textContent = '';
         node.className = 'status';
+        updateScoreHint();
       }
     }
 
     async function loadPlayers() {
-      const response = await fetch('/api/players');
+      const response = await apiFetch('/api/players');
       if (!response.ok) {
         throw new Error('Could not load players.');
       }
@@ -1176,7 +1838,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       setStatus('Submitting result...');
 
       try {
-        const response = await fetch('/api/matches', {
+        const response = await apiFetch('/api/matches', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1216,7 +1878,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       }
 
       setAddPlayerStatus('Adding player...');
-      const response = await fetch('/api/players', {
+      const response = await apiFetch('/api/players', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1234,6 +1896,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       input.value = '';
       setAddPlayerStatus(`Added ${result.name}.`, 'ok');
       await loadPlayers();
+      await refreshPresence();
       await refreshLeaderboard();
     }
 
@@ -1246,6 +1909,9 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     document.getElementById('swapSidesBtn').addEventListener('click', swapSides);
     document.getElementById('swapRedBtn').addEventListener('click', () => swapTeam('red'));
     document.getElementById('swapBlueBtn').addEventListener('click', () => swapTeam('blue'));
+    document.getElementById('randomBtn').addEventListener('click', () => randomizeLineup().catch((e) => setStatus(e.message, 'bad')));
+    document.getElementById('autoBtn').addEventListener('click', () => autoBalanceLineup().catch((e) => setStatus(e.message, 'bad')));
+    document.getElementById('awayToggleBtn').addEventListener('click', toggleAwayList);
     document.getElementById('undoBtn').addEventListener('click', undoLastPick);
     document.getElementById('clearBtn').addEventListener('click', clearSelection);
     document.getElementById('sortTotalBtn').addEventListener('click', () => setLeaderboardSort('total'));
@@ -1278,8 +1944,13 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     renderSlots();
     updateSummary();
     updateReview();
+    updateScoreHint();
     setLeaderboardFilter('all');
-    loadPlayers().catch((e) => setStatus(e.message, 'bad'));
+    document.getElementById('awayListWrap').classList.add('presence-collapsed');
+    loadPlayers()
+      .then(() => refreshPresence())
+      .catch((e) => setStatus(e.message, 'bad'));
+    startHealthMonitor();
 
     const tokenInput = document.getElementById('operatorToken');
     const savedToken = sessionStorage.getItem('fusball_token');
@@ -1311,6 +1982,7 @@ def create_app(db_dir: Path | None = None, operator_token: str | None = None) ->
   data_dir = db_dir or ROOT_DIR
   app.config["OPERATOR_TOKEN"] = operator_token
   _RECENT_MATCH_SIGNATURES.clear()
+  active_players: set[str] = set()
 
   @app.get("/api/health")
   def health() -> object:
@@ -1330,6 +2002,97 @@ def create_app(db_dir: Path | None = None, operator_token: str | None = None) ->
   def players() -> object:
     names = _load_player_names(data_dir)
     return jsonify({"count": len(names), "items": names})
+
+  @app.get("/api/presence")
+  def presence_get() -> object:
+    active = sorted(capwords(name) for name in active_players)
+    return jsonify({"count": len(active), "items": active})
+
+  @app.post("/api/presence")
+  def presence_set() -> object:
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+      return jsonify({"error": "request body must be a JSON object"}), 400
+
+    try:
+      name = _normalize_player_name(payload.get("name"))
+    except ValueError as exc:
+      return jsonify({"error": str(exc)}), 400
+
+    active = payload.get("active")
+    if not isinstance(active, bool):
+      return jsonify({"error": "active must be true or false"}), 400
+
+    if name not in set(_load_player_keys(data_dir)):
+      return jsonify({"error": "unknown player"}), 400
+
+    if active:
+      active_players.add(name)
+    else:
+      active_players.discard(name)
+
+    return jsonify({"ok": True, "name": capwords(name), "active": active, "count": len(active_players)})
+
+  @app.post("/api/presence/clear")
+  def presence_clear() -> object:
+    active_players.clear()
+    return jsonify({"ok": True, "count": 0})
+
+  @app.post("/api/lineup/random")
+  def random_lineup() -> object:
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+      return jsonify({"error": "request body must be a JSON object"}), 400
+
+    mode = payload.get("mode")
+    if mode not in {"singles", "doubles"}:
+      return jsonify({"error": "mode must be 'singles' or 'doubles'"}), 400
+
+    known_players = set(_load_player_keys(data_dir))
+    eligible = active_players.intersection(known_players)
+    try:
+      selected = _lineup_from_active_players(eligible, mode)
+    except ValueError as exc:
+      return jsonify({"error": str(exc)}), 400
+
+    return jsonify({"ok": True, "mode": mode, "selected": selected})
+
+  @app.post("/api/lineup/auto")
+  def auto_lineup() -> object:
+    try:
+      selected = _validate_auto_payload(request.get_json(silent=True))
+    except ValueError as exc:
+      return jsonify({"error": str(exc)}), 400
+
+    db_path = data_dir / "playerdb"
+    with shelve.open(str(db_path)) as players:
+      missing = [name for name in selected.values() if name not in players]
+      if missing:
+        return jsonify({"error": "all selected players must exist"}), 400
+
+      lineup = best_balanced_lineup(
+        players,
+        defense_a=selected["red_defense"],
+        offense_a=selected["red_offense"],
+        offense_b=selected["blue_offense"],
+        defense_b=selected["blue_defense"],
+      )
+
+    if lineup is None:
+      return jsonify({"error": "could not compute balanced lineup"}), 400
+
+    return jsonify(
+      {
+        "ok": True,
+        "mode": "doubles",
+        "selected": {
+          "red_defense": lineup[0],
+          "red_offense": lineup[1],
+          "blue_offense": lineup[2],
+          "blue_defense": lineup[3],
+        },
+      }
+    )
 
   @app.post("/api/players")
   def add_player() -> object:
