@@ -111,11 +111,16 @@ Rules:
 
 ## Operational Notes
 
-- Production/dev launchers exist at repo root:
-  - `run_phone_api_prod.bat`
+- Preferred production operation (manual, double-click):
+  - `start_phone_api_service.bat`
+  - `stop_phone_api_service.bat`
+  - `status_phone_api_service.bat`
+- Compatibility launcher:
+  - `run_phone_api_prod.bat` delegates to production service start behavior.
+- Development launcher:
   - `run_phone_api_dev.bat`
 - Dev launcher writes to `sandbox/dev-data`.
-- Prod launcher writes to `app/` data and performs startup backup.
+- Production service start writes to `app/` data, performs startup backup, and runs a watchdog that restarts the API after repeated health failures.
 
 ## See Also
 

@@ -54,12 +54,18 @@ See `docs/data-safety.md` for policy details.
 
 The kiosk Pygame UI stays local and fixed-layout. Phone access is provided through a separate web/API path.
 
-Run from repo root using launchers:
+Preferred production phone API service flow (manual, double-click):
 
-- Production data: `run_phone_api_prod.bat`
-- Development sandbox data: `run_phone_api_dev.bat`
+- Start (with token prompt + watchdog): `start_phone_api_service.bat`
+- Stop: `stop_phone_api_service.bat`
+- Status: `status_phone_api_service.bat`
 
-Direct run is also supported:
+Compatibility launchers:
+
+- `run_phone_api_prod.bat` delegates to the preferred production service start script.
+- `run_phone_api_dev.bat` starts the development sandbox API flow.
+
+Direct run is also supported (advanced/manual):
 
 ```bash
 cd app
@@ -68,9 +74,9 @@ python phone_api.py
 
 Operator token setup options:
 
-1. Pass token to launcher scripts (PowerShell wrappers).
+1. Enter token when prompted by `start_phone_api_service.bat`.
 2. Set environment variable `FUSBALL_PHONE_API_TOKEN`.
-3. Use launcher prompt when no token is preconfigured.
+3. Pass token directly to `scripts/phone_stack_control.ps1`.
 
 Env-var example (Windows PowerShell):
 
@@ -87,7 +93,8 @@ Primary URLs:
 
 Prod vs dev data safety:
 
-- Production launcher reads/writes `app/` data and creates a backup on startup.
+- Production service start script reads/writes `app/` data and creates a backup on startup.
+- Production service watchdog monitors `/health` and restarts the API after repeated failures.
 - Development launcher runs against `sandbox/dev-data` so test matches do not affect real rankings.
 - Refresh the dev sandbox manually when needed with `python scripts/refresh_dev_sandbox.py`.
 

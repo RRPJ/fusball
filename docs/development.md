@@ -95,3 +95,17 @@ Function documentation tip:
 - If audio causes startup issues, keep `SOUND = False` in `app/config.py`.
 - If you see display issues on desktop, validate fullscreen support at your current resolution.
 - If shelve files fail to open across OS boundaries, restore from backup and re-seed/migrate data before use.
+
+## 6) Phone API Operation (Windows)
+
+Preferred production phone API service flow is manual and double-click driven:
+
+- Start production phone API (prompts token): `start_phone_api_service.bat`
+- Stop production phone API: `stop_phone_api_service.bat`
+- Check watchdog/API status: `status_phone_api_service.bat`
+
+Behavior notes:
+
+- Start performs a production backup before launching.
+- A watchdog process keeps the phone API service running and restarts it after repeated `/health` failures.
+- Production writes target `app/` data; development flow remains `run_phone_api_dev.bat` with `sandbox/dev-data`.

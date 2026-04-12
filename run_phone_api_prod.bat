@@ -1,3 +1,7 @@
 @echo off
-pwsh -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\run_phone_api_prod.ps1"
-pause
+setlocal
+
+echo This launcher is kept for compatibility.
+echo Preferred production launcher: start_phone_api_service.bat
+echo.
+call "%~dp0start_phone_api_service.bat"
