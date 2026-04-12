@@ -49,7 +49,11 @@ The smoke check validates ranking-related logic and shelve compatibility assumpt
 python scripts/smoke_check.py
 ```
 
-## 3) Run the Application
+## 3) Choose A Runtime Flow
+
+After setup, choose one of the two supported runtime flows.
+
+### 3A) Touch-Screen Kiosk Flow
 
 ```bash
 cd app
@@ -62,6 +66,25 @@ Backward compatibility note:
 Notes:
 - The app is fullscreen and designed for touchscreen kiosks.
 - In development, mouse cursor behavior is controlled by `DEV_MODE` in `app/config.py`.
+
+### 3B) Mobile API Flow (Preferred)
+
+Preferred production phone API service flow is manual and double-click driven:
+
+- Start production phone API (prompts token): `start_phone_api_service.bat`
+- Stop production phone API (also closes the Tailscale app): `stop_phone_api_service.bat`
+- Check Tailscale/watchdog/API status: `status_phone_api_service.bat`
+
+Behavior notes:
+
+- Start ensures the Windows Tailscale service is running, opens the Tailscale app when installed, then performs a production backup before launching.
+- A watchdog process keeps the phone API service running and restarts it after repeated `/health` failures.
+- Stop shuts down the watchdog, phone API, and Tailscale app process, but does not disable or uninstall the Windows Tailscale service.
+- Production writes target `app/` data; development flow remains `run_phone_api_dev.bat` with `sandbox/dev-data`.
+
+Primary mobile URL:
+
+- `http://<host>:8080/phone`
 
 ## 4) Coding Standards
 
@@ -96,17 +119,3 @@ Function documentation tip:
 - If you see display issues on desktop, validate fullscreen support at your current resolution.
 - If shelve files fail to open across OS boundaries, restore from backup and re-seed/migrate data before use.
 
-## 6) Phone API Operation (Windows)
-
-Preferred production phone API service flow is manual and double-click driven:
-
-- Start production phone API (prompts token): `start_phone_api_service.bat`
-- Stop production phone API (also closes the Tailscale app): `stop_phone_api_service.bat`
-- Check watchdog/API status: `status_phone_api_service.bat`
-
-Behavior notes:
-
-- Start ensures the Windows Tailscale service is running, opens the Tailscale app when installed, then performs a production backup before launching.
-- A watchdog process keeps the phone API service running and restarts it after repeated `/health` failures.
-- Stop shuts down the watchdog, phone API, and Tailscale app process, but does not disable or uninstall the Windows Tailscale service.
-- Production writes target `app/` data; development flow remains `run_phone_api_dev.bat` with `sandbox/dev-data`.

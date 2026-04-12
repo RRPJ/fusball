@@ -1,10 +1,24 @@
 # Architecture Notes
 
+## Runtime Model
+
+The repository supports two runtime flows over the same ranking and persistence layer:
+
+- Touch-screen kiosk flow:
+  - fullscreen local Pygame UI on the host machine
+  - canonical entrypoint: `app/fusball.py`
+- Mobile API flow:
+  - phone-oriented web/API layer in `app/phone_api.py`
+  - preferred modern operator flow for day-to-day use
+
+The kiosk flow remains supported for dedicated touch installations, but the mobile API flow is now the preferred operator experience when phone access is available.
+
 ## Runtime Entry Point
 
 - `app/fusball.py` is the canonical entrypoint and delegates to legacy startup.
 - `app/lcars.py` remains as a compatibility entrypoint during migration.
 - `app/ui/ui.py` owns the Pygame lifecycle, event loop, and screen transitions.
+- `app/phone_api.py` owns the browser-based phone UI and JSON API runtime.
 
 ## Screen System
 

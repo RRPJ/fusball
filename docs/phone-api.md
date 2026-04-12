@@ -1,6 +1,13 @@
 # Phone API Reference
 
-This document is the endpoint-level reference for the phone web/API path in `app/phone_api.py`.
+This document is the endpoint-level reference for the mobile API flow in `app/phone_api.py`.
+
+The repository now has two runtime flows:
+
+- touch-screen kiosk flow: fullscreen local Pygame UI
+- mobile API flow: browser-based phone interface and JSON API
+
+The mobile API flow is the preferred modern operator path. This document covers only that flow.
 
 ## Base Path
 

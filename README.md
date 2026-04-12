@@ -1,25 +1,77 @@
 # LCARS Kickers Interface
 
-LCARS Kickers is a touchscreen-first foosball score and leaderboard application.
+LCARS Kickers is a foosball score and leaderboard application with two supported runtime flows.
 It tracks player skill separately for offense and defense using TrueSkill.
+
+## Runtime Flows
+
+There are two ways to use the system:
+
+1. Touch-screen kiosk flow
+	- Fullscreen Pygame interface on the host machine.
+	- Best when the table has a dedicated touch display.
+	- Started with `launch_fusball.bat` or `python app/fusball.py`.
+
+2. Mobile API flow
+	- Phone-friendly web interface served from the host at `http://<host>:8080/phone`.
+	- Supports player presence, lineup helpers, score submit, leaderboard views, and phone-first match entry.
+	- Started with `start_phone_api_service.bat`.
+
+Preferred flow for day-to-day operation: the mobile API flow. It is the more modern operator path and now has the clearest start/stop/status lifecycle.
 
 ## Quick Start
 
+First-time setup for either flow:
+
+1. Install Python and dependencies using `docs/development.md`.
+2. Run `python scripts/smoke_check.py` once.
+3. Choose one of the runtime flows below.
+
+### Quick Start: Mobile API Flow (Preferred)
+
+Use this when you want to run Fusball from a phone browser.
+
+Windows production flow:
+
+1. Double-click `start_phone_api_service.bat`.
+2. Enter the operator token when prompted.
+3. The script:
+	- ensures the Windows Tailscale service is running
+	- opens the Tailscale app
+	- creates a production backup
+	- starts a watchdog
+	- starts the phone API
+4. Open `http://<host>:8080/phone` from your phone.
+5. When done, double-click `stop_phone_api_service.bat`.
+
+Useful companion launcher:
+
+- `status_phone_api_service.bat` shows Tailscale, watchdog, API, and log status.
+
+Development/sandbox launcher:
+
+- `run_phone_api_dev.bat` runs the phone API against `sandbox/dev-data`.
+
+### Quick Start: Touch-Screen Kiosk Flow
+
+Use this when the host machine itself is the operator interface.
+
+Windows easiest path:
+
+- Double-click `launch_fusball.bat`.
+- On first run it creates `.venv`, installs dependencies, and launches the kiosk UI.
+- On later runs it launches directly.
+
+Manual path:
+
+```bash
+cd app
+python fusball.py
+```
+
 Setup and run instructions are maintained in `docs/development.md`.
 
-Canonical flow:
-1. Create/activate a venv.
-2. Install dependencies.
-3. Run `python scripts/smoke_check.py`.
-4. Launch from `app/` with `python fusball.py`.
-
 See `docs/development.md` for platform-specific commands.
-
-Windows double-click launcher:
-
-- Double-click `launch_fusball.bat` in Windows Explorer.
-- On first run it creates `.venv`, installs dependencies, and starts the app.
-- On later runs it launches directly.
 
 Advanced launcher option:
 
@@ -44,15 +96,22 @@ python scripts/backup_state.py
 
 See `docs/data-safety.md` for policy details.
 
+## Choosing A Flow
+
+- Choose the mobile API flow if your operators are using phones and you want the modern start/stop/watchdog workflow.
+- Choose the kiosk flow if the host machine has a dedicated touch display and should remain the primary control surface.
+- Both flows operate on the same underlying player/ranking data model.
+
 ## Development Notes
 
 - Development mode is enabled by default (`DEV_MODE = True` in `app/config.py`).
-- The app is fullscreen and optimized for touchscreen kiosks.
+- The kiosk app is fullscreen and optimized for touchscreen use.
+- The mobile API flow is the preferred modern operator path.
 - Coding standards, lint/format, pre-commit setup, and troubleshooting live in `docs/development.md`.
 
-## Phone Support
+## Mobile API Flow
 
-The kiosk Pygame UI stays local and fixed-layout. Phone access is provided through a separate web/API path.
+The mobile API flow is separate from the kiosk UI. The host machine runs the API, and phones connect through the browser-based interface.
 
 Preferred production phone API service flow (manual, double-click):
 
@@ -101,6 +160,16 @@ Prod vs dev data safety:
 
 For endpoint-level request/response details, see `docs/phone-api.md`.
 For auth/conflict behavior, see `docs/phone-write-policy.md`.
+
+## Kiosk Flow
+
+The kiosk flow keeps the original fullscreen local interface on the host machine.
+
+- Windows launcher: `launch_fusball.bat`
+- Manual launcher: `python app/fusball.py`
+- Compatibility entrypoint: `python app/lcars.py`
+
+This flow remains supported, but it is no longer the preferred day-to-day operator path when the mobile API flow is available.
 
 ## Repository Guide
 
