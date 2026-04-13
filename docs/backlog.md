@@ -19,7 +19,7 @@ Sequencing note:
 
 - [x] Remove VPN helper startup / check / stop automation from service scripts and documentation (follow-up to manual prod runner simplification).
 - [x] Select Neon Postgres as the external database for the Vercel deployment path.
-- [ ] Move the origin/master to personal account instead of cadmin.
+- [x] Move the origin/master to personal account instead of cadmin.
 - [ ] Deploy phone API to Vercel with Neon Postgres backing production data.
 
 ## Priority 1: Smartphone Access Path
