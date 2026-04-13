@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+# LEGACY - Serial driver for custom resistive touchscreen hardware.
+# Specific to Raspberry Pi + 7-inch resistive touchscreen used in original kiosk.
+# Kept for reference only. Not compatible with modern deployments.
+
 import serial
 from pymouse import PyMouse
 
@@ -46,5 +51,3 @@ while True:
         m.move(x, 768-y)
 
     mousedown = b==b'\x93'
-    
-    

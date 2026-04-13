@@ -1,11 +1,15 @@
+# LEGACY FILE — not imported anywhere.
+# This was the original home-automation themed main screen before the
+# foosball leaderboard replaced it. Kept for reference only.
+# The active main screen is app/screens/main.py.
+
 from datetime import datetime
 
+from datasources.network import get_ip_address_string
 from ui.widgets.background import LcarsBackgroundImage, LcarsImage
 from ui.widgets.gifimage import LcarsGifImage
 from ui.widgets.lcars_widgets import *
 from ui.widgets.screen import LcarsScreen
-
-from datasources.network import get_ip_address_string
 
 
 class ScreenMain(LcarsScreen):
@@ -17,7 +21,7 @@ class ScreenMain(LcarsScreen):
         # panel text
         all_sprites.add(LcarsText(colours.BLACK, (15, 44), "LCARS 105"),
                         layer=1)
-                        
+
         all_sprites.add(LcarsText(colours.ORANGE, (0, 135), "HOME AUTOMATION", 2),
                         layer=1)
         all_sprites.add(LcarsBlockMedium(colours.RED_BROWN, (145, 16), "LIGHTS"),
@@ -123,7 +127,7 @@ class ScreenMain(LcarsScreen):
         self.sensor_gadget.visible = False
         self.dashboard.visible = False
         self.weather.visible = False
-        
+
     def logoutHandler(self, item, event, clock):
         from screens.authorize import ScreenAuthorize
         self.loadScreen(ScreenAuthorize())

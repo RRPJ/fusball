@@ -1,3 +1,6 @@
+# LEGACY - X11 init config for Raspberry Pi kiosk.
+# This was the entry point for starting the fullscreen kiosk app via X11.
+# Kept for reference. Use app/fusball.py directly for modern deployments.
 
 # onscreen keyboard:
 #onboard &
@@ -15,4 +18,3 @@ done
 
 # old method: start in terminal for recovery
 #exec xfce4-terminal -e '/usr/bin/zsh -c "/usr/bin/python3 lcars.py; /usr/bin/zsh"'
-

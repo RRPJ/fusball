@@ -1,3 +1,7 @@
+# LEGACY - Old UI framework prototype using pygame sprites.
+# This was an earlier attempt at the LCARS UI. Not actively maintained.
+# The current production UI is in app/ui/ and app/screens/.
+
 import pygame
 from pygame.locals import *
 from pygame.sprite import DirtySprite, LayeredDirty
@@ -48,7 +52,4 @@ while pygame.display.get_init():
         
         if (event.type == MOUSEMOTION):
             # move button around as mouse moves (or touch-drag)
-            button.rect.left = event.pos[0]
-            button.rect.top = event.pos[1]
-            button.dirty = 1
-
+            button.rect.center = event.pos
