@@ -25,7 +25,7 @@ Implemented policy:
 - No anonymous write access.
 - Require an explicit operator credential on every write request.
 - For the first rollout, a shared operator secret is acceptable.
-- Tailscale or local-network reachability is not sufficient by itself; transport access and write authorization are separate concerns.
+- VPN or local-network reachability is not sufficient by itself; transport access and write authorization are separate concerns.
 
 Current implementation:
 - Use a single shared operator token configured locally on the host.

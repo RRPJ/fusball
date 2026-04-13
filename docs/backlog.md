@@ -15,21 +15,24 @@ Sequencing note:
 
 ## Priority 0: Immediate Repository And Deployment Tasks
 
-- [ ] Remove tailscale startup / check / stop from every .bat and the repo in general (follow-up to manual prod runner simplification).
+- Implementation plan: `docs/priority-0-implementation-plan.md`
+
+- [x] Remove VPN helper startup / check / stop automation from service scripts and documentation (follow-up to manual prod runner simplification).
+- [x] Select Neon Postgres as the external database for the Vercel deployment path.
 - [ ] Move the origin/master to personal account instead of cadmin.
-- [ ] Deploy to Vercel.
+- [ ] Deploy phone API to Vercel with Neon Postgres backing production data.
 
 ## Priority 1: Smartphone Access Path
 
 - Goal of remaining Priority 1 work: prove a minimal authenticated phone match-submit flow, not a broad remote feature set.
 - [ ] Run at-home validation on iOS: leaderboard read.
-- [ ] Run at-the-office validation via Tailscale: confirm leaderboard loads from phone on a different network.
+- [ ] Run at-the-office validation from a different network: confirm leaderboard loads from phone.
 
 ## Priority 2: Data Layer Modernization
 
-- [ ] Define portable storage model (SQLite recommended).
+- [ ] Define portable storage model (Neon Postgres for Vercel path; local fallback may remain optional).
 - [ ] Add export/import snapshot path from shelve.
-- [ ] Add migration prototype (shelve -> SQLite) with rollback notes.
+- [ ] Add migration prototype (shelve -> Neon Postgres) with rollback notes.
 - [ ] Keep compatibility reader for old backups until parity is verified.
 
 ## Priority 3: Seasons And Historical Views

@@ -23,7 +23,7 @@ Already completed in-repo:
 - Production/dev operational split exists for phone API launch (`run_phone_api_prod.bat`, `run_phone_api_dev.bat`, and `scripts/refresh_dev_sandbox.py`).
 
 Still open:
-- End-to-end phone validation across network/security boundaries (for example firewall/Tailscale path).
+- End-to-end phone validation across network/security boundaries (for example firewall/VPN path).
 - Data portability and migration path beyond shelve.
 - Structured match history needed for richer analytics, seasonal views, and future tournament features.
 
@@ -74,7 +74,7 @@ Constraint:
 - Phone support should be delivered through a separate web/API path, not by reusing Pygame screens directly.
 
 Option 1: Remote Desktop To Host Machine
-- Examples: Tailscale + RDP, AnyDesk, RustDesk.
+- Examples: VPN + RDP, AnyDesk, RustDesk.
 - Pros: fastest, no app changes, full UI preserved.
 - Cons: tied to host session/peripherals; not true multi-user app.
 
@@ -95,7 +95,7 @@ Recommended sequence:
 3. Decide later whether Option 3 is worth full migration cost.
 
 Early rollout preference:
-1. Use Tailscale as the default secure connectivity layer for early phone testing.
+1. Use a secure VPN connectivity layer for early phone testing.
 2. Start with read-only phone workflows before enabling write actions.
 
 Decision gates:

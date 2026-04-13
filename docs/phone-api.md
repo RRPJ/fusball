@@ -127,8 +127,8 @@ Rules:
 - Development launcher:
   - `run_phone_api_dev.bat`
 - Dev launcher writes to `sandbox/dev-data`.
-- Production service start ensures the Windows Tailscale service is running, opens the Tailscale app when installed, writes to `app/` data, performs startup backup, and runs a watchdog that restarts the API after repeated health failures.
-- Production service stop closes the phone API, watchdog, and Tailscale app process, but leaves the Windows Tailscale service available for future starts.
+- Production service start writes to `app/` data, performs startup backup, and runs a watchdog that restarts the API after repeated health failures.
+- Production service stop closes the phone API and watchdog processes.
 
 ## See Also
 
