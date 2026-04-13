@@ -1,7 +1,5 @@
 @echo off
 setlocal
 
-echo This launcher is kept for compatibility.
-echo Preferred production launcher: start_phone_api_service.bat
-echo.
-call "%~dp0start_phone_api_service.bat"
+set "ROOT=%~dp0"
+PowerShell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%scripts\run_phone_api_prod.ps1"

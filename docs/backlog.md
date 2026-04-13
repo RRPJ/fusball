@@ -13,6 +13,12 @@ Sequencing note:
 - Track D becomes more important before remote write support expands beyond that minimal authenticated match-submit flow.
 - Tracks E and G depend on the history/modeling work in C2 and should not be treated as immediate follow-ons to basic phone write support.
 
+## Next Up - High Priority (In Progress or Ready)
+
+- [ ] Remove tailscale startup / check / stop from every .bat and the repo in general (follow-up to manual prod runner simplification).
+- [ ] Move the origin/master to personal account instead of cadmin.
+- [ ] Deploy to Vercel.
+
 ## Completed Foundation (Done)
 
 - [x] Add startup diagnostic logging for missing assets and db files.
