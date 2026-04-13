@@ -81,6 +81,7 @@ tagdb
 tagdb.bak
 tagdb.dat
 tagdb.dir
+app/match_history
 
 # PyBuilder
 target/
