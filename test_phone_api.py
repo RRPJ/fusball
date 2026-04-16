@@ -9,6 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import trueskill
+from werkzeug.security import generate_password_hash
 
 ROOT = Path(__file__).resolve().parent
 APP_DIR = ROOT / "app"
@@ -213,7 +214,11 @@ class PhoneApiTests(unittest.TestCase):
             assert empty_payload is not None
             self.assertEqual(empty_payload["count"], 0)
 
-            add_active = client.post("/api/presence", json={"name": "alice", "active": True})
+            add_active = client.post(
+                "/api/presence",
+                json={"name": "alice", "active": True},
+                headers={"X-Operator-Token": self.operator_token},
+            )
             self.assertEqual(add_active.status_code, 200)
 
             presence = client.get("/api/presence")
@@ -222,7 +227,10 @@ class PhoneApiTests(unittest.TestCase):
             self.assertEqual(payload["count"], 1)
             self.assertEqual(payload["items"], ["Alice"])
 
-            clear = client.post("/api/presence/clear")
+            clear = client.post(
+                "/api/presence/clear",
+                headers={"X-Operator-Token": self.operator_token},
+            )
             self.assertEqual(clear.status_code, 200)
             cleared = client.get("/api/presence")
             cleared_payload = cleared.get_json()
@@ -241,10 +249,18 @@ class PhoneApiTests(unittest.TestCase):
             client = app.test_client()
 
             for name in ["alice", "bob", "carol", "dave"]:
-                response = client.post("/api/presence", json={"name": name, "active": True})
+                response = client.post(
+                    "/api/presence",
+                    json={"name": name, "active": True},
+                    headers={"X-Operator-Token": self.operator_token},
+                )
                 self.assertEqual(response.status_code, 200)
 
-            lineup_resp = client.post("/api/lineup/random", json={"mode": "doubles"})
+            lineup_resp = client.post(
+                "/api/lineup/random",
+                json={"mode": "doubles"},
+                headers={"X-Operator-Token": self.operator_token},
+            )
             self.assertEqual(lineup_resp.status_code, 200)
             payload = lineup_resp.get_json()
             assert payload is not None
@@ -283,6 +299,7 @@ class PhoneApiTests(unittest.TestCase):
                         "blue_defense": "dave",
                     },
                 },
+                headers={"X-Operator-Token": self.operator_token},
             )
             self.assertEqual(response.status_code, 200)
             payload = response.get_json()
@@ -348,6 +365,184 @@ class PhoneApiTests(unittest.TestCase):
             )
 
             self.assertEqual(response.status_code, 400)
+
+    def test_leaderboard_and_odds_can_use_injected_store(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+
+            class StubStore:
+                uses_local_lock = False
+
+                def __init__(self) -> None:
+                    self._ratings = {
+                        "alice": (trueskill.Rating(mu=35, sigma=6), trueskill.Rating(mu=33, sigma=6)),
+                        "bob": (trueskill.Rating(mu=30, sigma=7), trueskill.Rating(mu=29, sigma=7)),
+                    }
+
+                def list_player_keys(self) -> list[str]:
+                    return sorted(self._ratings.keys())
+
+                def get_player_ratings(self, names: list[str]):
+                    return {name: self._ratings[name] for name in names if name in self._ratings}
+
+                def leaderboard_ratings(self, scope: str):
+                    if scope != "all":
+                        return {}
+                    return dict(self._ratings)
+
+                def missing_players(self, names: list[str]) -> list[str]:
+                    return [name for name in names if name not in self._ratings]
+
+                def add_player(self, player_name: str):
+                    raise NotImplementedError
+
+                def submit_match(self, team1: list[str], team2: list[str], score1: int, score2: int, source: str):
+                    raise NotImplementedError
+
+            app = create_app(db_dir=tmp_path, operator_token=self.operator_token, write_store=StubStore())
+            client = app.test_client()
+
+            leaderboard = client.get("/api/leaderboard?limit=2")
+            self.assertEqual(leaderboard.status_code, 200)
+            leaderboard_payload = leaderboard.get_json()
+            assert leaderboard_payload is not None
+            self.assertEqual(leaderboard_payload["count"], 2)
+            self.assertEqual(leaderboard_payload["items"][0]["name"], "Alice")
+
+            odds = client.get("/api/odds?red_off=alice&blue_off=bob")
+            self.assertEqual(odds.status_code, 200)
+            odds_payload = odds.get_json()
+            assert odds_payload is not None
+            self.assertIn("probability", odds_payload)
+            self.assertIn("ratio", odds_payload)
+
+    def test_history_endpoints_can_use_injected_store(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+
+            class StubStore:
+                uses_local_lock = False
+
+                def list_player_keys(self) -> list[str]:
+                    return ["alice", "bob"]
+
+                def get_player_ratings(self, names: list[str]):
+                    ratings = {
+                        "alice": (trueskill.Rating(mu=35, sigma=6), trueskill.Rating(mu=33, sigma=6)),
+                        "bob": (trueskill.Rating(mu=30, sigma=7), trueskill.Rating(mu=29, sigma=7)),
+                    }
+                    return {name: ratings[name] for name in names if name in ratings}
+
+                def leaderboard_ratings(self, scope: str):
+                    return {}
+
+                def missing_players(self, names: list[str]) -> list[str]:
+                    return []
+
+                def add_player(self, player_name: str):
+                    raise NotImplementedError
+
+                def submit_match(self, team1: list[str], team2: list[str], score1: int, score2: int, source: str):
+                    raise NotImplementedError
+
+                def query_h2h(self, p1: str, p2: str):
+                    return {
+                        "p1": p1,
+                        "p2": p2,
+                        "matches": 2,
+                        "p1_wins": 1,
+                        "p2_wins": 1,
+                        "draws": 0,
+                        "last_match": "2026-04-01T12:00:00.000000Z",
+                    }
+
+                def query_player_stats(self, scope: str = "all"):
+                    return {
+                        "alice": {
+                            "games": 2,
+                            "wins": 1,
+                            "win_rate": 0.5,
+                            "streak": 0,
+                            "improved": 0.0,
+                            "recent_form_5": "WL",
+                            "last_match": "2026-04-01T12:00:00.000000Z",
+                        }
+                    }
+
+                def query_rating_snapshots(self, player: str, n: int = 10):
+                    return [
+                        {
+                            "timestamp": "2026-04-01T12:00:00.000000Z",
+                            "won": True,
+                            "before": {"offense_mu": 25.0, "offense_sigma": 8.333, "defense_mu": 25.0, "defense_sigma": 8.333},
+                            "after": {"offense_mu": 30.0, "offense_sigma": 8.0, "defense_mu": 30.0, "defense_sigma": 8.0},
+                        }
+                    ][:n]
+
+            app = create_app(db_dir=tmp_path, operator_token=self.operator_token, write_store=StubStore())
+            client = app.test_client()
+
+            h2h = client.get("/api/h2h?p1=alice&p2=bob")
+            self.assertEqual(h2h.status_code, 200)
+            h2h_payload = h2h.get_json()
+            assert h2h_payload is not None
+            self.assertEqual(h2h_payload["matches"], 2)
+
+            stats = client.get("/api/stats")
+            self.assertEqual(stats.status_code, 200)
+            stats_payload = stats.get_json()
+            assert stats_payload is not None
+            self.assertIn("alice", stats_payload)
+
+            history = client.get("/api/player/alice/history?n=1")
+            self.assertEqual(history.status_code, 200)
+            history_payload = history.get_json()
+            assert history_payload is not None
+            self.assertEqual(history_payload["count"], 1)
+
+    def test_dual_pin_auth_read_and_write_matrix(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            db_path = str(tmp_path / "playerdb")
+            with shelve.open(db_path) as players:
+                players["alice"] = (trueskill.Rating(), trueskill.Rating())
+                players["bob"] = (trueskill.Rating(), trueskill.Rating())
+
+            app = create_app(
+                db_dir=tmp_path,
+                read_pin_hash=generate_password_hash("read-1234"),
+                write_pin_hash=generate_password_hash("write-5678"),
+            )
+            client = app.test_client()
+
+            read_no_auth = client.get("/api/leaderboard")
+            self.assertEqual(read_no_auth.status_code, 401)
+
+            read_with_read_pin = client.get("/api/leaderboard", headers={"X-Read-Pin": "read-1234"})
+            self.assertEqual(read_with_read_pin.status_code, 200)
+
+            read_with_writer_pin = client.get("/api/leaderboard", headers={"X-Write-Pin": "write-5678"})
+            self.assertEqual(read_with_writer_pin.status_code, 200)
+
+            write_no_auth = client.post(
+                "/api/matches",
+                json={"team1": ["alice"], "team2": ["bob"], "score1": 5, "score2": 3},
+            )
+            self.assertEqual(write_no_auth.status_code, 403)
+
+            write_with_read_pin = client.post(
+                "/api/matches",
+                json={"team1": ["alice"], "team2": ["bob"], "score1": 5, "score2": 3},
+                headers={"X-Read-Pin": "read-1234"},
+            )
+            self.assertEqual(write_with_read_pin.status_code, 403)
+
+            write_with_writer_pin = client.post(
+                "/api/matches",
+                json={"team1": ["alice"], "team2": ["bob"], "score1": 5, "score2": 3},
+                headers={"X-Write-Pin": "write-5678"},
+            )
+            self.assertEqual(write_with_writer_pin.status_code, 201)
 
 
 class C3AnalyticsApiTests(unittest.TestCase):

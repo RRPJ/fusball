@@ -20,6 +20,9 @@ Sequencing note:
 - [x] Remove VPN helper startup / check / stop automation from service scripts and documentation (follow-up to manual prod runner simplification).
 - [x] Select Neon Postgres as the external database for the Vercel deployment path.
 - [x] Move the origin/master to personal account instead of cadmin.
+- [x] Add initial Vercel deployment scaffold (`vercel.json`, `api/index.py`, `.env.example`).
+- [x] Add initial Neon migration prototype scaffold (`scripts/sql/neon_schema.sql`, `scripts/migrate_shelve_to_neon.py`).
+- [x] Run first shelve -> Neon import (`--apply --reset`) and verify parity counts (`players`, `recent_players`, `match_history`).
 - [ ] Deploy phone API to Vercel with Neon Postgres backing production data.
 
 ## Priority 1: Smartphone Access Path

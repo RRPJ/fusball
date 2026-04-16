@@ -13,71 +13,54 @@ import argparse
 import os
 import random
 import re
-import shelve
 import time
 from pathlib import Path
 from string import capwords
 
 from flask import Flask, jsonify, request
+from werkzeug.security import check_password_hash
 
 from odds import playerLevel
 import trueskill as _trueskill
-from services.match_history import (
-    append_match_history,
-    query_h2h,
-    query_player_stats,
-    query_rating_snapshots,
-  replay_scope_ratings,
-)
-from services.match_log import append_match_log
-from services.match_service import best_balanced_lineup, calculate_rating_update
+from services.match_service import best_balanced_lineup, odds_ratio_for_teams
+from services.phone_write_store import BaseWriteStore, WriteStoreConfig, create_write_store
 from services.player_store import rank_labels_by_name, ranked_players
 
 
 ROOT_DIR = Path(__file__).resolve().parent
 WRITE_LOCK_NAME = "phone_api_write.lock"
 OPERATOR_TOKEN_HEADER = "X-Operator-Token"
+READ_PIN_HEADER = "X-Read-Pin"
+WRITE_PIN_HEADER = "X-Write-Pin"
 MATCH_DUPLICATE_WINDOW_SECONDS = 60.0
 _RECENT_MATCH_SIGNATURES: dict[str, float] = {}
 
 
-def _playerdb_exists(db_dir: Path) -> bool:
-    """Return whether any shelve artifact for playerdb exists in the directory."""
-    return any(db_dir.glob("playerdb*"))
+def _load_leaderboard(store: BaseWriteStore, limit: int = 50, scope: str = "all") -> list[dict[str, object]]:
+  ratings = store.leaderboard_ratings(scope)
+  if not ratings:
+    return []
 
+  ranked = ranked_players(ratings.items())
+  labels = rank_labels_by_name(ranked)
 
-def _load_leaderboard(db_dir: Path, limit: int = 50, scope: str = "all") -> list[dict[str, object]]:
-    db_path = db_dir / "playerdb"
-
-    if scope == "all" and not _playerdb_exists(db_dir):
-        return []
-
-    if scope == "all":
-        with shelve.open(str(db_path)) as players:
-            ranked = ranked_players(players.items())
-            labels = rank_labels_by_name(ranked)
-    else:
-        scoped_ratings = replay_scope_ratings(db_dir, scope)
-        ranked = ranked_players(scoped_ratings.items())
-        labels = rank_labels_by_name(ranked)
-
-    rows = []
-    for index, (name, rating) in enumerate(ranked[:limit], start=1):
-        rows.append(
-            {
-                "position": index,
-                "name": capwords(name),
-                "rank": labels[name],
-                "level": round(playerLevel(rating), 2),
-                "offense_level": round(_trueskill.expose(rating[0]), 2),
-                "defense_level": round(_trueskill.expose(rating[1]), 2),
-                "offense_mu": round(rating[0].mu, 2),
-                "offense_sigma": round(rating[0].sigma, 2),
-                "defense_mu": round(rating[1].mu, 2),
-                "defense_sigma": round(rating[1].sigma, 2),
-            }
-        )
-    return rows
+  rows = []
+  for index, (name, rating) in enumerate(ranked[:limit], start=1):
+    rows.append(
+      {
+        "position": index,
+        "name": capwords(name),
+        "rank": labels[name],
+        "level": round(playerLevel(rating), 2),
+        "offense_level": round(_trueskill.expose(rating[0]), 2),
+        "defense_level": round(_trueskill.expose(rating[1]), 2),
+        "offense_mu": round(rating[0].mu, 2),
+        "offense_sigma": round(rating[0].sigma, 2),
+        "defense_mu": round(rating[1].mu, 2),
+        "defense_sigma": round(rating[1].sigma, 2),
+      }
+    )
+  return rows
 
 
 def _match_signature(team1: list[str], team2: list[str], score1: int, score2: int) -> str:
@@ -94,24 +77,6 @@ def _is_recent_duplicate(signature: str, now_monotonic: float) -> bool:
 
 def _remember_match_signature(signature: str, now_monotonic: float) -> None:
     _RECENT_MATCH_SIGNATURES[signature] = now_monotonic
-
-
-def _load_player_names(db_dir: Path) -> list[str]:
-    db_path = db_dir / "playerdb"
-    if not _playerdb_exists(db_dir):
-        return []
-
-    with shelve.open(str(db_path)) as players:
-        return sorted(capwords(name) for name in players.keys())
-
-
-def _load_player_keys(db_dir: Path) -> list[str]:
-    db_path = db_dir / "playerdb"
-    if not _playerdb_exists(db_dir):
-        return []
-
-    with shelve.open(str(db_path)) as players:
-        return sorted(players.keys())
 
 
 def _default_selected_slots() -> dict[str, str | None]:
@@ -188,7 +153,7 @@ def _validate_finished_score(score1: object, score2: object) -> tuple[int, int]:
     return score1, score2
 
 
-def _validate_match_payload(db_dir: Path, payload: object) -> tuple[list[str], list[str], int, int]:
+def _validate_match_payload(store: BaseWriteStore, payload: object) -> tuple[list[str], list[str], int, int]:
     if not isinstance(payload, dict):
         raise ValueError("request body must be a JSON object")
 
@@ -209,9 +174,7 @@ def _validate_match_payload(db_dir: Path, payload: object) -> tuple[list[str], l
 
     score1, score2 = _validate_finished_score(payload.get("score1"), payload.get("score2"))
 
-    db_path = db_dir / "playerdb"
-    with shelve.open(str(db_path)) as players:
-        missing = [name for name in all_players if name not in players]
+    missing = store.missing_players(all_players)
     if missing:
         raise ValueError("all submitted players must already exist")
 
@@ -250,86 +213,13 @@ def _release_write_lock(db_dir: Path) -> None:
     _write_lock_path(db_dir).unlink(missing_ok=True)
 
 
-def _submit_match_result(
-    db_dir: Path,
-    team1: list[str],
-    team2: list[str],
-    score1: int,
-    score2: int,
-) -> dict[str, object]:
-  db_path = db_dir / "playerdb"
-  logfile_path = db_dir / "logfile.log"
-  winning_team = team1 if score1 > score2 else team2
-
-  with shelve.open(str(db_path)) as players:
-    before_ratings = {
-      name: players[name]
-      for team in (team1, team2)
-      for name in team
-    }
-    updated = calculate_rating_update(players, team1, team2, score1, score2)
-
-    for name in team1 + team2:
-      players[name] = updated[name]
-
-    after_ratings = {
-      name: players[name]
-      for team in (team1, team2)
-      for name in team
-    }
-
+def _verify_secret(secret_hash: str | None, provided_secret: str | None) -> bool:
+  if not secret_hash or not provided_secret:
+    return False
   try:
-    append_match_log(
-      str(logfile_path),
-      team1,
-      team2,
-      winning_team,
-      before_ratings,
-      after_ratings,
-    )
-    append_match_history(
-      db_dir,
-      team1,
-      team2,
-      winning_team,
-      score1,
-      score2,
-      before_ratings,
-      after_ratings,
-      source="phone_api",
-    )
+    return check_password_hash(secret_hash, provided_secret)
   except Exception:
-    with shelve.open(str(db_path)) as players:
-      for name, rating in before_ratings.items():
-        players[name] = rating
-    raise
-
-  return {
-    "ok": True,
-    "team1": team1,
-    "team2": team2,
-    "score1": score1,
-    "score2": score2,
-    "winner": winning_team,
-  }
-
-
-def _submit_new_player(db_dir: Path, player_name: str) -> dict[str, object]:
-    db_path = db_dir / "playerdb"
-    with shelve.open(str(db_path)) as players:
-        if player_name in players:
-            raise ValueError("player already exists")
-        players[player_name] = (_trueskill.Rating(), _trueskill.Rating())
-
-    with shelve.open(str(db_dir / "recentplayers")) as recent:
-        names = recent.get("names", [])
-        merged = [player_name] + [n for n in names if n != player_name]
-        recent["names"] = merged
-
-    return {
-        "ok": True,
-        "name": capwords(player_name),
-    }
+    return False
 
 
 def _render_phone_html(rows: list[dict[str, object]]) -> str:
@@ -620,9 +510,12 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       <h2>Step 4: Confirm And Submit</h2>
       <div class='review-card' id='reviewText'>Complete setup to review match.</div>
       <div style='margin-top:10px;'>
-        <input id='operatorToken' class='token' type='password' placeholder='Operator token (X-Operator-Token)' />
+        <input id='readPin' class='token' type='password' placeholder='Read PIN (optional if using writer PIN only)' />
       </div>
-      <div class='muted' style='margin-top:8px;'>Token is remembered for this tab session. Submit is enabled only when lineup and score are valid.</div>
+      <div style='margin-top:8px;'>
+        <input id='writePin' class='token' type='password' placeholder='Writer PIN (required for writes)' />
+      </div>
+      <div class='muted' style='margin-top:8px;'>PINs are remembered for this tab session. Submit is enabled only when lineup and score are valid.</div>
     </section>
 
     <section class='section active'>
@@ -719,6 +612,10 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       score1: null,
       score2: null,
     };
+
+    const READ_PIN_STORAGE_KEY = 'fusball_read_pin';
+    const WRITE_PIN_STORAGE_KEY = 'fusball_write_pin';
+    const LEGACY_TOKEN_STORAGE_KEY = 'fusball_token';
 
     const QUIPS_BY_CATEGORY = {
       expected_blowout: [
@@ -887,10 +784,89 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       state.healthTimerId = window.setInterval(check, 5000);
     }
 
+    function getStoredReadPin() {
+      return (sessionStorage.getItem(READ_PIN_STORAGE_KEY) || '').trim();
+    }
+
+    function getStoredWritePin() {
+      return (sessionStorage.getItem(WRITE_PIN_STORAGE_KEY) || sessionStorage.getItem(LEGACY_TOKEN_STORAGE_KEY) || '').trim();
+    }
+
+    function persistReadPin(pin) {
+      const value = (pin || '').trim();
+      if (value) {
+        sessionStorage.setItem(READ_PIN_STORAGE_KEY, value);
+      } else {
+        sessionStorage.removeItem(READ_PIN_STORAGE_KEY);
+      }
+    }
+
+    function persistWritePin(pin) {
+      const value = (pin || '').trim();
+      if (value) {
+        sessionStorage.setItem(WRITE_PIN_STORAGE_KEY, value);
+        // Keep legacy key in sync for backward-compatible local runs.
+        sessionStorage.setItem(LEGACY_TOKEN_STORAGE_KEY, value);
+      } else {
+        sessionStorage.removeItem(WRITE_PIN_STORAGE_KEY);
+      }
+    }
+
+    function promptForReadPin() {
+      const entered = (window.prompt('Enter read PIN') || '').trim();
+      if (!entered) {
+        return '';
+      }
+      persistReadPin(entered);
+      const input = document.getElementById('readPin');
+      if (input) {
+        input.value = entered;
+      }
+      return entered;
+    }
+
+    function ensureWritePin() {
+      const input = document.getElementById('writePin');
+      let writePin = (input.value || '').trim();
+      if (writePin) {
+        persistWritePin(writePin);
+        return writePin;
+      }
+
+      writePin = getStoredWritePin();
+      if (writePin) {
+        if (input) {
+          input.value = writePin;
+        }
+        return writePin;
+      }
+
+      const entered = (window.prompt('Enter writer PIN') || '').trim();
+      if (!entered) {
+        return '';
+      }
+      persistWritePin(entered);
+      if (input) {
+        input.value = entered;
+      }
+      return entered;
+    }
+
     async function apiFetch(url, options = {}) {
       const method = (options.method || 'GET').toUpperCase();
       if (state.offline && !options.allowOffline) {
         throw new Error('API offline.');
+      }
+
+      const headers = new Headers(options.headers || {});
+      const readPin = getStoredReadPin();
+      const writePin = getStoredWritePin();
+      if (readPin) {
+        headers.set('X-Read-Pin', readPin);
+      }
+      if (writePin) {
+        headers.set('X-Write-Pin', writePin);
+        headers.set('X-Operator-Token', writePin);
       }
 
       const timeoutMs = typeof options.timeoutMs === 'number'
@@ -905,9 +881,23 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       try {
         const response = await fetch(url, {
           ...options,
+          headers,
           signal: controller.signal,
           cache: method === 'GET' ? 'no-store' : options.cache,
         });
+        const authRetry = !!options.__authRetry;
+        if (!authRetry && response.status === 401 && method === 'GET' && !options.allowOffline) {
+          const enteredReadPin = promptForReadPin();
+          if (enteredReadPin) {
+            return apiFetch(url, { ...options, __authRetry: true });
+          }
+        }
+        if (!authRetry && (response.status === 401 || response.status === 403) && method !== 'GET') {
+          const enteredWritePin = ensureWritePin();
+          if (enteredWritePin) {
+            return apiFetch(url, { ...options, __authRetry: true });
+          }
+        }
         if (response.status === 503) {
           setOfflineMode('API offline.');
         }
@@ -927,23 +917,6 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
           state.inFlightGetControllers.delete(controller);
         }
       }
-    }
-
-    function ensureOperatorToken() {
-      const tokenInput = document.getElementById('operatorToken');
-      let token = (tokenInput.value || '').trim();
-      if (token) {
-        return token;
-      }
-
-      const entered = (window.prompt('Enter operator token') || '').trim();
-      if (!entered) {
-        return '';
-      }
-
-      tokenInput.value = entered;
-      sessionStorage.setItem('fusball_token', entered);
-      return entered;
     }
 
     function setMode(mode) {
@@ -1832,9 +1805,9 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         return;
       }
 
-      const token = document.getElementById('operatorToken').value.trim();
-      if (!token) {
-        setStatus('Enter operator token first.', 'bad');
+      const writePin = ensureWritePin();
+      if (!writePin) {
+        setStatus('Enter writer PIN first.', 'bad');
         return;
       }
 
@@ -1858,7 +1831,6 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Operator-Token': token,
           },
           body: JSON.stringify(payload),
         });
@@ -1880,9 +1852,9 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     }
 
     async function addPlayer() {
-      const token = ensureOperatorToken();
-      if (!token) {
-        setAddPlayerStatus('Operator token is required to add players.', 'bad');
+      const writePin = ensureWritePin();
+      if (!writePin) {
+        setAddPlayerStatus('Writer PIN is required to add players.', 'bad');
         return;
       }
 
@@ -1898,7 +1870,6 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Operator-Token': token,
         },
         body: JSON.stringify({ name }),
       });
@@ -1968,18 +1939,21 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       .catch((e) => setStatus(e.message, 'bad'));
     startHealthMonitor();
 
-    const tokenInput = document.getElementById('operatorToken');
-    const savedToken = sessionStorage.getItem('fusball_token');
-    if (savedToken) {
-      tokenInput.value = savedToken;
+    const readPinInput = document.getElementById('readPin');
+    const writePinInput = document.getElementById('writePin');
+    const savedReadPin = getStoredReadPin();
+    const savedWritePin = getStoredWritePin();
+    if (savedReadPin) {
+      readPinInput.value = savedReadPin;
     }
-    tokenInput.addEventListener('input', () => {
-      const val = tokenInput.value.trim();
-      if (val) {
-        sessionStorage.setItem('fusball_token', val);
-      } else {
-        sessionStorage.removeItem('fusball_token');
-      }
+    if (savedWritePin) {
+      writePinInput.value = savedWritePin;
+    }
+    readPinInput.addEventListener('input', () => {
+      persistReadPin(readPinInput.value);
+    });
+    writePinInput.addEventListener('input', () => {
+      persistWritePin(writePinInput.value);
     });
   </script>
 </body>
@@ -1987,18 +1961,95 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     return html.replace("__TABLE_ROWS__", table_rows)
 
 
-def create_app(db_dir: Path | None = None, operator_token: str | None = None) -> Flask:
+def create_app(
+  db_dir: Path | None = None,
+  operator_token: str | None = None,
+  read_pin_hash: str | None = None,
+  write_pin_hash: str | None = None,
+  database_url: str | None = None,
+  write_store: BaseWriteStore | None = None,
+) -> Flask:
   """Create the phone API app.
 
   Args:
     db_dir: Directory containing shelve files. Defaults to app directory.
-    operator_token: Shared secret required for write requests.
+    operator_token: Legacy shared secret required for write requests.
+    read_pin_hash: Optional password hash for read access.
+    write_pin_hash: Optional password hash for write access.
+    database_url: Optional Postgres URL enabling Neon write-store mode.
+    write_store: Optional explicit write-store override (primarily for tests).
   """
   app = Flask(__name__)
   data_dir = db_dir or ROOT_DIR
   app.config["OPERATOR_TOKEN"] = operator_token
+  app.config["READ_PIN_HASH"] = read_pin_hash
+  app.config["WRITE_PIN_HASH"] = write_pin_hash
+  app.config["DATABASE_URL"] = database_url or os.environ.get("DATABASE_URL")
   _RECENT_MATCH_SIGNATURES.clear()
   active_players: set[str] = set()
+
+  write_store_error: str | None = None
+  active_write_store = write_store
+  if active_write_store is None:
+    try:
+      active_write_store = create_write_store(
+        WriteStoreConfig(
+          db_dir=data_dir,
+          database_url=app.config["DATABASE_URL"],
+        )
+      )
+    except Exception as exc:
+      write_store_error = str(exc)
+
+  def _resolve_write_store() -> tuple[BaseWriteStore | None, object | None]:
+    if active_write_store is not None:
+      return active_write_store, None
+    if write_store_error:
+      return None, (jsonify({"error": f"write store unavailable: {write_store_error}"}), 503)
+    return None, (jsonify({"error": "write store unavailable"}), 503)
+
+  def _read_auth_enabled() -> bool:
+    return bool(app.config.get("READ_PIN_HASH") or app.config.get("WRITE_PIN_HASH"))
+
+  def _write_pin_enabled() -> bool:
+    return bool(app.config.get("WRITE_PIN_HASH"))
+
+  def _has_read_access() -> bool:
+    if not _read_auth_enabled():
+      return True
+
+    read_pin = request.headers.get(READ_PIN_HEADER)
+    write_pin = request.headers.get(WRITE_PIN_HEADER)
+    read_ok = _verify_secret(app.config.get("READ_PIN_HASH"), read_pin)
+    write_ok = _verify_secret(app.config.get("WRITE_PIN_HASH"), write_pin)
+    return read_ok or write_ok
+
+  def _check_write_access() -> tuple[bool, int, str]:
+    if _write_pin_enabled():
+      write_pin = request.headers.get(WRITE_PIN_HEADER)
+      if _verify_secret(app.config.get("WRITE_PIN_HASH"), write_pin):
+        return True, 200, ""
+      return False, 403, "writer authorization required"
+
+    token = app.config.get("OPERATOR_TOKEN")
+    if not token:
+      return False, 503, "write endpoint not configured"
+
+    provided_token = request.headers.get(OPERATOR_TOKEN_HEADER)
+    if provided_token != token:
+      return False, 401, "unauthorized"
+    return True, 200, ""
+
+  def require_read_access() -> object | None:
+    if _has_read_access():
+      return None
+    return jsonify({"error": "authentication required"}), 401
+
+  def require_write_access() -> object | None:
+    allowed, status, message = _check_write_access()
+    if allowed:
+      return None
+    return jsonify({"error": message}), status
 
   @app.get("/api/health")
   def health() -> object:
@@ -2006,26 +2057,51 @@ def create_app(db_dir: Path | None = None, operator_token: str | None = None) ->
 
   @app.get("/api/leaderboard")
   def leaderboard() -> object:
+    denied = require_read_access()
+    if denied is not None:
+      return denied
+
     limit = request.args.get("limit", default=50, type=int)
     limit = max(1, min(limit, 200))
     scope = request.args.get("scope", default="all", type=str)
     if scope not in {"all", "this_month", "this_week"}:
       return jsonify({"error": "invalid scope"}), 400
-    rows = _load_leaderboard(data_dir, limit, scope=scope)
+    store, error_response = _resolve_write_store()
+    if error_response is not None:
+      return error_response
+    assert store is not None
+
+    rows = _load_leaderboard(store, limit, scope=scope)
     return jsonify({"count": len(rows), "items": rows})
 
   @app.get("/api/players")
   def players() -> object:
-    names = _load_player_names(data_dir)
+    denied = require_read_access()
+    if denied is not None:
+      return denied
+
+    store, error_response = _resolve_write_store()
+    if error_response is not None:
+      return error_response
+    assert store is not None
+    names = [capwords(name) for name in store.list_player_keys()]
     return jsonify({"count": len(names), "items": names})
 
   @app.get("/api/presence")
   def presence_get() -> object:
+    denied = require_read_access()
+    if denied is not None:
+      return denied
+
     active = sorted(capwords(name) for name in active_players)
     return jsonify({"count": len(active), "items": active})
 
   @app.post("/api/presence")
   def presence_set() -> object:
+    denied = require_write_access()
+    if denied is not None:
+      return denied
+
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
       return jsonify({"error": "request body must be a JSON object"}), 400
@@ -2039,7 +2115,12 @@ def create_app(db_dir: Path | None = None, operator_token: str | None = None) ->
     if not isinstance(active, bool):
       return jsonify({"error": "active must be true or false"}), 400
 
-    if name not in set(_load_player_keys(data_dir)):
+    store, error_response = _resolve_write_store()
+    if error_response is not None:
+      return error_response
+    assert store is not None
+
+    if store.missing_players([name]):
       return jsonify({"error": "unknown player"}), 400
 
     if active:
@@ -2051,11 +2132,19 @@ def create_app(db_dir: Path | None = None, operator_token: str | None = None) ->
 
   @app.post("/api/presence/clear")
   def presence_clear() -> object:
+    denied = require_write_access()
+    if denied is not None:
+      return denied
+
     active_players.clear()
     return jsonify({"ok": True, "count": 0})
 
   @app.post("/api/lineup/random")
   def random_lineup() -> object:
+    denied = require_write_access()
+    if denied is not None:
+      return denied
+
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
       return jsonify({"error": "request body must be a JSON object"}), 400
@@ -2064,7 +2153,12 @@ def create_app(db_dir: Path | None = None, operator_token: str | None = None) ->
     if mode not in {"singles", "doubles"}:
       return jsonify({"error": "mode must be 'singles' or 'doubles'"}), 400
 
-    known_players = set(_load_player_keys(data_dir))
+    store, error_response = _resolve_write_store()
+    if error_response is not None:
+      return error_response
+    assert store is not None
+
+    known_players = set(store.list_player_keys())
     eligible = active_players.intersection(known_players)
     try:
       selected = _lineup_from_active_players(eligible, mode)
@@ -2075,24 +2169,32 @@ def create_app(db_dir: Path | None = None, operator_token: str | None = None) ->
 
   @app.post("/api/lineup/auto")
   def auto_lineup() -> object:
+    denied = require_write_access()
+    if denied is not None:
+      return denied
+
     try:
       selected = _validate_auto_payload(request.get_json(silent=True))
     except ValueError as exc:
       return jsonify({"error": str(exc)}), 400
 
-    db_path = data_dir / "playerdb"
-    with shelve.open(str(db_path)) as players:
-      missing = [name for name in selected.values() if name not in players]
-      if missing:
-        return jsonify({"error": "all selected players must exist"}), 400
+    store, error_response = _resolve_write_store()
+    if error_response is not None:
+      return error_response
+    assert store is not None
 
-      lineup = best_balanced_lineup(
-        players,
-        defense_a=selected["red_defense"],
-        offense_a=selected["red_offense"],
-        offense_b=selected["blue_offense"],
-        defense_b=selected["blue_defense"],
-      )
+    ratings = store.get_player_ratings(list(selected.values()))
+    missing = [name for name in selected.values() if name not in ratings]
+    if missing:
+      return jsonify({"error": "all selected players must exist"}), 400
+
+    lineup = best_balanced_lineup(
+      ratings,
+      defense_a=selected["red_defense"],
+      offense_a=selected["red_offense"],
+      offense_b=selected["blue_offense"],
+      defense_b=selected["blue_defense"],
+    )
 
     if lineup is None:
       return jsonify({"error": "could not compute balanced lineup"}), 400
@@ -2112,58 +2214,96 @@ def create_app(db_dir: Path | None = None, operator_token: str | None = None) ->
 
   @app.post("/api/players")
   def add_player() -> object:
-    token = app.config.get("OPERATOR_TOKEN")
-    if not token:
-      return jsonify({"error": "write endpoint not configured"}), 503
+    denied = require_write_access()
+    if denied is not None:
+      return denied
 
-    provided_token = request.headers.get(OPERATOR_TOKEN_HEADER)
-    if provided_token != token:
-      return jsonify({"error": "unauthorized"}), 401
+    store, error_response = _resolve_write_store()
+    if error_response is not None:
+      return error_response
+    assert store is not None
 
     try:
       player_name = _validate_new_player_name(request.get_json(silent=True))
     except ValueError as exc:
       return jsonify({"error": str(exc)}), 400
 
-    if not _acquire_write_lock(data_dir, owner="phone"):
+    uses_lock = store.uses_local_lock
+    if uses_lock and not _acquire_write_lock(data_dir, owner="phone"):
       return jsonify({"error": "another writer is active"}), 409
 
     try:
-      result = _submit_new_player(data_dir, player_name)
+      result = store.add_player(player_name)
     except ValueError as exc:
       return jsonify({"error": str(exc)}), 409
     except Exception:
       return jsonify({"error": "failed to persist player"}), 500
     finally:
-      _release_write_lock(data_dir)
+      if uses_lock:
+        _release_write_lock(data_dir)
 
     return jsonify(result), 201
 
   @app.get("/api/h2h")
   def h2h() -> object:
+    denied = require_read_access()
+    if denied is not None:
+      return denied
+
     p1 = request.args.get("p1", "").strip().lower()
     p2 = request.args.get("p2", "").strip().lower()
     if not p1 or not p2 or p1 == p2:
       return jsonify({"error": "two distinct player names required"}), 400
-    return jsonify(query_h2h(data_dir, p1, p2))
+
+    store, error_response = _resolve_write_store()
+    if error_response is not None:
+      return error_response
+    assert store is not None
+    return jsonify(store.query_h2h(p1, p2))
 
   @app.get("/api/stats")
   def player_stats() -> object:
+    denied = require_read_access()
+    if denied is not None:
+      return denied
+
     scope = request.args.get("scope", default="all", type=str)
     if scope not in {"all", "this_month", "this_week"}:
       return jsonify({"error": "invalid scope"}), 400
-    return jsonify(query_player_stats(data_dir, scope=scope))
+
+    store, error_response = _resolve_write_store()
+    if error_response is not None:
+      return error_response
+    assert store is not None
+
+    try:
+      return jsonify(store.query_player_stats(scope=scope))
+    except ValueError as exc:
+      return jsonify({"error": str(exc)}), 400
 
   @app.get("/api/player/<name>/history")
   def player_history(name: str) -> object:
+    denied = require_read_access()
+    if denied is not None:
+      return denied
+
     name = name.strip().lower()
     n = request.args.get("n", default=10, type=int)
     n = max(1, min(n, 50))
-    snapshots = query_rating_snapshots(data_dir, name, n)
+
+    store, error_response = _resolve_write_store()
+    if error_response is not None:
+      return error_response
+    assert store is not None
+    snapshots = store.query_rating_snapshots(name, n)
     return jsonify({"player": name, "count": len(snapshots), "snapshots": snapshots})
 
   @app.get("/api/odds")
   def match_odds() -> object:
+    denied = require_read_access()
+    if denied is not None:
+      return denied
+
     red_off = request.args.get("red_off", "").strip().lower()
     blue_off = request.args.get("blue_off", "").strip().lower()
     red_def = request.args.get("red_def", "").strip().lower()
@@ -2171,32 +2311,39 @@ def create_app(db_dir: Path | None = None, operator_token: str | None = None) ->
     mode = request.args.get("mode", "singles")
     if not red_off or not blue_off:
       return jsonify({"error": "offense players required"}), 400
+
+    store, error_response = _resolve_write_store()
+    if error_response is not None:
+      return error_response
+    assert store is not None
+
     team1 = [red_off, red_def] if mode == "doubles" and red_def else [red_off]
     team2 = [blue_off, blue_def] if mode == "doubles" and blue_def else [blue_off]
-    db_path = data_dir / "playerdb"
-    if not _playerdb_exists(data_dir):
+
+    ratings = store.get_player_ratings(team1 + team2)
+    if not ratings:
       return jsonify({"error": "no player data"}), 503
-    with shelve.open(str(db_path)) as pl:
-      missing = [n for n in team1 + team2 if n not in pl]
-      if missing:
-        return jsonify({"error": "unknown players"}), 400
-      from services.match_service import odds_ratio_for_teams
-      probability, ratio = odds_ratio_for_teams(pl, team1, team2)
+    missing = [n for n in team1 + team2 if n not in ratings]
+    if missing:
+      return jsonify({"error": "unknown players"}), 400
+
+    probability, ratio = odds_ratio_for_teams(ratings, team1, team2)
     return jsonify({"probability": round(probability, 3), "ratio": ratio})
 
   @app.post("/api/matches")
   def submit_match() -> object:
-    token = app.config.get("OPERATOR_TOKEN")
-    if not token:
-      return jsonify({"error": "write endpoint not configured"}), 503
+    denied = require_write_access()
+    if denied is not None:
+      return denied
 
-    provided_token = request.headers.get(OPERATOR_TOKEN_HEADER)
-    if provided_token != token:
-      return jsonify({"error": "unauthorized"}), 401
+    store, error_response = _resolve_write_store()
+    if error_response is not None:
+      return error_response
+    assert store is not None
 
     try:
       team1, team2, score1, score2 = _validate_match_payload(
-        data_dir,
+        store,
         request.get_json(silent=True),
       )
     except ValueError as exc:
@@ -2207,24 +2354,32 @@ def create_app(db_dir: Path | None = None, operator_token: str | None = None) ->
     if _is_recent_duplicate(signature, now_monotonic):
       return jsonify({"error": "duplicate match submission detected"}), 409
 
-    if not _acquire_write_lock(data_dir, owner="phone"):
+    uses_lock = store.uses_local_lock
+    if uses_lock and not _acquire_write_lock(data_dir, owner="phone"):
       return jsonify({"error": "another writer is active"}), 409
 
     try:
       if _is_recent_duplicate(signature, time.monotonic()):
         return jsonify({"error": "duplicate match submission detected"}), 409
-      result = _submit_match_result(data_dir, team1, team2, score1, score2)
+      result = store.submit_match(team1, team2, score1, score2, source="phone_api")
       _remember_match_signature(signature, time.monotonic())
+    except ValueError as exc:
+      return jsonify({"error": str(exc)}), 400
     except Exception:
       return jsonify({"error": "failed to persist match result"}), 500
     finally:
-      _release_write_lock(data_dir)
+      if uses_lock:
+        _release_write_lock(data_dir)
 
     return jsonify(result), 201
 
   @app.get("/phone")
   def phone_view() -> str:
-    rows = _load_leaderboard(data_dir, limit=50)
+    store, error_response = _resolve_write_store()
+    if error_response is not None:
+      return _render_phone_html([])
+    assert store is not None
+    rows = _load_leaderboard(store, limit=50)
     return _render_phone_html(rows)
 
   return app
@@ -2240,7 +2395,13 @@ def main() -> None:
   args = parser.parse_args()
 
   db_dir = Path(args.db_dir).resolve() if args.db_dir else ROOT_DIR
-  app = create_app(db_dir=db_dir, operator_token=os.environ.get("FUSBALL_PHONE_API_TOKEN"))
+  app = create_app(
+    db_dir=db_dir,
+    operator_token=os.environ.get("FUSBALL_PHONE_API_TOKEN"),
+    read_pin_hash=os.environ.get("READ_PIN_HASH"),
+    write_pin_hash=os.environ.get("WRITE_PIN_HASH"),
+    database_url=os.environ.get("DATABASE_URL"),
+  )
   app.run(host="0.0.0.0", port=8080, debug=False)
 
 

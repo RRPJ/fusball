@@ -71,7 +71,7 @@ Notes:
 
 Preferred production phone API service flow is manual and double-click driven:
 
-- Start production phone API (prompts token): `start_phone_api_service.bat`
+- Start production phone API (prompts writer PIN): `start_phone_api_service.bat`
 - Stop production phone API: `stop_phone_api_service.bat`
 - Check watchdog/API status: `status_phone_api_service.bat`
 
@@ -85,6 +85,58 @@ Behavior notes:
 Primary mobile URL:
 
 - `http://<host>:8080/phone`
+
+Split auth testing in DEV mode:
+
+- Generate hashes manually:
+
+```bash
+python scripts/generate_pin_hash.py --read-pin read1234 --write-pin write5678 --format dotenv
+```
+
+- Start dev API with prompted split PINs:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run_phone_api_dev.ps1 -PromptPins
+```
+
+- Start dev API with explicit split PINs:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run_phone_api_dev.ps1 -ReadPin "read1234" -WritePin "write5678"
+```
+
+Notes:
+- `run_phone_api_dev.bat` still works and calls the same script.
+- If split PINs are not provided and no PIN hashes are configured, the script falls back to legacy token mode.
+
+Staging/production auth smoke checks:
+
+```bash
+python scripts/smoke_phone_api_auth.py --base-url https://<your-deployment-host> --expect-auth --read-pin <read-pin> --write-pin <write-pin>
+```
+
+Neon parity smoke check (before cutover):
+
+```bash
+python scripts/smoke_neon_parity.py --db-dir app --database-url <database-url> --mode strict
+```
+
+Use `--mode counts` when you only want fast count-level verification.
+
+Full cutover sequence:
+- See `docs/priority-0-cutover-runbook.md` for the ordered staging and production checklist.
+
+Recommended environment model:
+- Vercel Production -> Neon Production
+- Vercel Preview -> Neon Preview
+- Local coding -> local shelve sandbox unless cloud-like testing is needed
+
+Legacy-token fallback smoke check:
+
+```bash
+python scripts/smoke_phone_api_auth.py --base-url http://127.0.0.1:8080 --operator-token <token>
+```
 
 ## 4) Coding Standards
 
