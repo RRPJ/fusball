@@ -592,6 +592,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       h2hOpen: false,
       isSubmitting: false,
       offline: false,
+      readPinPromptPromise: null,
       healthTimerId: null,
       inFlightGetControllers: new Set(),
       awayOpen: false,
@@ -813,16 +814,31 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     }
 
     function promptForReadPin() {
-      const entered = (window.prompt('Enter read PIN') || '').trim();
-      if (!entered) {
-        return '';
+      if (state.readPinPromptPromise) {
+        return state.readPinPromptPromise;
       }
-      persistReadPin(entered);
-      const input = document.getElementById('readPin');
-      if (input) {
-        input.value = entered;
-      }
-      return entered;
+
+      state.readPinPromptPromise = Promise.resolve().then(() => {
+        const existing = getStoredReadPin();
+        if (existing) {
+          return existing;
+        }
+
+        const entered = (window.prompt('Enter read PIN') || '').trim();
+        if (!entered) {
+          return '';
+        }
+        persistReadPin(entered);
+        const input = document.getElementById('readPin');
+        if (input) {
+          input.value = entered;
+        }
+        return entered;
+      }).finally(() => {
+        state.readPinPromptPromise = null;
+      });
+
+      return state.readPinPromptPromise;
     }
 
     function ensureWritePin() {
@@ -887,7 +903,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         });
         const authRetry = !!options.__authRetry;
         if (!authRetry && response.status === 401 && method === 'GET' && !options.allowOffline) {
-          const enteredReadPin = promptForReadPin();
+          const enteredReadPin = await promptForReadPin();
           if (enteredReadPin) {
             return apiFetch(url, { ...options, __authRetry: true });
           }
