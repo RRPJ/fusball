@@ -60,6 +60,15 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("Leaderboard", html)
             self.assertIn("Alice", html)
 
+    def test_root_redirects_to_phone(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+            client = app.test_client()
+            response = client.get("/", follow_redirects=False)
+            self.assertEqual(response.status_code, 302)
+            self.assertEqual(response.headers.get("Location"), "/phone")
+
     def test_phone_page_includes_quip_catalog_with_variety(self) -> None:
         with TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)

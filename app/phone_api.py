@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 from string import capwords
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, redirect, request
 from werkzeug.security import check_password_hash
 
 from odds import playerLevel
@@ -2381,6 +2381,10 @@ def create_app(
     assert store is not None
     rows = _load_leaderboard(store, limit=50)
     return _render_phone_html(rows)
+
+  @app.get("/")
+  def root() -> object:
+    return redirect("/phone", code=302)
 
   return app
 
