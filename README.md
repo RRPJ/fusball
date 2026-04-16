@@ -34,7 +34,7 @@ Use this when you want to run Fusball from a phone browser.
 Windows production flow:
 
 1. Double-click `start_phone_api_service.bat`.
-2. Enter the operator token when prompted.
+2. Enter the writer PIN when prompted (or legacy operator token in fallback mode).
 3. The script:
 	- creates a production backup
 	- starts a watchdog
@@ -113,7 +113,7 @@ The mobile API flow is separate from the kiosk UI. The host machine runs the API
 
 Preferred production phone API service flow (manual, double-click):
 
-- Start (with token prompt + watchdog): `start_phone_api_service.bat`
+- Start (with writer PIN prompt + watchdog): `start_phone_api_service.bat`
 - Stop: `stop_phone_api_service.bat`
 - Status: `status_phone_api_service.bat`
 
@@ -129,16 +129,17 @@ cd app
 python phone_api.py
 ```
 
-Operator token setup options:
+PIN/auth setup options:
 
-1. Enter token when prompted by `start_phone_api_service.bat`.
-2. Set environment variable `FUSBALL_PHONE_API_TOKEN`.
-3. Pass token directly to `scripts/phone_stack_control.ps1`.
+1. Set `READ_PIN_HASH` and `WRITE_PIN_HASH` for split read/write auth.
+2. Enter writer PIN when prompted by `start_phone_api_service.bat` for local operation.
+3. Use legacy fallback `FUSBALL_PHONE_API_TOKEN` only when hash-based auth is not configured.
+4. Use `python scripts/generate_pin_hash.py --read-pin <read> --write-pin <write> --format dotenv` to generate hash values.
 
 Env-var example (Windows PowerShell):
 
 ```powershell
-$env:FUSBALL_PHONE_API_TOKEN = "replace-with-a-shared-secret"
+$env:FUSBALL_PHONE_API_TOKEN = "legacy-fallback-token"
 cd app
 python phone_api.py
 ```

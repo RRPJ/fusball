@@ -16,16 +16,30 @@ The mobile API flow is the preferred modern operator path. This document covers 
 
 ## Authentication
 
-Write endpoints require the operator token header:
+Priority 0 auth split introduces two headers for the API path:
 
-- Header: `X-Operator-Token`
-- Env var used by server: `FUSBALL_PHONE_API_TOKEN`
-- If token is not configured, write endpoints return `503`.
+- Read header: `X-Read-Pin`
+- Writer header: `X-Write-Pin`
+
+Access model:
+
+- `GET /api/health` is public (no auth).
+- Read endpoints require a valid read PIN or writer PIN.
+- Write endpoints require a valid writer PIN.
+
+Legacy compatibility:
+
+- If `WRITE_PIN_HASH` is not configured, write endpoints still accept legacy operator token mode.
+- Legacy header: `X-Operator-Token`
+- Legacy env var: `FUSBALL_PHONE_API_TOKEN`
+- Legacy mode is intended for local compatibility during rollout.
 
 ## Environment Configuration
 
 - `FUSBALL_PHONE_API_TOKEN`: operator token for write requests.
 - `FUSBALL_PHONE_API_DB_DIR`: data directory override (`playerdb`, `recentplayers`, `tagdb`, `match_history`, `logfile.log`).
+- `READ_PIN_HASH`: hashed read PIN (`X-Read-Pin`).
+- `WRITE_PIN_HASH`: hashed writer PIN (`X-Write-Pin`).
 
 ## Endpoint Summary
 
@@ -88,7 +102,7 @@ Notes:
 ### Match Submit
 
 - `POST /api/matches`
-- Auth required
+- Writer PIN required (`X-Write-Pin`) unless running legacy fallback mode
 - Body example:
 
 ```json
@@ -111,10 +125,11 @@ Rules:
 - `200 OK`: read success
 - `201 Created`: write success
 - `400 Bad Request`: validation failure
-- `401 Unauthorized`: missing/invalid operator token
+- `401 Unauthorized`: missing/invalid read credentials on read endpoints
+- `403 Forbidden`: missing/invalid writer credentials on write endpoints
 - `409 Conflict`: lock contention or duplicate submit
 - `500 Internal Server Error`: persistence failure
-- `503 Service Unavailable`: write path disabled (token not configured)
+- `503 Service Unavailable`: write path disabled (legacy mode with no token configured)
 
 ## Operational Notes
 
@@ -129,6 +144,19 @@ Rules:
 - Dev launcher writes to `sandbox/dev-data`.
 - Production service start writes to `app/` data, performs startup backup, and runs a watchdog that restarts the API after repeated health failures.
 - Production service stop closes the phone API and watchdog processes.
+
+Priority 0 deployment smoke check:
+
+```bash
+python scripts/smoke_phone_api_auth.py --base-url https://<deployment-host> --expect-auth --read-pin <read-pin> --write-pin <write-pin>
+```
+
+For the full migration, parity, validation, and rollback sequence, see `docs/priority-0-cutover-runbook.md`.
+
+Recommended deployment model:
+- Vercel Production should use production Neon.
+- Vercel Preview should use preview Neon.
+- Preview deployments should never write into production ranking data.
 
 ## See Also
 

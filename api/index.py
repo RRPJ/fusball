@@ -21,4 +21,7 @@ _db_path = Path(_db_dir).resolve() if _db_dir else APP_DIR
 app = create_app(
   db_dir=_db_path,
   operator_token=os.environ.get("FUSBALL_PHONE_API_TOKEN"),
+  read_pin_hash=os.environ.get("READ_PIN_HASH"),
+  write_pin_hash=os.environ.get("WRITE_PIN_HASH"),
+  database_url=os.environ.get("DATABASE_URL"),
 )
