@@ -1109,29 +1109,51 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         sessionStorage.setItem(LEGACY_TOKEN_STORAGE_KEY, value);
       } else {
         sessionStorage.removeItem(WRITE_PIN_STORAGE_KEY);
+        sessionStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
       }
     }
 
-    function promptForReadPin() {
+    function setReadPinInputValue(pin) {
+      const input = document.getElementById('readPin');
+      if (input) {
+        input.value = pin;
+      }
+    }
+
+    function setWritePinInputValue(pin) {
+      const input = document.getElementById('writePin');
+      if (input) {
+        input.value = pin;
+      }
+    }
+
+    function clearStoredReadPin() {
+      persistReadPin('');
+      setReadPinInputValue('');
+    }
+
+    function clearStoredWritePin() {
+      persistWritePin('');
+      setWritePinInputValue('');
+    }
+
+    function promptForReadPin(promptMessage = 'Enter read PIN', forcePrompt = false) {
       if (state.readPinPromptPromise) {
         return state.readPinPromptPromise;
       }
 
       state.readPinPromptPromise = Promise.resolve().then(() => {
         const existing = getStoredReadPin();
-        if (existing) {
+        if (existing && !forcePrompt) {
           return existing;
         }
 
-        const entered = (window.prompt('Enter read PIN') || '').trim();
+        const entered = (window.prompt(promptMessage) || '').trim();
         if (!entered) {
           return '';
         }
         persistReadPin(entered);
-        const input = document.getElementById('readPin');
-        if (input) {
-          input.value = entered;
-        }
+        setReadPinInputValue(entered);
         return entered;
       }).finally(() => {
         state.readPinPromptPromise = null;
@@ -1140,31 +1162,74 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       return state.readPinPromptPromise;
     }
 
-    function ensureWritePin() {
+    function promptForWritePin(promptMessage = 'Enter writer PIN', forcePrompt = false) {
+      let writePin = '';
       const input = document.getElementById('writePin');
-      let writePin = (input.value || '').trim();
+      if (!forcePrompt && input) {
+        writePin = (input.value || '').trim();
+      }
       if (writePin) {
         persistWritePin(writePin);
         return writePin;
       }
 
-      writePin = getStoredWritePin();
+      writePin = forcePrompt ? '' : getStoredWritePin();
       if (writePin) {
-        if (input) {
-          input.value = writePin;
-        }
+        setWritePinInputValue(writePin);
         return writePin;
       }
 
-      const entered = (window.prompt('Enter writer PIN') || '').trim();
+      const entered = (window.prompt(promptMessage) || '').trim();
       if (!entered) {
         return '';
       }
       persistWritePin(entered);
-      if (input) {
-        input.value = entered;
-      }
+      setWritePinInputValue(entered);
       return entered;
+    }
+
+    function ensureWritePin() {
+      return promptForWritePin('Enter writer PIN');
+    }
+
+    async function retryReadAuth(url, options, suppliedReadPin, suppliedWritePin) {
+      if (suppliedReadPin) {
+        clearStoredReadPin();
+        const enteredReadPin = await promptForReadPin('Incorrect read PIN. Enter read PIN.', true);
+        if (enteredReadPin) {
+          return apiFetch(url, { ...options, __authRetry: true, __trackingActive: true });
+        }
+        return null;
+      }
+
+      if (suppliedWritePin) {
+        clearStoredWritePin();
+        const enteredWritePin = promptForWritePin('Incorrect writer PIN. Enter writer PIN.', true);
+        if (enteredWritePin) {
+          return apiFetch(url, { ...options, __authRetry: true, __trackingActive: true });
+        }
+        return null;
+      }
+
+      const enteredReadPin = await promptForReadPin('Enter read PIN', true);
+      if (enteredReadPin) {
+        return apiFetch(url, { ...options, __authRetry: true, __trackingActive: true });
+      }
+      return null;
+    }
+
+    function retryWriteAuth(url, options, suppliedWritePin) {
+      const promptMessage = suppliedWritePin
+        ? 'Incorrect writer PIN. Enter writer PIN.'
+        : 'Enter writer PIN';
+      if (suppliedWritePin) {
+        clearStoredWritePin();
+      }
+      const enteredWritePin = promptForWritePin(promptMessage, true);
+      if (enteredWritePin) {
+        return apiFetch(url, { ...options, __authRetry: true, __trackingActive: true });
+      }
+      return null;
     }
 
     async function apiFetch(url, options = {}) {
@@ -1182,6 +1247,8 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       const headers = new Headers(options.headers || {});
       const readPin = getStoredReadPin();
       const writePin = getStoredWritePin();
+      const suppliedReadPin = !!readPin;
+      const suppliedWritePin = !!writePin;
       if (readPin) {
         headers.set('X-Read-Pin', readPin);
       }
@@ -1210,19 +1277,17 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         });
         const authRetry = !!options.__authRetry;
         if (!authRetry && response.status === 401 && method === 'GET' && !options.allowOffline) {
-          const enteredReadPin = await promptForReadPin();
-          if (enteredReadPin) {
-            const retried = await apiFetch(url, { ...options, __authRetry: true, __trackingActive: true });
+          const retried = await retryReadAuth(url, options, suppliedReadPin, suppliedWritePin);
+          if (retried) {
             trackOutcome = 'success';
             return retried;
           }
         }
         if (!authRetry && (response.status === 401 || response.status === 403) && method !== 'GET') {
-          const enteredWritePin = ensureWritePin();
-          if (enteredWritePin) {
-            const retried = await apiFetch(url, { ...options, __authRetry: true, __trackingActive: true });
+          const retried = retryWriteAuth(url, options, suppliedWritePin);
+          if (retried) {
             trackOutcome = 'success';
-            return retried;
+            return await retried;
           }
         }
         if (response.status === 503) {
@@ -2464,6 +2529,9 @@ def create_app(
   def _write_pin_enabled() -> bool:
     return bool(app.config.get("WRITE_PIN_HASH"))
 
+  def _request_supplied_read_credentials() -> bool:
+    return bool(request.headers.get(READ_PIN_HEADER) or request.headers.get(WRITE_PIN_HEADER))
+
   def _has_read_access() -> bool:
     if not _read_auth_enabled():
       return True
@@ -2479,6 +2547,8 @@ def create_app(
       write_pin = request.headers.get(WRITE_PIN_HEADER)
       if _verify_secret(app.config.get("WRITE_PIN_HASH"), write_pin):
         return True, 200, ""
+      if write_pin:
+        return False, 403, "incorrect writer PIN"
       return False, 403, "writer authorization required"
 
     token = app.config.get("OPERATOR_TOKEN")
@@ -2487,13 +2557,16 @@ def create_app(
 
     provided_token = request.headers.get(OPERATOR_TOKEN_HEADER)
     if provided_token != token:
+      if provided_token:
+        return False, 401, "incorrect operator token"
       return False, 401, "unauthorized"
     return True, 200, ""
 
   def require_read_access() -> object | None:
     if _has_read_access():
       return None
-    return jsonify({"error": "authentication required"}), 401
+    message = "incorrect reader or writer PIN" if _request_supplied_read_credentials() else "authentication required"
+    return jsonify({"error": message}), 401
 
   def require_write_access() -> object | None:
     allowed, status, message = _check_write_access()

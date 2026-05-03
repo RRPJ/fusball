@@ -604,6 +604,15 @@ class PhoneApiTests(unittest.TestCase):
 
             read_no_auth = client.get("/api/leaderboard")
             self.assertEqual(read_no_auth.status_code, 401)
+            self.assertEqual(read_no_auth.get_json(), {"error": "authentication required"})
+
+            read_with_wrong_read_pin = client.get("/api/leaderboard", headers={"X-Read-Pin": "wrong-read"})
+            self.assertEqual(read_with_wrong_read_pin.status_code, 401)
+            self.assertEqual(read_with_wrong_read_pin.get_json(), {"error": "incorrect reader or writer PIN"})
+
+            read_with_wrong_write_pin = client.get("/api/leaderboard", headers={"X-Write-Pin": "wrong-write"})
+            self.assertEqual(read_with_wrong_write_pin.status_code, 401)
+            self.assertEqual(read_with_wrong_write_pin.get_json(), {"error": "incorrect reader or writer PIN"})
 
             read_with_read_pin = client.get("/api/leaderboard", headers={"X-Read-Pin": "read-1234"})
             self.assertEqual(read_with_read_pin.status_code, 200)
@@ -616,6 +625,7 @@ class PhoneApiTests(unittest.TestCase):
                 json={"team1": ["alice"], "team2": ["bob"], "score1": 5, "score2": 3},
             )
             self.assertEqual(write_no_auth.status_code, 403)
+            self.assertEqual(write_no_auth.get_json(), {"error": "writer authorization required"})
 
             write_with_read_pin = client.post(
                 "/api/matches",
@@ -623,6 +633,15 @@ class PhoneApiTests(unittest.TestCase):
                 headers={"X-Read-Pin": "read-1234"},
             )
             self.assertEqual(write_with_read_pin.status_code, 403)
+            self.assertEqual(write_with_read_pin.get_json(), {"error": "writer authorization required"})
+
+            write_with_wrong_writer_pin = client.post(
+                "/api/matches",
+                json={"team1": ["alice"], "team2": ["bob"], "score1": 5, "score2": 3},
+                headers={"X-Write-Pin": "wrong-write"},
+            )
+            self.assertEqual(write_with_wrong_writer_pin.status_code, 403)
+            self.assertEqual(write_with_wrong_writer_pin.get_json(), {"error": "incorrect writer PIN"})
 
             write_with_writer_pin = client.post(
                 "/api/matches",
