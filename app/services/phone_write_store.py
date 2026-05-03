@@ -315,10 +315,9 @@ class NeonWriteStore(BaseWriteStore):
 
     @staticmethod
     def _level_from_rating_dict(rating: dict) -> float:
-        return (
-            (float(rating.get("offense_mu", 25.0)) - 3.0 * float(rating.get("offense_sigma", 8.333)))
-            + (float(rating.get("defense_mu", 25.0)) - 3.0 * float(rating.get("defense_sigma", 8.333)))
-        )
+        offense_level = float(rating.get("offense_mu", 25.0)) - 3.0 * float(rating.get("offense_sigma", 8.333))
+        defense_level = float(rating.get("defense_mu", 25.0)) - 3.0 * float(rating.get("defense_sigma", 8.333))
+        return (offense_level + defense_level) / 2
 
     def query_h2h(self, p1: str, p2: str) -> dict:
         p1, p2 = p1.lower(), p2.lower()
@@ -367,6 +366,7 @@ class NeonWriteStore(BaseWriteStore):
 
         all_records = self._history_records()
         scoped_records = self._records_for_scope(scope)
+        stat_records = all_records if scope == "all" else scoped_records
 
         player_matches: dict[str, list[dict]] = {}
         latest_level_after: dict[str, float] = {}
@@ -389,6 +389,19 @@ class NeonWriteStore(BaseWriteStore):
                     }
                 )
                 latest_level_after[name] = level
+
+        player_matches = {}
+        for record in stat_records:
+            winner_team = [n.lower() for n in record.get("winner", [])]
+            all_names = [n.lower() for n in record.get("team1", []) + record.get("team2", [])]
+
+            for name in all_names:
+                player_matches.setdefault(name, []).append(
+                    {
+                        "won": name in winner_team,
+                        "timestamp": record.get("timestamp", ""),
+                    }
+                )
 
         for record in scoped_records:
             entries = {e["name"].lower(): e for e in record.get("players", [])}

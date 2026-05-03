@@ -24,7 +24,7 @@ The repository supports one runtime flow over the ranking and persistence layer:
 
 - `app/odds.py` provides:
   - Win probability calculation (`win_probability`)
-  - Player exposure level (`playerLevel`)
+  - Player exposure level (`playerLevel`), defined as the average of offense and defense exposed ratings
   - Rank string calculation (`findRank`)
 - TrueSkill is used with offense and defense tracked separately per player.
 
