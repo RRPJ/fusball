@@ -57,6 +57,7 @@ Legacy compatibility:
 - Returns:
   - `count`
   - `items[]` with `position`, `name`, `rank`, `level`, offense/defense stats
+  - `level` is the average of the offense and defense exposed TrueSkill levels
 
 ### Players
 

@@ -315,10 +315,9 @@ class NeonWriteStore(BaseWriteStore):
 
     @staticmethod
     def _level_from_rating_dict(rating: dict) -> float:
-        return (
-            (float(rating.get("offense_mu", 25.0)) - 3.0 * float(rating.get("offense_sigma", 8.333)))
-            + (float(rating.get("defense_mu", 25.0)) - 3.0 * float(rating.get("defense_sigma", 8.333)))
-        )
+        offense_level = float(rating.get("offense_mu", 25.0)) - 3.0 * float(rating.get("offense_sigma", 8.333))
+        defense_level = float(rating.get("defense_mu", 25.0)) - 3.0 * float(rating.get("defense_sigma", 8.333))
+        return (offense_level + defense_level) / 2
 
     def query_h2h(self, p1: str, p2: str) -> dict:
         p1, p2 = p1.lower(), p2.lower()
