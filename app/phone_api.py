@@ -646,6 +646,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       leaderboardFilter: 'all',
       leaderboardItems: [],
       playerStats: null,
+      playerStatsScope: null,
       expandedPlayer: null,
       h2hOpen: false,
       isSubmitting: false,
@@ -657,6 +658,8 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       requestState: {},
       leaderboardSource: 'server',
       leaderboardCacheAt: null,
+      leaderboardRequestVersion: 0,
+      statsRequestVersion: 0,
       lastOnlineAt: null,
       lastOfflineAt: null,
       offlineReason: '',
@@ -778,16 +781,16 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         return 'unknown';
       }
       const ageMs = Math.max(0, Date.now() - timestampMs);
-      if (ageMs < 5000) {
-        return 'just now';
-      }
       if (ageMs < 60000) {
-        return `${Math.floor(ageMs / 1000)}s ago`;
+        return 'just now';
       }
       if (ageMs < 3600000) {
         return `${Math.floor(ageMs / 60000)}m ago`;
       }
-      return `${Math.floor(ageMs / 3600000)}h ago`;
+      if (ageMs < 86400000) {
+        return `${Math.floor(ageMs / 3600000)}h ago`;
+      }
+      return `${Math.floor(ageMs / 86400000)}d ago`;
     }
 
     function ensureRequestMeta(key) {
@@ -858,7 +861,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         return;
       }
 
-      const activeRequests = Object.values(state.requestState).filter((meta) => meta.inFlightAt);
+      const activeRequests = Object.values(state.requestState).filter((meta) => meta.inFlightAt && meta.showInLiveStatus !== false);
       if (activeRequests.length) {
         const current = activeRequests.sort((left, right) => left.inFlightAt - right.inFlightAt)[0];
         const extraCount = activeRequests.length - 1;
@@ -902,6 +905,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       meta.label = label || meta.label;
       meta.inFlightAt = Date.now();
       meta.lastError = '';
+      meta.showInLiveStatus = key !== 'players';
       renderPresenceStatus();
       renderOddsStatus();
       renderLeaderboardFreshness();
@@ -1208,13 +1212,17 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         if (!authRetry && response.status === 401 && method === 'GET' && !options.allowOffline) {
           const enteredReadPin = await promptForReadPin();
           if (enteredReadPin) {
-            return apiFetch(url, { ...options, __authRetry: true, __trackingActive: true });
+            const retried = await apiFetch(url, { ...options, __authRetry: true, __trackingActive: true });
+            trackOutcome = 'success';
+            return retried;
           }
         }
         if (!authRetry && (response.status === 401 || response.status === 403) && method !== 'GET') {
           const enteredWritePin = ensureWritePin();
           if (enteredWritePin) {
-            return apiFetch(url, { ...options, __authRetry: true, __trackingActive: true });
+            const retried = await apiFetch(url, { ...options, __authRetry: true, __trackingActive: true });
+            trackOutcome = 'success';
+            return retried;
           }
         }
         if (response.status === 503) {
@@ -1732,7 +1740,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
           : '';
       }
       const statsNeeded = ['form','streak','improved'].includes(mode);
-      if (statsNeeded && !state.playerStats) {
+      if (statsNeeded && (!state.playerStats || state.playerStatsScope !== state.leaderboardFilter)) {
         fetchLeaderboardStats().catch(() => undefined);
       } else {
         renderLeaderboard(state.leaderboardItems);
@@ -1740,13 +1748,25 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     }
 
     function fetchLeaderboardStats() {
+      const requestVersion = state.statsRequestVersion + 1;
+      const requestScope = state.leaderboardFilter;
+      state.statsRequestVersion = requestVersion;
       return apiFetch('/api/stats?scope=' + encodeURIComponent(state.leaderboardFilter), {
         trackKey: 'stats',
         trackLabel: 'leaderboard stats',
       })
-        .then(r => r.ok ? r.json() : {})
+        .then(r => {
+          if (!r.ok) {
+            throw new Error('Could not load leaderboard stats.');
+          }
+          return r.json();
+        })
         .then(data => {
+          if (requestVersion !== state.statsRequestVersion || requestScope !== state.leaderboardFilter) {
+            return data;
+          }
           state.playerStats = data;
+          state.playerStatsScope = requestScope;
           renderLeaderboard(state.leaderboardItems);
           return data;
         });
@@ -1754,6 +1774,8 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
 
     function setLeaderboardFilter(f) {
       state.leaderboardFilter = f;
+      state.playerStats = null;
+      state.playerStatsScope = null;
       document.getElementById('filterAllBtn').classList.toggle('active', f === 'all');
       document.getElementById('filterThisMonthBtn').classList.toggle('active', f === 'this_month');
       document.getElementById('filterThisWeekBtn').classList.toggle('active', f === 'this_week');
@@ -2071,6 +2093,9 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         renderLiveStatus();
         return;
       }
+      const requestVersion = state.leaderboardRequestVersion + 1;
+      const requestScope = state.leaderboardFilter;
+      state.leaderboardRequestVersion = requestVersion;
       const response = await apiFetch('/api/leaderboard?limit=50&scope=' + encodeURIComponent(state.leaderboardFilter), {
         trackKey: 'leaderboard',
         trackLabel: 'leaderboard',
@@ -2079,6 +2104,9 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         throw new Error('Could not refresh leaderboard.');
       }
       const payload = await response.json();
+      if (requestVersion !== state.leaderboardRequestVersion || requestScope !== state.leaderboardFilter) {
+        return;
+      }
       const items = payload.items || [];
       state.leaderboardSource = 'live';
       renderLeaderboard(items);
