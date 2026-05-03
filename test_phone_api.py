@@ -84,6 +84,9 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("Fusball Phone API", html)
             self.assertIn("Leaderboard", html)
             self.assertIn("Alice", html)
+            self.assertIn("id='liveStatusCard' class='live-status review-card'", html)
+            self.assertIn("id='leaderboardFreshness' class='muted'", html)
+            self.assertIn("The page will show whether data is live, fetching, or using a cached snapshot.", html)
 
     def test_phone_page_uses_unnumbered_progress_buttons_and_mode_only_leaderboard(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -109,6 +112,11 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("id='leaderboardSection' class='section active'>", html)
             self.assertIn("const leaderboardSection = document.getElementById('leaderboardSection');", html)
             self.assertIn("leaderboardSection.classList.toggle('active', state.step === 1);", html)
+            self.assertIn("const LEADERBOARD_CACHE_STORAGE_KEY = 'fusball_leaderboard_snapshot';", html)
+            self.assertIn("function renderLiveStatus()", html)
+            self.assertIn("function renderLeaderboardFreshness()", html)
+            self.assertIn("function startFreshnessTicker()", html)
+            self.assertIn("trackKey: 'leaderboard'", html)
 
     def test_phone_page_formats_doubles_display_as_defense_then_offense(self) -> None:
         with TemporaryDirectory() as tmpdir:

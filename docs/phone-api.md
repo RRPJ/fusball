@@ -9,6 +9,26 @@ The phone API is the repository's primary runtime. It serves both the browser-ba
 - Default host/port: `http://<host>:8080`
 - Mobile page: `GET /phone`
 
+## Phone Page Status UX
+
+The `/phone` page exposes request/freshness state directly in the UI so operators can tell the difference between live data, active fetches, and cached fallback.
+
+- Header status card:
+  - `Live` means the API is reachable and the page is showing current data.
+  - `Fetching ...` means a request is in progress; the card shows the elapsed fetch time.
+  - `Snapshot mode` means the API is offline and the page is showing a cached leaderboard snapshot.
+- Leaderboard freshness:
+  - The leaderboard section shows when standings were last updated.
+  - While offline, it shows cached snapshot age instead of implying the data is still live.
+- Inline fetch cues:
+  - Presence status shows when active players are refreshing and when they were last updated.
+  - Odds status shows when matchup odds are being calculated and when the current odds were last updated.
+
+Notes:
+- Leaderboard cache is stored in browser `localStorage` with a timestamp.
+- Presence remains session-scoped server state and is still lost on API restart.
+- Current behavior remains intentionally conservative: the leaderboard refreshes after successful submit and filter changes rather than polling continuously.
+
 ## Authentication
 
 Priority 0 auth split introduces two headers for the API path:

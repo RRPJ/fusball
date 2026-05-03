@@ -378,6 +378,55 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     .status { margin-top: 8px; font-size: 0.84rem; min-height: 18px; color: var(--muted); }
     .status.ok { color: var(--ok); }
     .status.bad { color: var(--bad); }
+    .live-status {
+      margin-top: 10px;
+      display: grid;
+      gap: 6px;
+    }
+    .live-status-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: rgba(159, 179, 196, 0.08);
+    }
+    .status-chip::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.06);
+    }
+    .status-chip.ok {
+      color: var(--ok);
+      border-color: rgba(42, 166, 117, 0.45);
+      background: rgba(42, 166, 117, 0.12);
+    }
+    .status-chip.bad {
+      color: #ffd4d4;
+      border-color: rgba(180, 81, 81, 0.75);
+      background: rgba(180, 81, 81, 0.2);
+    }
+    .status-chip.fetching {
+      color: var(--accent);
+      border-color: rgba(239, 138, 23, 0.55);
+      background: rgba(239, 138, 23, 0.14);
+    }
     .review-card {
       border: 1px solid var(--line);
       border-radius: 10px;
@@ -443,6 +492,13 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       <h1>Fusball Phone API</h1>
       <div class='muted'>Button-driven setup, score, confirm, submit</div>
       <div id='offlineBanner' class='offline-banner' style='display:none;'>API offline. Showing leaderboard snapshot only.</div>
+      <div id='liveStatusCard' class='live-status review-card' aria-live='polite'>
+        <div class='live-status-row'>
+          <span id='liveStatusChip' class='status-chip'>Checking connection</span>
+          <span id='liveStatusAge' class='muted'>Waiting for first refresh.</span>
+        </div>
+        <div id='liveStatusDetail' class='muted'>The page will show whether data is live, fetching, or using a cached snapshot.</div>
+      </div>
       <div class='progress'>
           <button id='stepBtn1' type='button' class='active'>Mode</button>
           <button id='stepBtn2' type='button'>Players</button>
@@ -520,7 +576,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
 
     <section id='leaderboardSection' class='section active'>
       <h2>Leaderboard</h2>
-      <div class='muted'>Refreshes after successful submit.</div>
+      <div id='leaderboardFreshness' class='muted'>Live standings refresh after successful submit and when you change filters.</div>
       <div class='row sort-row'>
         <button id='sortTotalBtn' class='btn sort active' type='button'>Total</button>
         <button id='sortAtkBtn' class='btn sort' type='button'>Offense</button>
@@ -582,6 +638,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     };
 
     const state = {
+      bootedAt: Date.now(),
       step: 1,
       mode: 'singles',
       activeSlot: 'red_offense',
@@ -595,7 +652,14 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       offline: false,
       readPinPromptPromise: null,
       healthTimerId: null,
+      freshnessTimerId: null,
       inFlightGetControllers: new Set(),
+      requestState: {},
+      leaderboardSource: 'server',
+      leaderboardCacheAt: null,
+      lastOnlineAt: null,
+      lastOfflineAt: null,
+      offlineReason: '',
       awayOpen: false,
       players: [],
       activePlayers: [],
@@ -618,6 +682,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     const READ_PIN_STORAGE_KEY = 'fusball_read_pin';
     const WRITE_PIN_STORAGE_KEY = 'fusball_write_pin';
     const LEGACY_TOKEN_STORAGE_KEY = 'fusball_token';
+  const LEADERBOARD_CACHE_STORAGE_KEY = 'fusball_leaderboard_snapshot';
 
     const QUIPS_BY_CATEGORY = {
       expected_blowout: [
@@ -694,6 +759,202 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       ],
     };
 
+    function formatElapsed(startedAt) {
+      if (!startedAt) {
+        return '';
+      }
+      const elapsedMs = Math.max(1000, Date.now() - startedAt);
+      if (elapsedMs < 60000) {
+        return `${Math.ceil(elapsedMs / 1000)}s`;
+      }
+      if (elapsedMs < 3600000) {
+        return `${Math.ceil(elapsedMs / 60000)}m`;
+      }
+      return `${Math.ceil(elapsedMs / 3600000)}h`;
+    }
+
+    function formatAge(timestampMs) {
+      if (!timestampMs) {
+        return 'unknown';
+      }
+      const ageMs = Math.max(0, Date.now() - timestampMs);
+      if (ageMs < 5000) {
+        return 'just now';
+      }
+      if (ageMs < 60000) {
+        return `${Math.floor(ageMs / 1000)}s ago`;
+      }
+      if (ageMs < 3600000) {
+        return `${Math.floor(ageMs / 60000)}m ago`;
+      }
+      return `${Math.floor(ageMs / 3600000)}h ago`;
+    }
+
+    function ensureRequestMeta(key) {
+      if (!state.requestState[key]) {
+        state.requestState[key] = {
+          label: key,
+          inFlightAt: null,
+          lastSuccessAt: null,
+          lastFailureAt: null,
+          lastError: '',
+        };
+      }
+      return state.requestState[key];
+    }
+
+    function renderOfflineBanner() {
+      const banner = document.getElementById('offlineBanner');
+      if (!banner) {
+        return;
+      }
+      if (!state.offline) {
+        banner.style.display = 'none';
+        return;
+      }
+      banner.style.display = 'block';
+      const cacheText = state.leaderboardCacheAt
+        ? ` Cached leaderboard age: ${formatAge(state.leaderboardCacheAt)}.`
+        : ' Cached leaderboard age is unknown.';
+      banner.textContent = `${state.offlineReason || 'API offline.'} Showing leaderboard snapshot only.${cacheText}`;
+    }
+
+    function renderLeaderboardFreshness() {
+      const node = document.getElementById('leaderboardFreshness');
+      if (!node) {
+        return;
+      }
+      const meta = ensureRequestMeta('leaderboard');
+      const scopeLabel = state.leaderboardFilter === 'this_month'
+        ? 'this month'
+        : state.leaderboardFilter === 'this_week'
+          ? 'this week'
+          : 'all-time';
+      if (meta.inFlightAt) {
+        node.textContent = `Fetching ${scopeLabel} standings... ${formatElapsed(meta.inFlightAt)} elapsed.`;
+        return;
+      }
+      if (state.offline) {
+        if (state.leaderboardCacheAt) {
+          node.textContent = `Snapshot mode. Showing cached leaderboard from ${formatAge(state.leaderboardCacheAt)} until the API is reachable again.`;
+        } else {
+          node.textContent = 'Snapshot mode. No cache age is available yet.';
+        }
+        return;
+      }
+      if (meta.lastSuccessAt) {
+        const sourceText = state.leaderboardSource === 'server' ? 'from page load' : 'from the live API';
+        node.textContent = `Live standings. Updated ${formatAge(meta.lastSuccessAt)} ${sourceText}.`;
+        return;
+      }
+      node.textContent = 'Waiting for the first live leaderboard refresh.';
+    }
+
+    function renderLiveStatus() {
+      const chip = document.getElementById('liveStatusChip');
+      const age = document.getElementById('liveStatusAge');
+      const detail = document.getElementById('liveStatusDetail');
+      if (!chip || !age || !detail) {
+        return;
+      }
+
+      const activeRequests = Object.values(state.requestState).filter((meta) => meta.inFlightAt);
+      if (activeRequests.length) {
+        const current = activeRequests.sort((left, right) => left.inFlightAt - right.inFlightAt)[0];
+        const extraCount = activeRequests.length - 1;
+        chip.textContent = `Fetching ${current.label}${extraCount > 0 ? ` +${extraCount}` : ''}`;
+        chip.className = 'status-chip fetching';
+        age.textContent = `In progress for ${formatElapsed(current.inFlightAt)}.`;
+        detail.textContent = 'Requests are active. The page will stamp each panel when fresh data lands.';
+        return;
+      }
+
+      if (state.offline) {
+        chip.textContent = 'Snapshot mode';
+        chip.className = 'status-chip bad';
+        age.textContent = state.lastOfflineAt
+          ? `Lost connection ${formatAge(state.lastOfflineAt)}.`
+          : 'Connection unavailable.';
+        detail.textContent = state.leaderboardCacheAt
+          ? `Showing cached leaderboard from ${formatAge(state.leaderboardCacheAt)}. Match entry stays disabled while offline.`
+          : 'Match entry stays disabled while offline. No cached leaderboard timestamp is available.';
+        return;
+      }
+
+      const leaderboardMeta = ensureRequestMeta('leaderboard');
+      const presenceMeta = ensureRequestMeta('presence');
+      chip.textContent = 'Live';
+      chip.className = 'status-chip ok';
+      age.textContent = leaderboardMeta.lastSuccessAt
+        ? `Leaderboard updated ${formatAge(leaderboardMeta.lastSuccessAt)}.`
+        : 'Waiting for the first leaderboard refresh.';
+      if (presenceMeta.lastSuccessAt) {
+        detail.textContent = `Presence updated ${formatAge(presenceMeta.lastSuccessAt)}. Writes are available.`;
+      } else if (state.lastOnlineAt) {
+        detail.textContent = `Connection healthy since ${formatAge(state.lastOnlineAt)}. Waiting for active-player data.`;
+      } else {
+        detail.textContent = 'Connection healthy. Waiting for live data.';
+      }
+    }
+
+    function beginTrackedRequest(key, label) {
+      const meta = ensureRequestMeta(key);
+      meta.label = label || meta.label;
+      meta.inFlightAt = Date.now();
+      meta.lastError = '';
+      renderPresenceStatus();
+      renderOddsStatus();
+      renderLeaderboardFreshness();
+      renderLiveStatus();
+    }
+
+    function completeTrackedRequest(key) {
+      const meta = ensureRequestMeta(key);
+      meta.inFlightAt = null;
+      meta.lastSuccessAt = Date.now();
+      renderPresenceStatus();
+      renderOddsStatus();
+      renderLeaderboardFreshness();
+      renderLiveStatus();
+    }
+
+    function failTrackedRequest(key, errorMessage) {
+      const meta = ensureRequestMeta(key);
+      meta.inFlightAt = null;
+      meta.lastFailureAt = Date.now();
+      meta.lastError = errorMessage || 'Request failed.';
+      renderPresenceStatus();
+      renderOddsStatus();
+      renderLeaderboardFreshness();
+      renderLiveStatus();
+    }
+
+    function startFreshnessTicker() {
+      if (state.freshnessTimerId) {
+        window.clearInterval(state.freshnessTimerId);
+      }
+      renderOfflineBanner();
+      renderLeaderboardFreshness();
+      renderLiveStatus();
+      state.freshnessTimerId = window.setInterval(() => {
+        renderOfflineBanner();
+        renderLeaderboardFreshness();
+        renderLiveStatus();
+        renderPresenceStatus();
+        renderOddsStatus();
+      }, 1000);
+    }
+
+    function seedInitialFreshness() {
+      const leaderboardMeta = ensureRequestMeta('leaderboard');
+      leaderboardMeta.label = 'leaderboard';
+      leaderboardMeta.lastSuccessAt = state.bootedAt;
+      state.lastOnlineAt = state.bootedAt;
+      renderOfflineBanner();
+      renderLeaderboardFreshness();
+      renderLiveStatus();
+    }
+
     function setStatus(text, type = '') {
       const node = document.getElementById('statusText');
       if (!node) return;
@@ -709,51 +970,82 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
 
     function cacheLeaderboard(items) {
       try {
-        localStorage.setItem('fusball_leaderboard_snapshot', JSON.stringify(items || []));
+        const payload = {
+          items: items || [],
+          cachedAt: new Date().toISOString(),
+          scope: state.leaderboardFilter,
+        };
+        localStorage.setItem(LEADERBOARD_CACHE_STORAGE_KEY, JSON.stringify(payload));
+        state.leaderboardCacheAt = Date.parse(payload.cachedAt);
       } catch {
         // Ignore storage failures on private mode/storage-restricted browsers.
       }
+      renderOfflineBanner();
+      renderLeaderboardFreshness();
+      renderLiveStatus();
     }
 
     function readCachedLeaderboard() {
       try {
-        const raw = localStorage.getItem('fusball_leaderboard_snapshot');
-        if (!raw) return [];
+        const raw = localStorage.getItem(LEADERBOARD_CACHE_STORAGE_KEY);
+        if (!raw) return { items: [], cachedAt: null, scope: null };
         const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
+        if (Array.isArray(parsed)) {
+          return { items: parsed, cachedAt: null, scope: null };
+        }
+        if (parsed && Array.isArray(parsed.items)) {
+          return {
+            items: parsed.items,
+            cachedAt: parsed.cachedAt || null,
+            scope: parsed.scope || null,
+          };
+        }
+        return { items: [], cachedAt: null, scope: null };
       } catch {
-        return [];
+        return { items: [], cachedAt: null, scope: null };
       }
     }
 
     function setOfflineMode(reason = 'API offline.') {
       if (state.offline) return;
       state.offline = true;
+      state.offlineReason = reason;
+      state.lastOfflineAt = Date.now();
       abortInFlightGets();
       document.body.classList.add('offline');
       leaderboardSection.classList.add('active');
-      const banner = document.getElementById('offlineBanner');
-      if (banner) {
-        banner.style.display = 'block';
-        banner.textContent = `${reason} Showing leaderboard snapshot only.`;
-      }
       const cached = readCachedLeaderboard();
-      if (cached.length) {
-        renderLeaderboard(cached);
+      if (cached.cachedAt) {
+        state.leaderboardCacheAt = Date.parse(cached.cachedAt);
       }
+      if (cached.items.length) {
+        state.leaderboardSource = 'cache';
+        renderLeaderboard(cached.items);
+      }
+      renderOfflineBanner();
       setStatus('API offline. Match entry is disabled.', 'bad');
+      renderPresenceStatus();
+      renderOddsStatus();
+      renderLeaderboardFreshness();
+      renderLiveStatus();
     }
 
     function clearOfflineMode() {
-      if (!state.offline) return;
+      state.lastOnlineAt = Date.now();
+      if (!state.offline) {
+        renderLiveStatus();
+        return;
+      }
       state.offline = false;
+      state.offlineReason = '';
       document.body.classList.remove('offline');
       leaderboardSection.classList.toggle('active', state.step === 1);
-      const banner = document.getElementById('offlineBanner');
-      if (banner) {
-        banner.style.display = 'none';
-      }
+      renderOfflineBanner();
       setStatus('API online again.', 'ok');
+      renderPresenceStatus();
+      renderOddsStatus();
+      renderLeaderboardFreshness();
+      renderLiveStatus();
     }
 
     function abortInFlightGets() {
@@ -877,6 +1169,12 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         throw new Error('API offline.');
       }
 
+      const trackKey = options.trackKey || '';
+      const startedTracking = !!trackKey && !options.__trackingActive;
+      if (startedTracking) {
+        beginTrackedRequest(trackKey, options.trackLabel || trackKey);
+      }
+
       const headers = new Headers(options.headers || {});
       const readPin = getStoredReadPin();
       const writePin = getStoredWritePin();
@@ -897,6 +1195,8 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         state.inFlightGetControllers.add(controller);
       }
 
+      let trackOutcome = 'pending';
+
       try {
         const response = await fetch(url, {
           ...options,
@@ -908,20 +1208,25 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         if (!authRetry && response.status === 401 && method === 'GET' && !options.allowOffline) {
           const enteredReadPin = await promptForReadPin();
           if (enteredReadPin) {
-            return apiFetch(url, { ...options, __authRetry: true });
+            return apiFetch(url, { ...options, __authRetry: true, __trackingActive: true });
           }
         }
         if (!authRetry && (response.status === 401 || response.status === 403) && method !== 'GET') {
           const enteredWritePin = ensureWritePin();
           if (enteredWritePin) {
-            return apiFetch(url, { ...options, __authRetry: true });
+            return apiFetch(url, { ...options, __authRetry: true, __trackingActive: true });
           }
         }
         if (response.status === 503) {
           setOfflineMode('API offline.');
         }
+        trackOutcome = 'success';
         return response;
       } catch (error) {
+        trackOutcome = 'error';
+        if (startedTracking) {
+          failTrackedRequest(trackKey, error && error.message ? error.message : 'Request failed.');
+        }
         if (error && error.name === 'AbortError') {
           if (state.offline && !options.allowOffline) {
             throw new Error('API offline.');
@@ -934,6 +1239,9 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         window.clearTimeout(timeoutId);
         if (method === 'GET') {
           state.inFlightGetControllers.delete(controller);
+        }
+        if (startedTracking && trackOutcome === 'success') {
+          completeTrackedRequest(trackKey);
         }
       }
     }
@@ -1123,10 +1431,60 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     function renderPresenceStatus() {
       const node = document.getElementById('presenceStatus');
       const required = state.mode === 'doubles' ? 4 : 2;
-      node.textContent = `${state.activePlayers.length} active player(s). Need ${required} for ${state.mode}.`;
+      const meta = ensureRequestMeta('presence');
+      let text = `${state.activePlayers.length} active player(s). Need ${required} for ${state.mode}.`;
+      if (meta.inFlightAt) {
+        text += ` Refreshing active players (${formatElapsed(meta.inFlightAt)}).`;
+      } else if (state.offline) {
+        text += ' Presence updates are unavailable while offline.';
+      } else if (meta.lastSuccessAt) {
+        text += ` Updated ${formatAge(meta.lastSuccessAt)}.`;
+      }
+      node.textContent = text;
       node.className = 'status' + (state.activePlayers.length >= required ? ' ok' : '');
       document.getElementById('randomBtn').disabled = state.activePlayers.length < required;
       document.getElementById('autoBtn').disabled = state.mode !== 'doubles';
+    }
+
+    function renderOddsStatus() {
+      const node = document.getElementById('oddsText');
+      if (!node) {
+        return;
+      }
+      const redOff = state.selected.red_offense;
+      const blueOff = state.selected.blue_offense;
+      const meta = ensureRequestMeta('odds');
+      if (!redOff || !blueOff) {
+        node.textContent = '';
+        node.className = 'status';
+        return;
+      }
+      if (meta.inFlightAt) {
+        node.textContent = `Calculating odds... ${formatElapsed(meta.inFlightAt)} elapsed.`;
+        node.className = 'status';
+        return;
+      }
+      if (!state.latestOdds) {
+        if (meta.lastFailureAt) {
+          node.textContent = 'Could not load odds for this matchup.';
+          node.className = 'status bad';
+        } else {
+          node.textContent = 'Pick both sides to fetch matchup odds.';
+          node.className = 'status';
+        }
+        return;
+      }
+
+      const redPct = Math.round(state.latestOdds.probability * 100);
+      const bluePct = 100 - redPct;
+      const [favored, favoredPct] = redPct >= 50 ? [redOff + ' side', redPct] : [blueOff + ' side', bluePct];
+      const label = oddsLabel(state.latestOdds.probability);
+      const upset = hasUpsetRisk(state.latestOdds.probability);
+      const badgeHtml = `<span class='badge ${label.cls}'>${label.text}</span>` +
+        (upset ? `<span class='badge badge-bad'>Upset Risk</span>` : '') +
+        (meta.lastSuccessAt ? `<span class='badge badge-muted'>Updated ${formatAge(meta.lastSuccessAt)}</span>` : '');
+      node.innerHTML = `Odds: ${state.latestOdds.ratio} \u2014 ${favored} favored (${favoredPct}%) \u2014 Predicted: ${state.latestOdds.predicted} ${badgeHtml}`;
+      node.className = 'status ok';
     }
 
     function setScore(side, score) {
@@ -1219,7 +1577,10 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       if (state.offline) {
         return;
       }
-      const response = await apiFetch('/api/presence');
+      const response = await apiFetch('/api/presence', {
+        trackKey: 'presence',
+        trackLabel: 'active players',
+      });
       if (!response.ok) {
         throw new Error('Could not load active players.');
       }
@@ -1240,6 +1601,8 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       const nextActive = forceActive === null ? !state.activePlayers.includes(key) : !!forceActive;
       const response = await apiFetch('/api/presence', {
         method: 'POST',
+        trackKey: 'presence',
+        trackLabel: 'active players',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: key, active: nextActive }),
       });
@@ -1370,13 +1733,23 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       }
       const statsNeeded = ['form','streak','improved'].includes(mode);
       if (statsNeeded && !state.playerStats) {
-        apiFetch('/api/stats?scope=' + encodeURIComponent(state.leaderboardFilter))
-          .then(r => r.ok ? r.json() : {})
-          .then(data => { state.playerStats = data; renderLeaderboard(state.leaderboardItems); })
-          .catch(() => undefined);
+        fetchLeaderboardStats().catch(() => undefined);
       } else {
         renderLeaderboard(state.leaderboardItems);
       }
+    }
+
+    function fetchLeaderboardStats() {
+      return apiFetch('/api/stats?scope=' + encodeURIComponent(state.leaderboardFilter), {
+        trackKey: 'stats',
+        trackLabel: 'leaderboard stats',
+      })
+        .then(r => r.ok ? r.json() : {})
+        .then(data => {
+          state.playerStats = data;
+          renderLeaderboard(state.leaderboardItems);
+          return data;
+        });
     }
 
     function setLeaderboardFilter(f) {
@@ -1397,10 +1770,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
 
       const needsStats = ['form', 'streak', 'improved'].includes(state.leaderboardSort);
       if (needsStats && !state.offline) {
-        apiFetch('/api/stats?scope=' + encodeURIComponent(state.leaderboardFilter))
-          .then(r => r.ok ? r.json() : {})
-          .then(data => { state.playerStats = data; renderLeaderboard(state.leaderboardItems); })
-          .catch(() => undefined);
+        fetchLeaderboardStats().catch(() => undefined);
       }
     }
 
@@ -1440,11 +1810,14 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       const td = document.createElement('td');
       td.colSpan = 3;
       td.className = 'expand-panel';
-      td.innerHTML = '<div class="kv">Loading progression…</div>';
+      td.innerHTML = '<div class="kv">Loading rating progression...</div>';
       tr.appendChild(td);
       rowEl.after(tr);
       try {
-        const resp = await apiFetch(`/api/player/${encodeURIComponent(playerKey)}/history?n=6`);
+        const resp = await apiFetch(`/api/player/${encodeURIComponent(playerKey)}/history?n=6`, {
+          trackKey: 'history',
+          trackLabel: 'player history',
+        });
         if (!resp.ok) { td.innerHTML = '<div class="kv">No history available.</div>'; return; }
         const data = await resp.json();
         if (!data.snapshots || data.snapshots.length === 0) { td.innerHTML = '<div class="kv">No matches recorded yet.</div>'; return; }
@@ -1689,17 +2062,29 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     async function refreshLeaderboard() {
       if (state.offline) {
         const cached = readCachedLeaderboard();
-        renderLeaderboard(cached);
+        if (cached.cachedAt) {
+          state.leaderboardCacheAt = Date.parse(cached.cachedAt);
+        }
+        state.leaderboardSource = 'cache';
+        renderLeaderboard(cached.items);
+        renderLeaderboardFreshness();
+        renderLiveStatus();
         return;
       }
-      const response = await apiFetch('/api/leaderboard?limit=50&scope=' + encodeURIComponent(state.leaderboardFilter));
+      const response = await apiFetch('/api/leaderboard?limit=50&scope=' + encodeURIComponent(state.leaderboardFilter), {
+        trackKey: 'leaderboard',
+        trackLabel: 'leaderboard',
+      });
       if (!response.ok) {
         throw new Error('Could not refresh leaderboard.');
       }
       const payload = await response.json();
       const items = payload.items || [];
+      state.leaderboardSource = 'live';
       renderLeaderboard(items);
       cacheLeaderboard(items);
+      renderLeaderboardFreshness();
+      renderLiveStatus();
     }
 
     function predictedScore(prob) {
@@ -1744,8 +2129,11 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       }
       toggleRow.style.display = '';
       if (!state.h2hOpen) return;
-      card.innerHTML = '<span class="muted">Loading\u2026</span>';
-      apiFetch(`/api/h2h?p1=${encodeURIComponent(redOff.toLowerCase())}&p2=${encodeURIComponent(blueOff.toLowerCase())}`)
+      card.innerHTML = '<span class="muted">Loading head-to-head...</span>';
+      apiFetch(`/api/h2h?p1=${encodeURIComponent(redOff.toLowerCase())}&p2=${encodeURIComponent(blueOff.toLowerCase())}`, {
+        trackKey: 'h2h',
+        trackLabel: 'head-to-head',
+      })
         .then(r => r.json())
         .then(d => {
           if (d.matches === 0) {
@@ -1777,53 +2165,48 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       }
       const redOff = state.selected.red_offense;
       const blueOff = state.selected.blue_offense;
-      const node = document.getElementById('oddsText');
-      if (!node) return;
       if (!redOff || !blueOff) {
         state.latestOdds = null;
-        node.textContent = '';
-        node.className = 'status';
+        renderOddsStatus();
         updateScoreHint();
         refreshH2H();
         return;
       }
+      renderOddsStatus();
       const params = new URLSearchParams({ red_off: redOff.toLowerCase(), blue_off: blueOff.toLowerCase(), mode: state.mode });
       if (state.mode === 'doubles') {
         if (state.selected.red_defense) params.set('red_def', state.selected.red_defense.toLowerCase());
         if (state.selected.blue_defense) params.set('blue_def', state.selected.blue_defense.toLowerCase());
       }
       try {
-        const resp = await apiFetch('/api/odds?' + params.toString());
+        const resp = await apiFetch('/api/odds?' + params.toString(), {
+          trackKey: 'odds',
+          trackLabel: 'odds',
+        });
         if (!resp.ok) {
           state.latestOdds = null;
-          node.textContent = '';
+          renderOddsStatus();
           updateScoreHint();
           return;
         }
         const data = await resp.json();
-        const redPct = Math.round(data.probability * 100);
-        const bluePct = 100 - redPct;
         const score = predictedScore(data.probability);
         state.latestOdds = { probability: data.probability, ratio: data.ratio, predicted: score };
-        const [favored, favoredPct] = redPct >= 50 ? [redOff + ' side', redPct] : [blueOff + ' side', bluePct];
-        const label = oddsLabel(data.probability);
-        const upset = hasUpsetRisk(data.probability);
-        const badgeHtml = `<span class='badge ${label.cls}'>${label.text}</span>` +
-          (upset ? `<span class='badge badge-bad'>Upset Risk</span>` : '');
-        node.innerHTML = `Odds: ${data.ratio} \u2014 ${favored} favored (${favoredPct}%) \u2014 Predicted: ${score} ${badgeHtml}`;
-        node.className = 'status ok';
+        renderOddsStatus();
         updateScoreHint();
         refreshH2H();
       } catch {
         state.latestOdds = null;
-        node.textContent = '';
-        node.className = 'status';
+        renderOddsStatus();
         updateScoreHint();
       }
     }
 
     async function loadPlayers() {
-      const response = await apiFetch('/api/players');
+      const response = await apiFetch('/api/players', {
+        trackKey: 'players',
+        trackLabel: 'player list',
+      });
       if (!response.ok) {
         throw new Error('Could not load players.');
       }
@@ -1862,6 +2245,8 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       try {
         const response = await apiFetch('/api/matches', {
           method: 'POST',
+          trackKey: 'submit',
+          trackLabel: 'match submit',
           headers: {
             'Content-Type': 'application/json',
           },
@@ -1901,6 +2286,8 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       setAddPlayerStatus('Adding player...');
       const response = await apiFetch('/api/players', {
         method: 'POST',
+        trackKey: 'players',
+        trackLabel: 'player add',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -1960,6 +2347,8 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
 
     setMode('singles');
     setActiveSlot('red_offense');
+    seedInitialFreshness();
+    startFreshnessTicker();
     renderScoreButtons();
     renderSlots();
     updateSummary();
