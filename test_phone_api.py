@@ -85,6 +85,51 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("Leaderboard", html)
             self.assertIn("Alice", html)
 
+    def test_phone_page_uses_unnumbered_progress_buttons_and_mode_only_leaderboard(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            db_path = str(tmp_path / "playerdb")
+            with shelve.open(db_path) as players:
+                players["alice"] = (trueskill.Rating(), trueskill.Rating())
+
+            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+            client = app.test_client()
+            response = client.get("/phone")
+            self.assertEqual(response.status_code, 200)
+
+            html = response.get_data(as_text=True)
+            self.assertIn("id='stepBtn1' type='button' class='active'>Mode</button>", html)
+            self.assertIn("id='stepBtn2' type='button'>Players</button>", html)
+            self.assertIn("id='stepBtn3' type='button'>Score</button>", html)
+            self.assertIn("id='stepBtn4' type='button'>Confirm</button>", html)
+            self.assertNotIn("1 Mode", html)
+            self.assertNotIn("2 Players", html)
+            self.assertNotIn("3 Score", html)
+            self.assertNotIn("4 Confirm", html)
+            self.assertIn("id='leaderboardSection' class='section active'>", html)
+            self.assertIn("const leaderboardSection = document.getElementById('leaderboardSection');", html)
+            self.assertIn("leaderboardSection.classList.toggle('active', state.step === 1);", html)
+
+    def test_phone_page_formats_doubles_display_as_defense_then_offense(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            db_path = str(tmp_path / "playerdb")
+            with shelve.open(db_path) as players:
+                players["alice"] = (trueskill.Rating(), trueskill.Rating())
+
+            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+            client = app.test_client()
+            response = client.get("/phone")
+            self.assertEqual(response.status_code, 200)
+
+            html = response.get_data(as_text=True)
+            self.assertIn("state.selected.red_defense || placeholder, state.selected.red_offense || placeholder", html)
+            self.assertIn("state.selected.blue_defense || placeholder, state.selected.blue_offense || placeholder", html)
+            self.assertIn("const red = formatTeamDisplay('red');", html)
+            self.assertIn("const blue = formatTeamDisplay('blue');", html)
+            self.assertIn("const redDisplay = formatTeamDisplay('red', ' + ');", html)
+            self.assertIn("const blueDisplay = formatTeamDisplay('blue', ' + ');", html)
+
     def test_root_redirects_to_phone(self) -> None:
         with TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
