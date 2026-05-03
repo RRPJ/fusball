@@ -84,6 +84,9 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("Fusball Phone API", html)
             self.assertIn("Leaderboard", html)
             self.assertIn("Alice", html)
+            self.assertIn("id='liveStatusCard' class='live-status review-card'", html)
+            self.assertIn("id='leaderboardFreshness' class='muted'", html)
+            self.assertIn("The page will show whether data is live, fetching, or using a cached snapshot.", html)
 
     def test_phone_page_uses_unnumbered_progress_buttons_and_mode_only_leaderboard(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -109,6 +112,11 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("id='leaderboardSection' class='section active'>", html)
             self.assertIn("const leaderboardSection = document.getElementById('leaderboardSection');", html)
             self.assertIn("leaderboardSection.classList.toggle('active', state.step === 1);", html)
+            self.assertIn("const LEADERBOARD_CACHE_STORAGE_KEY = 'fusball_leaderboard_snapshot';", html)
+            self.assertIn("function renderLiveStatus()", html)
+            self.assertIn("function renderLeaderboardFreshness()", html)
+            self.assertIn("function startFreshnessTicker()", html)
+            self.assertIn("trackKey: 'leaderboard'", html)
 
     def test_phone_page_formats_doubles_display_as_defense_then_offense(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -596,6 +604,15 @@ class PhoneApiTests(unittest.TestCase):
 
             read_no_auth = client.get("/api/leaderboard")
             self.assertEqual(read_no_auth.status_code, 401)
+            self.assertEqual(read_no_auth.get_json(), {"error": "authentication required"})
+
+            read_with_wrong_read_pin = client.get("/api/leaderboard", headers={"X-Read-Pin": "wrong-read"})
+            self.assertEqual(read_with_wrong_read_pin.status_code, 401)
+            self.assertEqual(read_with_wrong_read_pin.get_json(), {"error": "incorrect reader or writer PIN"})
+
+            read_with_wrong_write_pin = client.get("/api/leaderboard", headers={"X-Write-Pin": "wrong-write"})
+            self.assertEqual(read_with_wrong_write_pin.status_code, 401)
+            self.assertEqual(read_with_wrong_write_pin.get_json(), {"error": "incorrect reader or writer PIN"})
 
             read_with_read_pin = client.get("/api/leaderboard", headers={"X-Read-Pin": "read-1234"})
             self.assertEqual(read_with_read_pin.status_code, 200)
@@ -608,6 +625,7 @@ class PhoneApiTests(unittest.TestCase):
                 json={"team1": ["alice"], "team2": ["bob"], "score1": 5, "score2": 3},
             )
             self.assertEqual(write_no_auth.status_code, 403)
+            self.assertEqual(write_no_auth.get_json(), {"error": "writer authorization required"})
 
             write_with_read_pin = client.post(
                 "/api/matches",
@@ -615,6 +633,15 @@ class PhoneApiTests(unittest.TestCase):
                 headers={"X-Read-Pin": "read-1234"},
             )
             self.assertEqual(write_with_read_pin.status_code, 403)
+            self.assertEqual(write_with_read_pin.get_json(), {"error": "writer authorization required"})
+
+            write_with_wrong_writer_pin = client.post(
+                "/api/matches",
+                json={"team1": ["alice"], "team2": ["bob"], "score1": 5, "score2": 3},
+                headers={"X-Write-Pin": "wrong-write"},
+            )
+            self.assertEqual(write_with_wrong_writer_pin.status_code, 403)
+            self.assertEqual(write_with_wrong_writer_pin.get_json(), {"error": "incorrect writer PIN"})
 
             write_with_writer_pin = client.post(
                 "/api/matches",
