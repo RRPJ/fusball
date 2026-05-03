@@ -444,10 +444,10 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       <div class='muted'>Button-driven setup, score, confirm, submit</div>
       <div id='offlineBanner' class='offline-banner' style='display:none;'>API offline. Showing leaderboard snapshot only.</div>
       <div class='progress'>
-        <button id='stepBtn1' type='button' class='active'>1 Mode</button>
-        <button id='stepBtn2' type='button'>2 Players</button>
-        <button id='stepBtn3' type='button'>3 Score</button>
-        <button id='stepBtn4' type='button'>4 Confirm</button>
+          <button id='stepBtn1' type='button' class='active'>Mode</button>
+          <button id='stepBtn2' type='button'>Players</button>
+          <button id='stepBtn3' type='button'>Score</button>
+          <button id='stepBtn4' type='button'>Confirm</button>
       </div>
     </header>
 
@@ -518,7 +518,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       <div class='muted' style='margin-top:8px;'>PINs are remembered for this tab session. Submit is enabled only when lineup and score are valid.</div>
     </section>
 
-    <section class='section active'>
+    <section id='leaderboardSection' class='section active'>
       <h2>Leaderboard</h2>
       <div class='muted'>Refreshes after successful submit.</div>
       <div class='row sort-row'>
@@ -567,6 +567,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     const slots = ['red_offense', 'red_defense', 'blue_offense', 'blue_defense'];
     const stepButtons = [null, document.getElementById('stepBtn1'), document.getElementById('stepBtn2'), document.getElementById('stepBtn3'), document.getElementById('stepBtn4')];
     const stepSections = [null, document.getElementById('step1'), document.getElementById('step2'), document.getElementById('step3'), document.getElementById('step4')];
+    const leaderboardSection = document.getElementById('leaderboardSection');
     const slotToElement = {
       red_offense: document.getElementById('slotRedOff'),
       red_defense: document.getElementById('slotRedDef'),
@@ -730,6 +731,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       state.offline = true;
       abortInFlightGets();
       document.body.classList.add('offline');
+      leaderboardSection.classList.add('active');
       const banner = document.getElementById('offlineBanner');
       if (banner) {
         banner.style.display = 'block';
@@ -746,6 +748,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       if (!state.offline) return;
       state.offline = false;
       document.body.classList.remove('offline');
+      leaderboardSection.classList.toggle('active', state.step === 1);
       const banner = document.getElementById('offlineBanner');
       if (banner) {
         banner.style.display = 'none';
@@ -1459,12 +1462,8 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     }
 
     function updateSummary() {
-      const red = state.mode === 'doubles'
-        ? `${state.selected.red_offense || '?'} / ${state.selected.red_defense || '?'}`
-        : `${state.selected.red_offense || '?'}`;
-      const blue = state.mode === 'doubles'
-        ? `${state.selected.blue_offense || '?'} / ${state.selected.blue_defense || '?'}`
-        : `${state.selected.blue_offense || '?'}`;
+      const red = formatTeamDisplay('red');
+      const blue = formatTeamDisplay('blue');
       const score = (state.score1 === null || state.score2 === null) ? '?-?' : `${state.score1}-${state.score2}`;
       document.getElementById('summaryText').textContent = `${state.mode.toUpperCase()} | Red: ${red} vs Blue: ${blue} | Score: ${score}`;
       document.getElementById('redScoreLabel').textContent = red;
@@ -1625,7 +1624,9 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       const review = document.getElementById('reviewText');
       try {
         const payload = buildPayload();
-        const winner = payload.score1 > payload.score2 ? payload.team1.join(' + ') : payload.team2.join(' + ');
+        const redDisplay = formatTeamDisplay('red', ' + ');
+        const blueDisplay = formatTeamDisplay('blue', ' + ');
+        const winner = payload.score1 > payload.score2 ? redDisplay : blueDisplay;
         const oddsText = state.latestOdds
           ? `<div><strong>Odds:</strong> ${state.latestOdds.ratio} (${Math.round(state.latestOdds.probability * 100)}% red-side win)</div>`
           : '';
@@ -1634,8 +1635,8 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
           ? `<div class='review-quip'>${quipState.text}</div>`
           : '';
         review.innerHTML =
-          `<div><strong>Red:</strong> ${payload.team1.join(' + ')}</div>` +
-          `<div><strong>Blue:</strong> ${payload.team2.join(' + ')}</div>` +
+          `<div><strong>Red:</strong> ${redDisplay}</div>` +
+          `<div><strong>Blue:</strong> ${blueDisplay}</div>` +
           `<div class='review-score'>Final Score: ${payload.score1} - ${payload.score2}</div>` +
           `<div><strong>Winner:</strong> ${winner}</div>` +
           oddsText +
@@ -1643,6 +1644,21 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       } catch {
         review.textContent = 'Complete lineup and score to enable submit.';
       }
+    }
+
+    function teamDisplayMembers(team, placeholder = '?') {
+      if (team === 'red') {
+        return state.mode === 'doubles'
+          ? [state.selected.red_defense || placeholder, state.selected.red_offense || placeholder]
+          : [state.selected.red_offense || placeholder];
+      }
+      return state.mode === 'doubles'
+        ? [state.selected.blue_defense || placeholder, state.selected.blue_offense || placeholder]
+        : [state.selected.blue_offense || placeholder];
+    }
+
+    function formatTeamDisplay(team, separator = ' / ', placeholder = '?') {
+      return teamDisplayMembers(team, placeholder).join(separator);
     }
 
     function setStep(step) {
@@ -1660,6 +1676,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         stepSections[i].classList.toggle('active', i === state.step);
         stepButtons[i].disabled = !isStepReachable(i);
       }
+      leaderboardSection.classList.toggle('active', state.step === 1);
       document.getElementById('backBtn').style.visibility = state.step === 1 ? 'hidden' : 'visible';
       document.getElementById('nextBtn').style.display = state.step === 4 ? 'none' : 'inline-block';
       document.getElementById('submitBtn').style.display = state.step === 4 ? 'inline-block' : 'none';
