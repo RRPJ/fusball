@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 APP_DIR = ROOT / "app"
 BACKUPS_DIR = ROOT / "backups"
 
-PATTERNS = ["playerdb*", "recentplayers*", "tagdb*", "logfile.log"]
+PATTERNS = ["playerdb*", "recentplayers*", "match_history*", "logfile.log"]
 
 
 def main() -> None:

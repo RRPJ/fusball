@@ -17,6 +17,9 @@ Sequencing note:
 
 - Implementation plan: `docs/priority-0-implementation-plan.md`
 
+- [ ] Remove the deprecated kiosk runtime, assets, and launchers from the active repository.
+- [ ] Remove kiosk-only dependencies and compatibility guidance from setup/docs.
+- [ ] Verify the retained phone-only runtime with updated integration coverage.
 - [x] Remove VPN helper startup / check / stop automation from service scripts and documentation (follow-up to manual prod runner simplification).
 - [x] Select Neon Postgres as the external database for the Vercel deployment path.
 - [x] Move the origin/master to personal account instead of cadmin.
@@ -25,9 +28,9 @@ Sequencing note:
 - [x] Run first shelve -> Neon import (`--apply --reset`) and verify parity counts (`players`, `recent_players`, `match_history`).
 - [x] Deploy phone API to Vercel with Neon Postgres backing production data.
 
-## Priority 1: Smartphone Access Path
+## Priority 1: Phone Runtime Validation
 
-- Goal of remaining Priority 1 work: prove a minimal authenticated phone match-submit flow, not a broad remote feature set.
+- Goal of remaining Priority 1 work: harden the existing phone match-submit flow, not to preserve any older local UI.
 - [ ] Run at-home validation on iOS: leaderboard read.
 - [ ] Run at-the-office validation from a different network: confirm leaderboard loads from phone.
 
@@ -46,7 +49,7 @@ Sequencing note:
 - [ ] Add season-aware leaderboard and analytics views.
 - [ ] Document how season boundaries interact with ratings, logs, exports, and future migrations.
 
-## Priority 4: Remote Match Operations
+## Priority 4: Expanded Match Operations
 
 - [ ] After auth/conflict rules are defined, add authenticated phone match submission if Priority 1 has not already delivered the minimal submit flow.
 - [ ] Expand remote workflows beyond the minimal submit proof only after the structured history model is stable.

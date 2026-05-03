@@ -82,11 +82,10 @@ recentplayers
 recentplayers.bak
 recentplayers.dat
 recentplayers.dir
-tagdb
-tagdb.bak
-tagdb.dat
-tagdb.dir
 app/match_history
+app/match_history.bak
+app/match_history.dat
+app/match_history.dir
 
 # PyBuilder
 target/

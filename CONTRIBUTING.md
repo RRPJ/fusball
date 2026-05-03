@@ -20,8 +20,8 @@
 
 ## Naming Policy
 
-- Entry-point and compatibility policy is documented in `docs/architecture.md`.
-- Avoid broad symbol renames from `Lcars*` unless part of an explicit migration slice.
+- Repository-facing names should describe the phone API workflow and use Fusball terminology.
+- Remove or rewrite legacy kiosk, LCARS, and kickers references when they no longer serve an active compatibility need.
 
 ## Data Safety Requirements
 
@@ -41,4 +41,3 @@ CI runs lint/format checks and smoke checks on push/PR.
 - [ ] Ruff and Black checks pass locally.
 - [ ] Any data-shape changes have migration and rollback notes.
 - [ ] README/docs are updated for behavior or workflow changes.
-- [ ] UI changes preserve touchscreen-first navigation and hit targets.

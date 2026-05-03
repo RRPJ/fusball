@@ -41,7 +41,7 @@ def inspect_shelf(name: str) -> None:
 
 def inspect_files() -> None:
     print("== app data files ==")
-    for pattern in ("playerdb*", "recentplayers*", "tagdb*", "match_history*", "logfile.log"):
+    for pattern in ("playerdb*", "recentplayers*", "match_history*", "logfile.log"):
         for p in sorted(APP_DIR.glob(pattern)):
             if p.is_file():
                 print(f"{p.name}\t{p.stat().st_size} bytes")
@@ -50,6 +50,6 @@ def inspect_files() -> None:
 if __name__ == "__main__":
     inspect_files()
     print()
-    for shelf_name in ("playerdb", "recentplayers", "tagdb", "match_history"):
+    for shelf_name in ("playerdb", "recentplayers", "match_history"):
         inspect_shelf(shelf_name)
         print()

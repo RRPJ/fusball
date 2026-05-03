@@ -15,7 +15,7 @@ The implemented write scope is intentionally narrow:
 - Add a new player (token-authenticated).
 - Submit a finished match only.
 - Match submit uses existing players only.
-- Apply the same score validity rules as the kiosk flow.
+- Apply the same score validity rules as the current Fusball match model.
 - Persist the result, update rankings, and refresh read views.
 - Keep additional remote-admin workflows out of scope for now.
 
@@ -48,19 +48,19 @@ The endpoints reject:
 - Partial or in-progress matches.
 - Match edits or deletes.
 - Freeform player names that do not match existing stored players.
-- Unsupported score shapes that do not match kiosk result rules.
+- Unsupported score shapes that do not match current result rules.
 
 ## Conflict Policy
 
 The write path assumes a single active writer at a time.
 
 Rules:
-- If the kiosk is in the middle of a local write-sensitive flow, remote submit should be rejected.
+- If another write-sensitive operation is already in progress, remote submit should be rejected.
 - If a phone submit is already being processed, a second concurrent submit should be rejected.
 - Conflict responses should be explicit and non-destructive.
 
 Current implementation:
-- Introduce a short-lived write lock owned by either `kiosk` or `phone`.
+- Introduce a short-lived write lock owned by the active writer.
 - Acquire the lock before mutating shelve state.
 - Release it immediately after persistence and ranking update complete.
 - Return `409 Conflict` when the lock is already held.

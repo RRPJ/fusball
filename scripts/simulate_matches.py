@@ -103,7 +103,7 @@ def print_top(playerdb: shelve.Shelf, count: int = 10) -> None:
 
 def print_data_files(work_dir: Path) -> None:
     print("Data files:")
-    for pattern in ("playerdb*", "recentplayers*", "tagdb*", "logfile.log"):
+    for pattern in ("playerdb*", "recentplayers*", "match_history*", "logfile.log"):
         for file in sorted(work_dir.glob(pattern)):
             if file.is_file():
                 print(f"- {file.name}: {file.stat().st_size} bytes")

@@ -1,7 +1,7 @@
 [project]
 name = "fusball"
 version = "0.1.0"
-description = "Fusball kiosk + phone API"
+description = "Fusball phone API for match operations and leaderboards"
 requires-python = ">=3.11"
 dependencies = [
 	"Flask>=3.0,<4",

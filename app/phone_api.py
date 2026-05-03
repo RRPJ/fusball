@@ -242,7 +242,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
 <head>
   <meta charset='utf-8' />
   <meta name='viewport' content='width=device-width, initial-scale=1' />
-  <title>Dustin Fusball Phone Console</title>
+  <title>Fusball Phone API</title>
   <style>
     :root {
       --bg: #0b1721;
@@ -440,7 +440,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
 <body>
   <main class='panel'>
     <header>
-      <h1>Dustin Fusball Phone Console</h1>
+      <h1>Fusball Phone API</h1>
       <div class='muted'>Button-driven setup, score, confirm, submit</div>
       <div id='offlineBanner' class='offline-banner' style='display:none;'>API offline. Showing leaderboard snapshot only.</div>
       <div class='progress'>
@@ -2406,11 +2406,11 @@ def create_app(
 
 
 def main() -> None:
-  parser = argparse.ArgumentParser(description="Run the phone API server")
+  parser = argparse.ArgumentParser(description="Run the Fusball phone API server")
   parser.add_argument(
     "--db-dir",
     default=os.environ.get("FUSBALL_PHONE_API_DB_DIR"),
-    help="Directory containing playerdb/recentplayers/tagdb/logfile files",
+    help="Directory containing playerdb/recentplayers/match_history/logfile files",
   )
   args = parser.parse_args()
 

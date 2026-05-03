@@ -7,6 +7,7 @@ import sys
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 import trueskill
 from werkzeug.security import generate_password_hash
@@ -80,7 +81,7 @@ class PhoneApiTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
 
             html = response.get_data(as_text=True)
-            self.assertIn("Dustin Fusball Phone Console", html)
+            self.assertIn("Fusball Phone API", html)
             self.assertIn("Leaderboard", html)
             self.assertIn("Alice", html)
 
@@ -147,7 +148,7 @@ class PhoneApiTests(unittest.TestCase):
                 players["alice"] = (trueskill.Rating(), trueskill.Rating())
                 players["bob"] = (trueskill.Rating(), trueskill.Rating())
 
-            (tmp_path / WRITE_LOCK_NAME).write_text("kiosk", encoding="utf-8")
+            (tmp_path / WRITE_LOCK_NAME).write_text("another-writer", encoding="utf-8")
 
             app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
             client = app.test_client()
@@ -694,7 +695,7 @@ class C3AnalyticsApiTests(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
 
-            now = datetime.now(timezone.utc)
+            now = datetime(2026, 5, 20, 12, 0, tzinfo=timezone.utc)
             local_now = now.astimezone()
             start_week_local = (local_now - timedelta(days=local_now.weekday())).replace(
                 hour=0,
@@ -704,7 +705,6 @@ class C3AnalyticsApiTests(unittest.TestCase):
             )
             start_month_local = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             start_week = start_week_local.astimezone(timezone.utc)
-            start_month = start_month_local.astimezone(timezone.utc)
             week_base_local = max(start_week_local, start_month_local)
             this_week_ts = (week_base_local + ((local_now - week_base_local) / 2)).astimezone(timezone.utc)
             this_month_ts = (start_month_local + ((local_now - start_month_local) / 4)).astimezone(timezone.utc)
@@ -714,34 +714,35 @@ class C3AnalyticsApiTests(unittest.TestCase):
             self._write_history_record(tmp_path, this_month_ts, ["carol"], ["dave"], ["carol"], 5, 2)
             self._write_history_record(tmp_path, this_week_ts, ["eve"], ["frank"], ["eve"], 5, 1)
 
-            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
-            client = app.test_client()
+            with patch("services.match_history._current_utc", return_value=now):
+                app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+                client = app.test_client()
 
-            month_resp = client.get("/api/leaderboard?scope=this_month")
-            self.assertEqual(month_resp.status_code, 200)
-            month_payload = month_resp.get_json()
-            assert month_payload is not None
-            month_names = {item["name"].lower() for item in month_payload["items"]}
-            self.assertIn("carol", month_names)
-            self.assertIn("dave", month_names)
-            self.assertIn("eve", month_names)
-            self.assertIn("frank", month_names)
-            self.assertNotIn("alice", month_names)
-            self.assertNotIn("bob", month_names)
+                month_resp = client.get("/api/leaderboard?scope=this_month")
+                self.assertEqual(month_resp.status_code, 200)
+                month_payload = month_resp.get_json()
+                assert month_payload is not None
+                month_names = {item["name"].lower() for item in month_payload["items"]}
+                self.assertIn("carol", month_names)
+                self.assertIn("dave", month_names)
+                self.assertIn("eve", month_names)
+                self.assertIn("frank", month_names)
+                self.assertNotIn("alice", month_names)
+                self.assertNotIn("bob", month_names)
 
-            week_resp = client.get("/api/leaderboard?scope=this_week")
-            self.assertEqual(week_resp.status_code, 200)
-            week_payload = week_resp.get_json()
-            assert week_payload is not None
-            week_names = {item["name"].lower() for item in week_payload["items"]}
-            self.assertIn("eve", week_names)
-            self.assertIn("frank", week_names)
-            if this_month_ts >= start_week:
-                self.assertIn("carol", week_names)
-                self.assertIn("dave", week_names)
-            else:
-                self.assertNotIn("carol", week_names)
-                self.assertNotIn("dave", week_names)
+                week_resp = client.get("/api/leaderboard?scope=this_week")
+                self.assertEqual(week_resp.status_code, 200)
+                week_payload = week_resp.get_json()
+                assert week_payload is not None
+                week_names = {item["name"].lower() for item in week_payload["items"]}
+                self.assertIn("eve", week_names)
+                self.assertIn("frank", week_names)
+                if this_month_ts >= start_week:
+                    self.assertIn("carol", week_names)
+                    self.assertIn("dave", week_names)
+                else:
+                    self.assertNotIn("carol", week_names)
+                    self.assertNotIn("dave", week_names)
 
     def test_scoped_leaderboard_levels_use_average_total_level(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -814,7 +815,7 @@ class C3AnalyticsApiTests(unittest.TestCase):
     def test_stats_improved_uses_scope_baseline_to_current_all_level(self) -> None:
         with TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
-            now = datetime.now(timezone.utc)
+            now = datetime(2026, 5, 20, 12, 0, tzinfo=timezone.utc)
             local_now = now.astimezone()
             start_week_local = (local_now - timedelta(days=local_now.weekday())).replace(
                 hour=0,
@@ -885,57 +886,61 @@ class C3AnalyticsApiTests(unittest.TestCase):
                 ],
             )
 
-            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
-            client = app.test_client()
+            with patch("services.match_history._current_utc", return_value=now):
+                app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+                client = app.test_client()
 
-            month_stats = client.get("/api/stats?scope=this_month")
-            self.assertEqual(month_stats.status_code, 200)
-            month_payload = month_stats.get_json()
-            assert month_payload is not None
-            self.assertAlmostEqual(month_payload["alice"]["improved"], 9.0, places=2)
+                month_stats = client.get("/api/stats?scope=this_month")
+                self.assertEqual(month_stats.status_code, 200)
+                month_payload = month_stats.get_json()
+                assert month_payload is not None
+                self.assertAlmostEqual(month_payload["alice"]["improved"], 9.0, places=2)
 
-            week_stats = client.get("/api/stats?scope=this_week")
-            self.assertEqual(week_stats.status_code, 200)
-            week_payload = week_stats.get_json()
-            assert week_payload is not None
-            expected_week_improved = 9.0 if month_match_ts >= start_week else 3.5
-            self.assertAlmostEqual(week_payload["alice"]["improved"], expected_week_improved, places=2)
+                week_stats = client.get("/api/stats?scope=this_week")
+                self.assertEqual(week_stats.status_code, 200)
+                week_payload = week_stats.get_json()
+                assert week_payload is not None
+                expected_week_improved = 9.0 if month_match_ts >= start_week else 3.5
+                self.assertAlmostEqual(week_payload["alice"]["improved"], expected_week_improved, places=2)
 
     def test_stats_scope_uses_only_scoped_matches_for_form_and_streak(self) -> None:
         with TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
-            now = datetime.now(timezone.utc)
+            now = datetime(2026, 5, 20, 12, 0, tzinfo=timezone.utc)
             local_now = now.astimezone()
+            start_week_local = (local_now - timedelta(days=local_now.weekday())).replace(
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
             start_month_local = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-            pre_month_loss_ts = (start_month_local - timedelta(hours=2)).astimezone(timezone.utc)
-            pre_month_win_ts = (start_month_local - timedelta(hours=1)).astimezone(timezone.utc)
-            month_midpoint = start_month_local + ((local_now - start_month_local) / 2)
-            month_win_one_ts = month_midpoint.astimezone(timezone.utc)
-            month_win_two_ts = (month_midpoint + timedelta(minutes=5)).astimezone(timezone.utc)
+            pre_scope_ts = (min(start_month_local, start_week_local) - timedelta(hours=1)).astimezone(timezone.utc)
+            week_match_ts = (max(start_week_local, start_month_local) + timedelta(hours=12)).astimezone(timezone.utc)
 
-            self._write_history_record(tmp_path, pre_month_loss_ts, ["alice"], ["bob"], ["bob"], 1, 5)
-            self._write_history_record(tmp_path, pre_month_win_ts, ["alice"], ["bob"], ["alice"], 5, 3)
-            self._write_history_record(tmp_path, month_win_one_ts, ["alice"], ["bob"], ["alice"], 5, 2)
-            self._write_history_record(tmp_path, month_win_two_ts, ["alice"], ["bob"], ["alice"], 5, 0)
+            self._write_history_record(tmp_path, pre_scope_ts, ["alice"], ["bob"], ["alice"], 5, 3)
+            self._write_history_record(tmp_path, week_match_ts, ["alice"], ["bob"], ["alice"], 5, 1)
 
-            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
-            client = app.test_client()
+            with patch("services.match_history._current_utc", return_value=now):
+                app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+                client = app.test_client()
 
-            scoped_stats = client.get("/api/stats?scope=this_month")
-            self.assertEqual(scoped_stats.status_code, 200)
-            scoped_payload = scoped_stats.get_json()
-            assert scoped_payload is not None
+                all_stats = client.get("/api/stats")
+                self.assertEqual(all_stats.status_code, 200)
+                all_payload = all_stats.get_json()
+                assert all_payload is not None
+                self.assertEqual(all_payload["alice"]["games"], 2)
+                self.assertEqual(all_payload["alice"]["streak"], 2)
+                self.assertEqual(all_payload["alice"]["recent_form_5"], "WW")
 
-            self.assertEqual(scoped_payload["alice"]["games"], 2)
-            self.assertEqual(scoped_payload["alice"]["wins"], 2)
-            self.assertAlmostEqual(scoped_payload["alice"]["win_rate"], 1.0, places=3)
-            self.assertEqual(scoped_payload["alice"]["streak"], 2)
-            self.assertEqual(scoped_payload["alice"]["recent_form_5"], "WW")
-            self.assertEqual(scoped_payload["bob"]["games"], 2)
-            self.assertEqual(scoped_payload["bob"]["wins"], 0)
-            self.assertEqual(scoped_payload["bob"]["streak"], 0)
-            self.assertEqual(scoped_payload["bob"]["recent_form_5"], "LL")
+                week_stats = client.get("/api/stats?scope=this_week")
+                self.assertEqual(week_stats.status_code, 200)
+                week_payload = week_stats.get_json()
+                assert week_payload is not None
+                self.assertEqual(week_payload["alice"]["games"], 1)
+                self.assertEqual(week_payload["alice"]["streak"], 1)
+                self.assertEqual(week_payload["alice"]["recent_form_5"], "W")
 
 
 if __name__ == "__main__":

@@ -2,32 +2,23 @@
 
 ## Runtime Model
 
-The repository supports two runtime flows over the same ranking and persistence layer:
+The repository supports one runtime flow over the ranking and persistence layer:
 
-- Touch-screen kiosk flow:
-  - fullscreen local Pygame UI on the host machine
-  - canonical entrypoint: `app/fusball.py`
-- Mobile API flow:
-  - phone-oriented web/API layer in `app/phone_api.py`
-  - preferred modern operator flow for day-to-day use
-
-The kiosk flow remains supported for dedicated touch installations, but the mobile API flow is now the preferred operator experience when phone access is available.
+- Phone API flow:
+  - browser-based phone UI and JSON API in `app/phone_api.py`
+  - primary operator entrypoint for local service mode and hosted deployments
 
 ## Runtime Entry Point
 
-- `app/fusball.py` is the canonical entrypoint and delegates to legacy startup.
-- `app/lcars.py` remains as a compatibility entrypoint during migration.
-- `app/ui/ui.py` owns the Pygame lifecycle, event loop, and screen transitions.
 - `app/phone_api.py` owns the browser-based phone UI and JSON API runtime.
+- `api/index.py` exposes the same app factory for Vercel deployments.
+- `app/startup.py` contains phone-runtime diagnostics for data-directory access.
 
-## Screen System
+## Request Surface
 
-- Screens are under `app/screens/` and inherit from `LcarsScreen`.
-- The main menu is `ScreenMain` and links to workflows:
-  - Enter match (`ScreenEnterMatch`)
-  - Enter outcome (`ScreenEnterOutcome`)
-  - Log view (`ScreenLog`)
-  - Power screen
+- `/phone` renders the operator UI.
+- `/api/*` provides health, leaderboard, player, presence, lineup, odds, stats, history, and match-submit endpoints.
+- `start_phone_api_service.bat` and related PowerShell scripts provide the supported Windows production lifecycle.
 
 ## Ranking And Odds
 
@@ -43,7 +34,6 @@ The kiosk flow remains supported for dedicated touch installations, but the mobi
 - Observed stores:
   - `playerdb`: player ratings and leaderboard source
   - `recentplayers`: recent player names for entry UX
-  - `tagdb`: badge/tag to player mapping
   - `match_history`: structured match records for analytics/history replay
 - A plain text audit trail is appended to `logfile.log` for legacy/debug continuity.
 
@@ -63,7 +53,6 @@ Core domain services live under `app/services/`:
 
 Support modules:
 
-- `app/datasources/`: external/network data adapters
 - `scripts/`: operational utilities (backup, inspect, sandbox refresh, smoke)
 - repo-root `test_*.py`: regression and API behavior tests
 
@@ -74,8 +63,8 @@ Support modules:
 - `docs/phone-api.md`
 - `docs/backlog.md`
 
-## Known Legacy Constraints
+## Current Constraints
 
-- Storage format is legacy shelve files (`.bak/.dir` style artifacts exist in repo).
-- Relative file paths assume process cwd is `app/` when launching `fusball.py`.
-- UI was built for kiosk/touchscreen/fullscreen operation.
+- Storage format is still legacy shelve for local mode (`.bak/.dir` style artifacts may exist in backups).
+- Local service scripts assume app data lives under `app/` unless `FUSBALL_PHONE_API_DB_DIR` overrides it.
+- Hosted deployments are converging on Neon-backed persistence, but local shelve remains the compatibility path today.
