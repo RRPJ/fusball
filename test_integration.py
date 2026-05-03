@@ -1,47 +1,37 @@
-#!/usr/bin/env python3
-"""Quick test of startup diagnostics and fusball entrypoint integration."""
+from __future__ import annotations
 
 import sys
+import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
-# Add app to path
-app_path = Path(__file__).parent / "app"
-sys.path.insert(0, str(app_path))
+ROOT = Path(__file__).resolve().parent
+APP_DIR = ROOT / "app"
+if str(APP_DIR) not in sys.path:
+    sys.path.insert(0, str(APP_DIR))
 
-# Test 1: Import startup module
-print("Test 1: Importing startup module...")
-try:
-    from startup import run_diagnostics
-    print("  ✓ startup module imported successfully")
-except Exception as e:
-    print(f"  ✗ Failed to import startup: {e}", file=sys.stderr)
-    sys.exit(1)
+from phone_api import create_app  # noqa: E402
+from startup import run_diagnostics  # noqa: E402
 
-# Test 2: Import fusball entrypoint
-print("Test 2: Importing fusball (new entrypoint)...")
-try:
-    import fusball
-    print("  ✓ fusball module imported successfully")
-except Exception as e:
-    print(f"  ✗ Failed to import fusball: {e}", file=sys.stderr)
-    sys.exit(1)
 
-# Test 3: Import lcars (legacy, should still work for compatibility)
-print("Test 3: Importing lcars (legacy for compatibility)...")
-try:
-    import lcars
-    print("  ✓ lcars module imported successfully (legacy support OK)")
-except Exception as e:
-    print(f"  ✗ Failed to import lcars: {e}", file=sys.stderr)
-    sys.exit(1)
+class PhoneOnlyIntegrationTests(unittest.TestCase):
+    def test_startup_diagnostics_run_against_custom_data_dir(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            self.assertTrue(run_diagnostics(tmp_path))
+            self.assertTrue((tmp_path / "startup.log").exists())
 
-# Test 4: Run diagnostics
-print("Test 4: Running startup diagnostics...")
-try:
-    result = run_diagnostics()
-    print(f"  ✓ Diagnostics completed (result: {result})")
-except Exception as e:
-    print(f"  ✗ Diagnostics failed: {e}", file=sys.stderr)
-    sys.exit(1)
+    def test_phone_api_health_endpoint_starts_without_kiosk_modules(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            app = create_app(db_dir=tmp_path, operator_token="secret-token")
+            client = app.test_client()
 
-print("\nAll integration tests passed!")
+            response = client.get("/api/health")
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.get_json(), {"ok": True})
+
+
+if __name__ == "__main__":
+    unittest.main()

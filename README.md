@@ -1,90 +1,44 @@
-# LCARS Kickers Interface
+# Fusball Phone API
 
-LCARS Kickers is a foosball score and leaderboard application with two supported runtime flows.
-It tracks player skill separately for offense and defense using TrueSkill.
+Fusball is a phone-first match and leaderboard service for foosball play. It tracks player skill separately for offense and defense using TrueSkill and exposes both a browser UI and JSON endpoints from the same runtime.
 
-## Runtime Flows
+## What It Does
 
-There are two ways to use the system:
-
-1. Touch-screen kiosk flow
-	- Fullscreen Pygame interface on the host machine.
-	- Best when the table has a dedicated touch display.
-	- Started with `launch_fusball.bat` or `python app/fusball.py`.
-
-2. Mobile API flow
-	- Phone-friendly web interface served from the host at `http://<host>:8080/phone`.
-	- Supports player presence, lineup helpers, score submit, leaderboard views, and phone-first match entry.
-	- Started with `start_phone_api_service.bat`.
-
-Preferred flow for day-to-day operation: the mobile API flow. It is the more modern operator path and now has the clearest start/stop/status lifecycle.
+- Serves a phone-friendly operator page at `/phone`
+- Exposes leaderboard, player, presence, odds, stats, and match endpoints under `/api/*`
+- Persists ratings and match history in the existing shelve-backed data model under `app/`
+- Supports split read/write PIN auth with legacy token fallback where needed
 
 ## Quick Start
 
-First-time setup for either flow:
+1. Install Python and project dependencies using `docs/development.md`.
+2. Run `python scripts/smoke_check.py`.
+3. Start the phone API using one of the supported paths.
 
-1. Install Python and dependencies using `docs/development.md`.
-2. Run `python scripts/smoke_check.py` once.
-3. Choose one of the runtime flows below.
-
-### Quick Start: Mobile API Flow (Preferred)
-
-Use this when you want to run Fusball from a phone browser.
-
-Windows production flow:
+Production service flow on Windows:
 
 1. Double-click `start_phone_api_service.bat`.
-2. Enter the writer PIN when prompted (or legacy operator token in fallback mode).
-3. The script:
-	- creates a production backup
-	- starts a watchdog
-	- starts the phone API
-4. Open `http://<host>:8080/phone` from your phone.
-5. When done, double-click `stop_phone_api_service.bat`.
+2. Enter the writer PIN when prompted.
+3. Open `http://<host>:8080/phone` from a phone or browser.
+4. Stop the service with `stop_phone_api_service.bat`.
 
-Useful companion launcher:
+Useful companion commands:
 
 - `status_phone_api_service.bat` shows watchdog, API, and log status.
+- `run_phone_api_dev.bat` starts the sandbox-backed development runtime.
+- `run_phone_api_prod.bat` delegates to the production service start flow.
 
-Development/sandbox launcher:
-
-- `run_phone_api_dev.bat` runs the phone API against `sandbox/dev-data`.
-
-### Quick Start: Touch-Screen Kiosk Flow
-
-Use this when the host machine itself is the operator interface.
-
-Windows easiest path:
-
-- Double-click `launch_fusball.bat`.
-- On first run it creates `.venv`, installs dependencies, and launches the kiosk UI.
-- On later runs it launches directly.
-
-Manual path:
+Direct local run is also supported:
 
 ```bash
 cd app
-python fusball.py
+python phone_api.py
 ```
-
-Setup and run instructions are maintained in `docs/development.md`.
-
-See `docs/development.md` for platform-specific commands.
-
-Advanced launcher option:
-
-- Set `FUSBALL_NO_LAUNCH=1` to perform setup checks without starting the app.
-
-Python version guidance:
-
-- Python 3.14 is supported on Windows using `pygame-ce`.
-- Python 3.11+ is supported for baseline development.
-- Dependency selection is automatic via environment markers in `requirements.txt`.
 
 ## Data Safety
 
 Operational data is stored in shelve files under `app/`.
-Treat `playerdb*`, `recentplayers*`, and `tagdb*` as production-like state.
+Treat `playerdb*`, `recentplayers*`, and `match_history*` as production-like state.
 
 Before changing persistence or migration logic:
 
@@ -92,83 +46,13 @@ Before changing persistence or migration logic:
 python scripts/backup_state.py
 ```
 
-See `docs/data-safety.md` for policy details.
+Historical kiosk-only artifacts have been retired from the active workflow. Keep `backups/` as the archive for old state snapshots.
 
-## Choosing A Flow
+## Primary URLs
 
-- Choose the mobile API flow if your operators are using phones and you want the modern start/stop/watchdog workflow.
-- Choose the kiosk flow if the host machine has a dedicated touch display and should remain the primary control surface.
-- Both flows operate on the same underlying player/ranking data model.
-
-## Development Notes
-
-- Development mode is enabled by default (`DEV_MODE = True` in `app/config.py`).
-- The kiosk app is fullscreen and optimized for touchscreen use.
-- The mobile API flow is the preferred modern operator path.
-- Coding standards, lint/format, pre-commit setup, and troubleshooting live in `docs/development.md`.
-
-## Mobile API Flow
-
-The mobile API flow is separate from the kiosk UI. The host machine runs the API, and phones connect through the browser-based interface.
-
-Preferred production phone API service flow (manual, double-click):
-
-- Start (with writer PIN prompt + watchdog): `start_phone_api_service.bat`
-- Stop: `stop_phone_api_service.bat`
-- Status: `status_phone_api_service.bat`
-
-Compatibility launchers:
-
-- `run_phone_api_prod.bat` delegates to the preferred production service start script.
-- `run_phone_api_dev.bat` starts the development sandbox API flow.
-
-Direct run is also supported (advanced/manual):
-
-```bash
-cd app
-python phone_api.py
-```
-
-PIN/auth setup options:
-
-1. Set `READ_PIN_HASH` and `WRITE_PIN_HASH` for split read/write auth.
-2. Enter writer PIN when prompted by `start_phone_api_service.bat` for local operation.
-3. Use legacy fallback `FUSBALL_PHONE_API_TOKEN` only when hash-based auth is not configured.
-4. Use `python scripts/generate_pin_hash.py --read-pin <read> --write-pin <write> --format dotenv` to generate hash values.
-
-Env-var example (Windows PowerShell):
-
-```powershell
-$env:FUSBALL_PHONE_API_TOKEN = "legacy-fallback-token"
-cd app
-python phone_api.py
-```
-
-Primary URLs:
-
-- Mobile page: `http://<host>:8080/phone`
+- Phone UI: `http://<host>:8080/phone`
+- Health: `http://<host>:8080/api/health`
 - Leaderboard API: `http://<host>:8080/api/leaderboard`
-
-Prod vs dev data safety:
-
-- Production service start script reads/writes `app/` data and creates a backup on startup.
-- Production service watchdog monitors `/health` and restarts the API after repeated failures.
-- Production service stop shuts down the watchdog and API process.
-- Development launcher runs against `sandbox/dev-data` so test matches do not affect real rankings.
-- Refresh the dev sandbox manually when needed with `python scripts/refresh_dev_sandbox.py`.
-
-For endpoint-level request/response details, see `docs/phone-api.md`.
-For auth/conflict behavior, see `docs/phone-write-policy.md`.
-
-## Kiosk Flow
-
-The kiosk flow keeps the original fullscreen local interface on the host machine.
-
-- Windows launcher: `launch_fusball.bat`
-- Manual launcher: `python app/fusball.py`
-- Compatibility entrypoint: `python app/lcars.py`
-
-This flow remains supported, but it is no longer the preferred day-to-day operator path when the mobile API flow is available.
 
 ## Repository Guide
 
@@ -181,20 +65,6 @@ This flow remains supported, but it is no longer the preferred day-to-day operat
 - Modernization roadmap: `docs/modernization-plan.md`
 - Contribution workflow: `CONTRIBUTING.md`
 
-## Documentation Source Of Truth
+## Direction
 
-- Strategy, rationale, and sequencing principles: `docs/modernization-plan.md`
-- Ordered execution status and next slices: `docs/backlog.md`
-- Setup, smoke check, lint/format, and pre-commit commands: `docs/development.md`
-
-## Future Direction
-
-Planned future exploration is focused on extending the current kiosk-first app without disrupting core match entry.
-
-- Structured match history to support richer analytics beyond the current leaderboard.
-- Prediction and insight features such as expected-result context, head-to-head records, form, and progression over time.
-- Seasons, so current-season competition can reset cleanly while all-time rankings remain available.
-- Tournament support as a separate exploration track once season/history foundations are in place.
-- Broader authenticated phone workflows beyond the current baseline (for example match correction/admin operations) after structured history and stronger data guarantees are in place.
-
-See `docs/backlog.md` for near-term slices and `docs/modernization-plan.md` for longer-term sequencing and rationale.
+The repository now targets a single runtime: the Fusball phone API. Future work is focused on safer data evolution, richer match history, stronger operations, and better phone-native workflows rather than maintaining a local kiosk UI.

@@ -4,13 +4,8 @@ This document describes how to set up and run the project on modern developer ma
 
 ## Supported Baseline
 
-- Python: 3.14 preferred on Windows; 3.11+ supported baseline
+- Python: 3.11+ supported baseline
 - OS: Windows 11 and Ubuntu 22.04+ (headless CI uses Ubuntu)
-
-Python package note:
-
-- Python 3.14 on Windows uses `pygame-ce` (selected automatically from `requirements.txt`).
-- Python 3.13 and older use `pygame`.
 
 ## 1) Create a Virtual Environment
 
@@ -43,31 +38,13 @@ pip install -r requirements.txt
 
 ## 2) Run Smoke Check
 
-The smoke check validates ranking-related logic and shelve compatibility assumptions without opening the Pygame UI.
+The smoke check validates ranking-related logic and shelve compatibility assumptions for the phone API workflow.
 
 ```bash
 python scripts/smoke_check.py
 ```
 
-## 3) Choose A Runtime Flow
-
-After setup, choose one of the two supported runtime flows.
-
-### 3A) Touch-Screen Kiosk Flow
-
-```bash
-cd app
-python fusball.py
-```
-
-Backward compatibility note:
-- `python lcars.py` still works and currently delegates to the same app startup path.
-
-Notes:
-- The app is fullscreen and designed for touchscreen kiosks.
-- In development, mouse cursor behavior is controlled by `DEV_MODE` in `app/config.py`.
-
-### 3B) Mobile API Flow (Preferred)
+## 3) Run The Phone API
 
 Preferred production phone API service flow is manual and double-click driven:
 
@@ -110,6 +87,13 @@ Notes:
 - `run_phone_api_dev.bat` still works and calls the same script.
 - If split PINs are not provided and no PIN hashes are configured, the script falls back to legacy token mode.
 
+Direct local run:
+
+```bash
+cd app
+python phone_api.py
+```
+
 Staging/production auth smoke checks:
 
 ```bash
@@ -149,8 +133,8 @@ pip install -r requirements-dev.txt
 Run lint and formatting checks:
 
 ```bash
-ruff check app/startup.py app/fusball.py scripts
-black --check app/startup.py app/fusball.py scripts
+ruff check app api test_*.py scripts
+black --check app api test_*.py scripts
 ```
 
 Enable pre-commit hooks:
@@ -167,7 +151,7 @@ Function documentation tip:
 
 ## 5) Troubleshooting
 
-- If audio causes startup issues, keep `SOUND = False` in `app/config.py`.
-- If you see display issues on desktop, validate fullscreen support at your current resolution.
+- If the phone API cannot write, verify `READ_PIN_HASH` / `WRITE_PIN_HASH` or the legacy token fallback configuration.
+- If the service starts but the phone page is empty, verify the selected data directory contains `playerdb*` and related state.
 - If shelve files fail to open across OS boundaries, restore from backup and re-seed/migrate data before use.
 

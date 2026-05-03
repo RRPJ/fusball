@@ -1,13 +1,8 @@
 # Phone API Reference
 
-This document is the endpoint-level reference for the mobile API flow in `app/phone_api.py`.
+This document is the endpoint-level reference for the Fusball phone API in `app/phone_api.py`.
 
-The repository now has two runtime flows:
-
-- touch-screen kiosk flow: fullscreen local Pygame UI
-- mobile API flow: browser-based phone interface and JSON API
-
-The mobile API flow is the preferred modern operator path. This document covers only that flow.
+The phone API is the repository's primary runtime. It serves both the browser-based operator UI and the JSON endpoints used by phone clients and hosted deployments.
 
 ## Base Path
 
@@ -37,7 +32,7 @@ Legacy compatibility:
 ## Environment Configuration
 
 - `FUSBALL_PHONE_API_TOKEN`: operator token for write requests.
-- `FUSBALL_PHONE_API_DB_DIR`: data directory override (`playerdb`, `recentplayers`, `tagdb`, `match_history`, `logfile.log`).
+- `FUSBALL_PHONE_API_DB_DIR`: data directory override (`playerdb`, `recentplayers`, `match_history`, `logfile.log`).
 - `READ_PIN_HASH`: hashed read PIN (`X-Read-Pin`).
 - `WRITE_PIN_HASH`: hashed writer PIN (`X-Write-Pin`).
 

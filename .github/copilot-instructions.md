@@ -7,11 +7,9 @@
 
 ## Project Conventions
 
-- Launch app from `app/` directory (`python fusball.py`).
-- Keep `lcars.py` compatibility unless a migration task explicitly removes it.
+- Launch the local service from `app/` directory (`python phone_api.py`) unless a maintained script is more appropriate.
 - Data is stateful and lives in shelve files under `app/`.
-- Treat `playerdb*`, `recentplayers*`, and `tagdb*` as production-like data.
-- Keep kiosk/fullscreen assumptions intact unless a task explicitly changes them.
+- Treat `playerdb*`, `recentplayers*`, and `match_history*` as production-like data.
 
 ## Safe Change Workflow
 
@@ -34,8 +32,7 @@
 - For schema changes, provide migration and rollback notes.
 - Prefer additive migrations over destructive rewrites.
 
-## UI Rules
+## Runtime Rules
 
-- Maintain screen navigation semantics.
-- Preserve touchscreen usability and large hit targets.
-- Keep visual style consistent with existing LCARS components unless asked otherwise.
+- Preserve phone API behavior and ranking semantics while removing legacy kiosk references.
+- Update docs and operational scripts when the supported phone workflow changes.

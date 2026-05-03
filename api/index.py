@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[1]
 APP_DIR = ROOT_DIR / "app"
 
-# Ensure modules from the legacy app directory are importable on Vercel.
+# Ensure modules from the shared app directory are importable on Vercel.
 if str(APP_DIR) not in sys.path:
   sys.path.insert(0, str(APP_DIR))
 

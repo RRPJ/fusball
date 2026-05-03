@@ -14,7 +14,7 @@ Implement Priority 0 as three coordinated workstreams: remove VPN helper automat
 9. Update local repository remote origin URL to https://github.com/RRPJ/fusball and verify fetch/push defaults still target master. (depends on 1)
 10. Update contributor-facing docs where needed to reflect new canonical remote owner and any first-time clone/fork guidance. (depends on 9)
 11. Phase D - Vercel deployment path for full phone API writes with production data.
-12. Add explicit deployment architecture decision: separate phone API runtime from kiosk process (kiosk stays local; phone API runs as deployable web service). (depends on 1)
+12. Add explicit deployment architecture decision: keep the phone API deployable both as a local service and as a hosted web service. (depends on 1)
 13. Implement Option 1 auth split: one read PIN for authenticated leaderboard/view access and a separate writer PIN for write endpoints (add player, submit match, presence updates). (depends on 12)
 14. Introduce Vercel-compatible runtime for API routes and phone page, replacing direct Flask dev-server invocation pattern in deployment path (retain local run behavior for existing scripts). (depends on 12)
 15. Pull forward minimal storage modernization prerequisite for production writes: replace shelve-backed mutable operations used by write endpoints with Neon Postgres as the persistent shared datastore for the Vercel deployment path, including schema/bootstrap path. (depends on 12)
@@ -126,7 +126,7 @@ Implement Priority 0 as three coordinated workstreams: remove VPN helper automat
 - Vercel deployment target is production ranking data, not sandbox.
 - External database choice for deployment path: Neon Postgres.
 - Auth approach: Option 1 with two shared credentials (read PIN and separate writer PIN).
-- Scope boundary: kiosk/Pygame local app remains local; Priority 0 deployment work targets phone API/web surface only.
+- Scope boundary: Priority 0 deployment work targets the phone API/web surface only.
 - Consequence: full Vercel write deployment cannot be safely completed without advancing a minimal subset of Priority 2 (storage + concurrency) into this implementation window.
 
 **Further Considerations**

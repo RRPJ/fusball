@@ -101,11 +101,15 @@ def _parse_timestamp_utc(value: str) -> datetime | None:
         return None
 
 
+def _current_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 def _scope_window_utc(scope: str, now_utc: datetime | None = None) -> tuple[datetime, datetime] | None:
     if scope == "all":
         return None
 
-    now_utc = now_utc or datetime.now(timezone.utc)
+    now_utc = now_utc or _current_utc()
     local_now = now_utc.astimezone()
 
     if scope == "this_month":

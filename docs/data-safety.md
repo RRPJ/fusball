@@ -13,8 +13,10 @@ Example backup layout:
 
 - `backups/2026-04-09/playerdb*`
 - `backups/2026-04-09/recentplayers*`
-- `backups/2026-04-09/tagdb*`
+- `backups/2026-04-09/match_history*`
 - `backups/2026-04-09/logfile.log`
+
+Historical kiosk-only files may still exist in older backups. Keep them for archive purposes, but they are no longer part of the active runtime contract.
 
 ## Compatibility Caveat
 
@@ -47,12 +49,11 @@ For the full deployment sequence, see `docs/priority-0-cutover-runbook.md`.
 
 Use this when data corruption or a failed migration is suspected.
 
-1. Stop kiosk app and phone API processes.
+1. Stop phone API processes.
 2. Identify the target backup folder under `backups/<timestamp>/`.
 3. Copy backup artifacts back into `app/` for each relevant store:
 	- `playerdb*`
 	- `recentplayers*`
-	- `tagdb*`
 	- `match_history*` (if present)
 	- `logfile.log` (optional legacy audit restore)
 4. Start app from `app/` and run smoke validation:

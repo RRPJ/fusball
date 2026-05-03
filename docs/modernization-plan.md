@@ -11,19 +11,17 @@ This plan keeps gameplay behavior stable while enabling steady modernization.
 ## Current Status Snapshot (2026-04-12)
 
 Already completed in-repo:
-- Canonical entrypoint is `app/fusball.py` with `app/lcars.py` compatibility retained.
-- Startup diagnostics exist (`app/startup.py`) and run from app startup.
+- Phone API runtime is the primary app surface (`app/phone_api.py`).
+- Startup diagnostics exist for phone data-directory checks (`app/startup.py`).
 - CI runs lint/format checks and smoke checks (`.github/workflows/ci.yml`).
 - Tooling is in place (`ruff`, `black`, and pre-commit hooks).
 - Targeted behavior/regression tests exist for rating transitions, match save flow, and auto-balance behavior.
-- Screen-level A3 refactor slice is complete for `entermatch.py` and `enteroutcome.py` with docstrings.
-- Track C read-only phone slice exists (`app/phone_api.py`) with `/api/leaderboard` and `/phone`.
-- Track C write baseline is shipped with token-protected `POST /api/matches` and `POST /api/players`; field validation items remain open in `docs/backlog.md`.
+- Phone read and write slices are shipped, including `/phone`, `/api/leaderboard`, `POST /api/matches`, and `POST /api/players`.
 - Phone page now uses a guided step flow and supports player onboarding from mobile.
 - Production/dev operational split exists for phone API launch (`run_phone_api_prod.bat`, `run_phone_api_dev.bat`, and `scripts/refresh_dev_sandbox.py`).
 
 Still open:
-- End-to-end phone validation across network/security boundaries (for example firewall/VPN path).
+- End-to-end phone validation across network/security boundaries.
 - Data portability and migration path beyond shelve.
 - Structured match history needed for richer analytics, seasonal views, and future tournament features.
 
@@ -36,9 +34,9 @@ For each significant change set:
    - See `docs/development.md` for the current command.
 3. Run local app startup check:
    - `cd app`
-   - `python fusball.py`
+   - `python phone_api.py`
 4. Human validation gate:
-   - Verify at least one match flow manually in the UI.
+   - Verify at least one match flow manually from the phone UI.
    - Confirm leaderboard page still renders and updates.
 5. Merge only after both automation and manual validation pass.
 
@@ -67,47 +65,17 @@ Goals:
 Execution detail:
 - Keep concrete performance tasks and measurements in `docs/backlog.md`.
 
-## Workstream C: Remote Reachability Options
+## Workstream C: Service Operations And Reachability
 
-Constraint:
-- The current Pygame UI uses kiosk-oriented fixed layouts and should remain kiosk-only.
-- Phone support should be delivered through a separate web/API path, not by reusing Pygame screens directly.
-
-Option 1: Remote Desktop To Host Machine
-- Examples: VPN + RDP, AnyDesk, RustDesk.
-- Pros: fastest, no app changes, full UI preserved.
-- Cons: tied to host session/peripherals; not true multi-user app.
-
-Option 2: Kiosk Host + Thin Operator API
-- Keep Pygame kiosk local.
-- Add a small HTTP API (FastAPI/Flask) for remote tasks (add player, submit result, read leaderboard).
-- Pros: incremental, keeps kiosk UX, unlocks automation.
-- Cons: need auth, validation, and conflict handling with local writes.
-
-Option 3: Full Web Frontend Replacement
-- Replace Pygame UI with web app and backend service.
-- Pros: best long-term remote access and multi-device UX.
-- Cons: largest rewrite, highest risk, requires staged migration.
-
-Recommended sequence:
-1. Start with Option 1 for immediate remote usability.
-2. Build Option 2 API for real operational remote workflows.
-3. Decide later whether Option 3 is worth full migration cost.
-
-Early rollout preference:
-1. Use a secure VPN connectivity layer for early phone testing.
-2. Start with read-only phone workflows before enabling write actions.
+Goals:
+- Keep the phone API easy to operate locally and in hosted environments.
+- Make read/write auth and deployment behavior explicit.
+- Improve stability before expanding operator workflows.
 
 Decision gates:
-1. Host runtime is stable (app starts reliably and backups are repeatable).
-2. Phone can read leaderboard from Android and iOS over the chosen secure path.
-3. Write path is enabled only after auth and conflict rules are validated.
-
-Recommended incremental feature sequence after read-only phone support:
-1. Add structured match history storage beside the existing text audit log.
-2. Use that history to deliver prediction context and analytics (head-to-head, form, trend views, richer leaderboard filters).
-3. Extend the phone path from read-only leaderboard to authenticated match submission with live refresh.
-4. Reassess whether a larger web workflow is warranted only after those slices prove value.
+1. Local service scripts stay reliable and backup-aware.
+2. Hosted deployments behave the same as the local phone API contract.
+3. Network access and auth failures are diagnosable from logs and smoke checks.
 
 ## Workstream D: Data Layer Evolution
 
@@ -146,7 +114,7 @@ Candidate features:
 
 Decision gates:
 1. Analytics derive from structured persisted history rather than fragile log parsing.
-2. Kiosk UX remains quick to operate; heavier views can live on phone/web surfaces.
+2. The phone UI remains quick to operate; heavier views can live on separate read surfaces.
 3. New metrics are explainable enough that players can understand why rankings or badges changed.
 
 ## Workstream F: Seasons And Historical Rankings
@@ -182,7 +150,7 @@ Recommended direction:
 3. Decide whether tournaments are standalone, season-scoped, or both before building UI.
 
 Decision gates:
-1. Tournament flow does not complicate the default kiosk match flow for casual play.
+1. Tournament flow does not complicate the default phone match flow for casual play.
 2. Ranking impact rules are explicit before tournament results affect leaderboards.
 3. Persistence design can represent tournament structure without blocking future migration work.
 

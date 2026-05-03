@@ -10,7 +10,7 @@ import trueskill
 ROOT = Path(__file__).resolve().parents[1]
 APP_DIR = ROOT / "app"
 DEFAULT_TARGET = ROOT / "sandbox" / "dev-data"
-PATTERNS = ["playerdb*", "recentplayers*", "tagdb*", "logfile.log"]
+PATTERNS = ["playerdb*", "recentplayers*", "match_history*", "logfile.log"]
 SEED_PLAYERS = ["alice", "bob", "carol", "dave", "eve", "frank", "grace", "heidi"]
 
 
