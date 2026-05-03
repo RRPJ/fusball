@@ -2,6 +2,8 @@
 
 Fusball is a phone-first match and leaderboard service for foosball play. It tracks player skill separately for offense and defense using TrueSkill and exposes both a browser UI and JSON endpoints from the same runtime.
 
+<img width="774" height="1283" alt="image" src="https://github.com/user-attachments/assets/f06b7698-7729-4ac1-9478-a4dc9ed0efbd" />
+
 ## What It Does
 
 - Serves a phone-friendly operator page at `/phone`
