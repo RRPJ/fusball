@@ -63,7 +63,7 @@ odds_texts = [
 
 # Compute player level based on TrueSkill ratings
 def playerLevel(player):
-    return trueskill.expose(player[0]) + trueskill.expose(player[1])
+    return (trueskill.expose(player[0]) + trueskill.expose(player[1])) / 2
 
 # Find rank of a player among others
 def findRank(players, player):

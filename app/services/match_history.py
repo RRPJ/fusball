@@ -86,10 +86,9 @@ def _all_records(db_dir: str | Path) -> list[dict]:
 
 
 def _level_from_rating_dict(rating: dict) -> float:
-    return (
-        (float(rating.get("offense_mu", 25.0)) - 3.0 * float(rating.get("offense_sigma", 8.333)))
-        + (float(rating.get("defense_mu", 25.0)) - 3.0 * float(rating.get("defense_sigma", 8.333)))
-    )
+    offense_level = float(rating.get("offense_mu", 25.0)) - 3.0 * float(rating.get("offense_sigma", 8.333))
+    defense_level = float(rating.get("defense_mu", 25.0)) - 3.0 * float(rating.get("defense_sigma", 8.333))
+    return (offense_level + defense_level) / 2
 
 
 def _parse_timestamp_utc(value: str) -> datetime | None:
@@ -224,6 +223,7 @@ def query_player_stats(db_dir: str | Path, scope: str = "all") -> dict[str, dict
 
     all_records = _all_records(db_dir)
     scoped_records = records_for_scope(db_dir, scope)
+    stat_records = all_records if scope == "all" else scoped_records
 
     player_matches: dict[str, list[dict]] = {}
     latest_level_after: dict[str, float] = {}
@@ -244,6 +244,17 @@ def query_player_stats(db_dir: str | Path, scope: str = "all") -> dict[str, dict
                 "level_after": round(level, 2),
             })
             latest_level_after[name] = level
+
+    player_matches = {}
+    for record in stat_records:
+        winner_team = [n.lower() for n in record.get("winner", [])]
+        all_names = [n.lower() for n in record.get("team1", []) + record.get("team2", [])]
+
+        for name in all_names:
+            player_matches.setdefault(name, []).append({
+                "won": name in winner_team,
+                "timestamp": record.get("timestamp", ""),
+            })
 
     for record in scoped_records:
         entries = {e["name"].lower(): e for e in record.get("players", [])}
