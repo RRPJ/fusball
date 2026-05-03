@@ -366,6 +366,7 @@ class NeonWriteStore(BaseWriteStore):
 
         all_records = self._history_records()
         scoped_records = self._records_for_scope(scope)
+        stat_records = all_records if scope == "all" else scoped_records
 
         player_matches: dict[str, list[dict]] = {}
         latest_level_after: dict[str, float] = {}
@@ -388,6 +389,19 @@ class NeonWriteStore(BaseWriteStore):
                     }
                 )
                 latest_level_after[name] = level
+
+        player_matches = {}
+        for record in stat_records:
+            winner_team = [n.lower() for n in record.get("winner", [])]
+            all_names = [n.lower() for n in record.get("team1", []) + record.get("team2", [])]
+
+            for name in all_names:
+                player_matches.setdefault(name, []).append(
+                    {
+                        "won": name in winner_team,
+                        "timestamp": record.get("timestamp", ""),
+                    }
+                )
 
         for record in scoped_records:
             entries = {e["name"].lower(): e for e in record.get("players", [])}

@@ -901,6 +901,42 @@ class C3AnalyticsApiTests(unittest.TestCase):
             expected_week_improved = 9.0 if month_match_ts >= start_week else 3.5
             self.assertAlmostEqual(week_payload["alice"]["improved"], expected_week_improved, places=2)
 
+    def test_stats_scope_uses_only_scoped_matches_for_form_and_streak(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            now = datetime.now(timezone.utc)
+            local_now = now.astimezone()
+            start_month_local = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+            pre_month_loss_ts = (start_month_local - timedelta(hours=2)).astimezone(timezone.utc)
+            pre_month_win_ts = (start_month_local - timedelta(hours=1)).astimezone(timezone.utc)
+            month_midpoint = start_month_local + ((local_now - start_month_local) / 2)
+            month_win_one_ts = month_midpoint.astimezone(timezone.utc)
+            month_win_two_ts = (month_midpoint + timedelta(minutes=5)).astimezone(timezone.utc)
+
+            self._write_history_record(tmp_path, pre_month_loss_ts, ["alice"], ["bob"], ["bob"], 1, 5)
+            self._write_history_record(tmp_path, pre_month_win_ts, ["alice"], ["bob"], ["alice"], 5, 3)
+            self._write_history_record(tmp_path, month_win_one_ts, ["alice"], ["bob"], ["alice"], 5, 2)
+            self._write_history_record(tmp_path, month_win_two_ts, ["alice"], ["bob"], ["alice"], 5, 0)
+
+            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+            client = app.test_client()
+
+            scoped_stats = client.get("/api/stats?scope=this_month")
+            self.assertEqual(scoped_stats.status_code, 200)
+            scoped_payload = scoped_stats.get_json()
+            assert scoped_payload is not None
+
+            self.assertEqual(scoped_payload["alice"]["games"], 2)
+            self.assertEqual(scoped_payload["alice"]["wins"], 2)
+            self.assertAlmostEqual(scoped_payload["alice"]["win_rate"], 1.0, places=3)
+            self.assertEqual(scoped_payload["alice"]["streak"], 2)
+            self.assertEqual(scoped_payload["alice"]["recent_form_5"], "WW")
+            self.assertEqual(scoped_payload["bob"]["games"], 2)
+            self.assertEqual(scoped_payload["bob"]["wins"], 0)
+            self.assertEqual(scoped_payload["bob"]["streak"], 0)
+            self.assertEqual(scoped_payload["bob"]["recent_form_5"], "LL")
+
 
 if __name__ == "__main__":
     unittest.main()
