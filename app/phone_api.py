@@ -350,12 +350,17 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     }
     .players {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
       max-height: 260px;
       overflow: auto;
       padding-right: 4px;
       align-content: start;
+    }
+    @media (min-width: 560px) {
+      .players {
+        grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));
+      }
     }
     .players .muted { grid-column: 1 / -1; }
     .presence-list { width: 100%; margin-top: 8px; }

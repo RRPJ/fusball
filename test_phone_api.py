@@ -140,6 +140,8 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("id='presentPlayersPanel' class='players'", html)
             self.assertIn("id='awayPlayersHeading'>Away Players (tap to mark present)</h3>", html)
             self.assertIn("id='awayPlayersPanel' class='players'", html)
+            self.assertIn("grid-template-columns: repeat(2, minmax(0, 1fr));", html)
+            self.assertIn("@media (min-width: 560px)", html)
             self.assertIn("grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));", html)
             self.assertIn("presentHeading.textContent = `Present Players (${presentNames.length}) - tap to assign`", html)
             self.assertIn("awayHeading.textContent = `Away Players (${awayNames.length}) - tap to mark present`", html)
