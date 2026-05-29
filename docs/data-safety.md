@@ -43,8 +43,6 @@ Notes:
 - `--mode strict` compares players, recent player ordering, and match-history IDs.
 - Use `--mode counts` for a faster count-only comparison.
 
-For the full deployment sequence, see `docs/priority-0-cutover-runbook.md`.
-
 ## Restore Procedure (Rollback)
 
 Use this when data corruption or a failed migration is suspected.

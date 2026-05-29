@@ -120,4 +120,3 @@ Priority remains on history/model hardening before expanding write scope. See `d
 
 - API endpoint reference: `docs/phone-api.md`
 - Execution status and sequencing: `docs/backlog.md`
-- Strategy and rationale: `docs/modernization-plan.md`

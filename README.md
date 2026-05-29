@@ -64,7 +64,6 @@ Historical kiosk-only artifacts have been retired from the active workflow. Keep
 - Phone API endpoint reference: `docs/phone-api.md`
 - Phone write auth/conflict policy: `docs/phone-write-policy.md`
 - Prioritized improvement backlog: `docs/backlog.md`
-- Modernization roadmap: `docs/modernization-plan.md`
 - Contribution workflow: `CONTRIBUTING.md`
 
 ## Direction
