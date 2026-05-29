@@ -266,6 +266,16 @@ class NeonWriteStore(BaseWriteStore):
 
         if scope == "this_month":
             start_local = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        elif scope == "this_quarter":
+            quarter_start_month = ((local_now.month - 1) // 3) * 3 + 1
+            start_local = local_now.replace(
+                month=quarter_start_month,
+                day=1,
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
         elif scope == "this_week":
             start_local = (local_now - timedelta(days=local_now.weekday())).replace(
                 hour=0,
@@ -361,7 +371,7 @@ class NeonWriteStore(BaseWriteStore):
         }
 
     def query_player_stats(self, scope: str = "all") -> dict[str, dict]:
-        if scope not in {"all", "this_month", "this_week"}:
+        if scope not in {"all", "this_quarter", "this_month", "this_week"}:
             raise ValueError(f"unsupported scope: {scope}")
 
         all_records = self._history_records()

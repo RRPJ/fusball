@@ -113,6 +113,16 @@ def _scope_window_utc(scope: str, now_utc: datetime | None = None) -> tuple[date
 
     if scope == "this_month":
         start_local = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    elif scope == "this_quarter":
+        quarter_start_month = ((local_now.month - 1) // 3) * 3 + 1
+        start_local = local_now.replace(
+            month=quarter_start_month,
+            day=1,
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
     elif scope == "this_week":
         start_local = (local_now - timedelta(days=local_now.weekday())).replace(
             hour=0,
@@ -222,7 +232,7 @@ def query_h2h(db_dir: str | Path, p1: str, p2: str) -> dict:
 
 def query_player_stats(db_dir: str | Path, scope: str = "all") -> dict[str, dict]:
     """Return aggregate stats per player and scope-aware improved delta."""
-    if scope not in {"all", "this_month", "this_week"}:
+    if scope not in {"all", "this_quarter", "this_month", "this_week"}:
         raise ValueError(f"unsupported scope: {scope}")
 
     all_records = _all_records(db_dir)
