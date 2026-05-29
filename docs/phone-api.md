@@ -31,7 +31,7 @@ Notes:
 
 ## Authentication
 
-Priority 0 auth split introduces two headers for the API path:
+The auth split introduces two headers for the API path:
 
 - Read header: `X-Read-Pin`
 - Writer header: `X-Write-Pin`
@@ -161,13 +161,11 @@ Rules:
 - Production service start writes to `app/` data, performs startup backup, and runs a watchdog that restarts the API after repeated health failures.
 - Production service stop closes the phone API and watchdog processes.
 
-Priority 0 deployment smoke check:
+Deployment smoke check:
 
 ```bash
 python scripts/smoke_phone_api_auth.py --base-url https://<deployment-host> --expect-auth --read-pin <read-pin> --write-pin <write-pin>
 ```
-
-For the full migration, parity, validation, and rollback sequence, see `docs/priority-0-cutover-runbook.md`.
 
 Recommended deployment model:
 - Vercel Production should use production Neon.

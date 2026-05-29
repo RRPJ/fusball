@@ -108,9 +108,6 @@ python scripts/smoke_neon_parity.py --db-dir app --database-url <database-url> -
 
 Use `--mode counts` when you only want fast count-level verification.
 
-Full cutover sequence:
-- See `docs/priority-0-cutover-runbook.md` for the ordered staging and production checklist.
-
 Recommended environment model:
 - Vercel Production -> Neon Production
 - Vercel Preview -> Neon Preview
