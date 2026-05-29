@@ -120,6 +120,13 @@ def _pair_lineup_context(record: dict, player: str) -> tuple[list[str], list[str
     return None
 
 
+def _display_team_order(team: Sequence[str]) -> list[str]:
+    names = [name.title() for name in team]
+    if len(names) == 2:
+        return [names[1], names[0]]
+    return names
+
+
 def _recent_matches_from_records(records: Sequence[dict], player: str, limit: int) -> list[dict]:
     recent_matches: list[dict] = []
     for record in reversed(list(records)):
@@ -140,8 +147,8 @@ def _recent_matches_from_records(records: Sequence[dict], player: str, limit: in
             {
                 "timestamp": record.get("timestamp", ""),
                 "won": player in winner_team,
-                "team": [name.title() for name in own_team],
-                "opponents": [name.title() for name in opp_team],
+                "team": _display_team_order(own_team),
+                "opponents": _display_team_order(opp_team),
                 "score_for": int(record.get("score1", 0) if on_team1 else record.get("score2", 0)),
                 "score_against": int(record.get("score2", 0) if on_team1 else record.get("score1", 0)),
                 "delta": {
@@ -238,15 +245,13 @@ def query_player_profile_from_records(
 
     stats = query_player_stats_from_records(all_records, scoped_records)
     player_stats = stats.get(player)
-    snapshots = query_rating_snapshots_from_records(all_records, player, n=max(recent_limit, 5))
-    latest_matches = _recent_matches_from_records(all_records, player, recent_limit)
+    latest_matches = _recent_matches_from_records(scoped_records, player, recent_limit)
     best_partner, toughest_opponent = _partner_and_opponent_summaries(scoped_records, player)
 
-    trend = {"offense": 0.0, "defense": 0.0}
-    if snapshots:
-        sample = snapshots[-min(3, len(snapshots)):]
-        trend["offense"] = round(sum(float(s["after"].get("offense_mu", 0.0)) - float(s["before"].get("offense_mu", 0.0)) for s in sample), 2)
-        trend["defense"] = round(sum(float(s["after"].get("defense_mu", 0.0)) - float(s["before"].get("defense_mu", 0.0)) for s in sample), 2)
+    trend = {
+        "offense": round(sum(float(match["delta"].get("offense", 0.0)) for match in latest_matches), 2),
+        "defense": round(sum(float(match["delta"].get("defense", 0.0)) for match in latest_matches), 2),
+    }
 
     return {
         "player": player,
@@ -490,6 +495,48 @@ def query_h2h(db_dir: str | Path, p1: str, p2: str) -> dict:
         "draws": draws,
         "last_match": last_match,
     }
+
+
+def query_team_h2h_from_records(records: Sequence[dict], team1: Sequence[str], team2: Sequence[str]) -> dict:
+    team1_names = tuple(name.lower() for name in team1)
+    team2_names = tuple(name.lower() for name in team2)
+    team1_wins = team2_wins = draws = count = 0
+    last_match: str | None = None
+
+    for record in records:
+        left = tuple(name.lower() for name in record.get("team1", []))
+        right = tuple(name.lower() for name in record.get("team2", []))
+        if left == team1_names and right == team2_names:
+            own_side, opp_side = left, right
+        elif left == team2_names and right == team1_names:
+            own_side, opp_side = right, left
+        else:
+            continue
+
+        count += 1
+        last_match = record.get("timestamp")
+        winner_team = [name.lower() for name in record.get("winner", [])]
+
+        if any(name in winner_team for name in own_side):
+            team1_wins += 1
+        elif any(name in winner_team for name in opp_side):
+            team2_wins += 1
+        else:
+            draws += 1
+
+    return {
+        "team1": _display_team_order(team1_names),
+        "team2": _display_team_order(team2_names),
+        "matches": count,
+        "team1_wins": team1_wins,
+        "team2_wins": team2_wins,
+        "draws": draws,
+        "last_match": last_match,
+    }
+
+
+def query_team_h2h(db_dir: str | Path, team1: Sequence[str], team2: Sequence[str]) -> dict:
+    return query_team_h2h_from_records(_all_records(db_dir), team1, team2)
 
 
 def query_player_stats(db_dir: str | Path, scope: str = "all") -> dict[str, dict]:

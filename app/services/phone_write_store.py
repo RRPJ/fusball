@@ -20,6 +20,8 @@ from services.match_history import query_player_stats as shelve_query_player_sta
 from services.match_history import query_player_stats_from_records
 from services.match_history import query_rating_snapshots as shelve_query_rating_snapshots
 from services.match_history import query_rating_snapshots_from_records
+from services.match_history import query_team_h2h as shelve_query_team_h2h
+from services.match_history import query_team_h2h_from_records
 from services.match_log import append_match_log
 from services.match_service import calculate_rating_update
 
@@ -45,6 +47,9 @@ class BaseWriteStore:
         raise NotImplementedError
 
     def query_h2h(self, p1: str, p2: str) -> dict:
+        raise NotImplementedError
+
+    def query_team_h2h(self, team1: Sequence[str], team2: Sequence[str]) -> dict:
         raise NotImplementedError
 
     def query_player_stats(self, scope: str = "all") -> dict[str, dict]:
@@ -103,6 +108,9 @@ class ShelveWriteStore(BaseWriteStore):
 
     def query_h2h(self, p1: str, p2: str) -> dict:
         return shelve_query_h2h(self.db_dir, p1, p2)
+
+    def query_team_h2h(self, team1: Sequence[str], team2: Sequence[str]) -> dict:
+        return shelve_query_team_h2h(self.db_dir, team1, team2)
 
     def query_player_stats(self, scope: str = "all") -> dict[str, dict]:
         return shelve_query_player_stats(self.db_dir, scope)
@@ -379,6 +387,9 @@ class NeonWriteStore(BaseWriteStore):
             "draws": draws,
             "last_match": last_match,
         }
+
+    def query_team_h2h(self, team1: Sequence[str], team2: Sequence[str]) -> dict:
+        return query_team_h2h_from_records(self._history_records(), team1, team2)
 
     def query_player_stats(self, scope: str = "all") -> dict[str, dict]:
         if scope not in {"all", "this_quarter", "this_month", "this_week"}:

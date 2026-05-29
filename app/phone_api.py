@@ -1988,14 +1988,15 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
 
     function openPlayerH2H(playerKey, otherPlayerKey) {
       setStep(2);
+      setMode('singles');
       state.selected.red_offense = displayNameForKey(playerKey);
       state.selected.blue_offense = displayNameForKey(otherPlayerKey);
-      if (state.mode === 'doubles') {
-        state.selected.red_defense = null;
-        state.selected.blue_defense = null;
-      }
+      state.selected.red_defense = null;
+      state.selected.blue_defense = null;
       state.h2hOpen = true;
-      renderSelection();
+      renderSlots();
+      updateSummary();
+      updateReview();
       refreshH2H();
     }
 
@@ -2332,37 +2333,49 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       toggleRow.style.display = '';
       if (!state.h2hOpen) return;
       card.innerHTML = '<span class="muted">Loading head-to-head...</span>';
-      const pairs = state.mode === 'doubles' && redDef && blueDef
-        ? [
-            { left: redDef, right: blueDef, label: 'Defense vs Defense' },
-            { left: redOff, right: blueOff, label: 'Offense vs Offense' },
-            { left: redDef, right: blueOff, label: 'Red Defense vs Blue Offense' },
-            { left: redOff, right: blueDef, label: 'Red Offense vs Blue Defense' },
-          ]
-        : [{ left: redOff, right: blueOff, label: 'Singles H2H' }];
-
-      Promise.all(pairs.map(pair =>
-        apiFetch(`/api/h2h?p1=${encodeURIComponent(pair.left.toLowerCase())}&p2=${encodeURIComponent(pair.right.toLowerCase())}`, {
+      if (state.mode === 'doubles' && redDef && blueDef) {
+        const redTeamDisplay = `${redDef} + ${redOff}`;
+        const blueTeamDisplay = `${blueDef} + ${blueOff}`;
+        const team1 = `${encodeURIComponent(redOff.toLowerCase())},${encodeURIComponent(redDef.toLowerCase())}`;
+        const team2 = `${encodeURIComponent(blueOff.toLowerCase())},${encodeURIComponent(blueDef.toLowerCase())}`;
+        apiFetch(`/api/team-h2h?team1=${team1}&team2=${team2}`, {
           trackKey: 'h2h',
           trackLabel: 'head-to-head',
         })
           .then(r => r.json())
-          .then(d => ({ pair, data: d }))
-      ))
-        .then(results => {
-          card.innerHTML = `<div class='profile-meta' style='margin-bottom:8px;'>${state.mode === 'doubles' ? 'Player-pair H2H' : 'Head-to-head'}</div>` +
-            `<div class='h2h-grid'>` +
-            results.map(({ pair, data }) => {
-              if (data.matches === 0) {
-                return `<div class='h2h-pair'><div class='label'>${pair.label}</div><div class='kv'><strong>${pair.left}</strong> vs <strong>${pair.right}</strong></div><div class='sub'>No recorded matches yet.</div></div>`;
-              }
-              const last = data.last_match ? data.last_match.slice(0, 10) : '?';
-              return `<div class='h2h-pair'>` +
-                `<div class='label'>${pair.label}</div>` +
-                `<div class='kv'><strong>${pair.left}</strong> ${data.p1_wins}\u2013${data.p2_wins} <strong>${pair.right}</strong>${data.draws ? ` (${data.draws}D)` : ''}</div>` +
-                `<div class='sub'>${data.matches} match${data.matches === 1 ? '' : 'es'} · last ${last}</div>` +
-                `</div>`;
-            }).join('') +
+          .then(data => {
+            if (data.matches === 0) {
+              card.innerHTML = `<div class='profile-meta' style='margin-bottom:8px;'>Current teams H2H</div>` +
+                `<div class='h2h-pair'><div class='kv'><strong>${redTeamDisplay}</strong> vs <strong>${blueTeamDisplay}</strong></div>` +
+                `<div class='sub'>No recorded doubles matches for this exact lineup order yet.</div></div>`;
+              return;
+            }
+            const last = data.last_match ? data.last_match.slice(0, 10) : '?';
+            card.innerHTML = `<div class='profile-meta' style='margin-bottom:8px;'>Current teams H2H</div>` +
+              `<div class='h2h-pair'>` +
+              `<div class='kv'><strong>${redTeamDisplay}</strong> ${data.team1_wins}\u2013${data.team2_wins} <strong>${blueTeamDisplay}</strong>${data.draws ? ` (${data.draws}D)` : ''}</div>` +
+              `<div class='sub'>${data.matches} match${data.matches === 1 ? '' : 'es'} · last ${last}</div>` +
+              `</div>`;
+          })
+          .catch(() => { card.innerHTML = '<span class="muted">Could not load H2H data.</span>'; });
+        return;
+      }
+
+      apiFetch(`/api/h2h?p1=${encodeURIComponent(redOff.toLowerCase())}&p2=${encodeURIComponent(blueOff.toLowerCase())}`, {
+        trackKey: 'h2h',
+        trackLabel: 'head-to-head',
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.matches === 0) {
+            card.innerHTML = '<span class="muted">No recorded matches between these players yet.</span>';
+            return;
+          }
+          const last = data.last_match ? data.last_match.slice(0, 10) : '?';
+          card.innerHTML = `<div class='profile-meta' style='margin-bottom:8px;'>Head-to-head</div>` +
+            `<div class='h2h-pair'>` +
+            `<div class='kv'><strong>${redOff}</strong> ${data.p1_wins}\u2013${data.p2_wins} <strong>${blueOff}</strong>${data.draws ? ` (${data.draws}D)` : ''}</div>` +
+            `<div class='sub'>${data.matches} match${data.matches === 1 ? '' : 'es'} · last ${last}</div>` +
             `</div>`;
         })
         .catch(() => { card.innerHTML = '<span class="muted">Could not load H2H data.</span>'; });
@@ -2907,6 +2920,28 @@ def create_app(
       return error_response
     assert store is not None
     return jsonify(store.query_h2h(p1, p2))
+
+  @app.get("/api/team-h2h")
+  def team_h2h() -> object:
+    denied = require_read_access()
+    if denied is not None:
+      return denied
+
+    team1_raw = request.args.get("team1", "").strip().lower()
+    team2_raw = request.args.get("team2", "").strip().lower()
+    if not team1_raw or not team2_raw:
+      return jsonify({"error": "team1 and team2 are required"}), 400
+
+    team1 = [name.strip() for name in team1_raw.split(",") if name.strip()]
+    team2 = [name.strip() for name in team2_raw.split(",") if name.strip()]
+    if len(team1) != len(team2) or len(team1) not in {1, 2}:
+      return jsonify({"error": "team1 and team2 must be balanced singles or doubles lineups"}), 400
+
+    store, error_response = _resolve_write_store()
+    if error_response is not None:
+      return error_response
+    assert store is not None
+    return jsonify(store.query_team_h2h(team1, team2))
 
   @app.get("/api/stats")
   def player_stats() -> object:
