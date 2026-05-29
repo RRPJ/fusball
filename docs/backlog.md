@@ -22,9 +22,8 @@ Use this file to prioritize changes in small, safe slices.
 
 ## Player Profiles and Rivalries
 
-- [ ] Build player detail page: recent matches, offense vs defense trend, current streak, best partner, toughest opponent.
+- [x] Build player detail page: recent matches, offense vs defense trend, current streak, best partner, toughest opponent.
 - [ ] Create rivalries hub: most-played rivalries, closest rivalry, one-sided matchups, revenge tracking.
-- [ ] Surface head-to-head history within player context (integrate existing h2h endpoint).
 
 ## Queue and Match Suggestions
 

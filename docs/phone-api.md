@@ -112,7 +112,12 @@ Notes:
   - Inputs: `red_off`, `blue_off`, optional defenders in doubles
   - Returns probability + ratio text
 - `GET /api/h2h?p1=alice&p2=bob`
+- `GET /api/team-h2h?team1=alice,bob&team2=carol,dave`
+  - Ordered team-vs-team H2H for the current lineup.
+  - Team member order is significant for doubles because internal phone-runtime records preserve the gameplay order used by ratings and odds.
+  - The phone UI should still render doubles as `Defense + Offense` even though internal arrays remain offense-first.
 - `GET /api/stats?scope=all|this_quarter|this_month|this_week`
+- `GET /api/player/<name>/profile?scope=all|this_quarter|this_month|this_week&recent_limit=5`
 - `GET /api/player/<name>/history?n=10`
 
 ### Match Submit
@@ -135,6 +140,11 @@ Rules:
 - Singles/doubles only; team sizes must be balanced.
 - Players must exist already.
 - Duplicate submit detection applies in a short time window.
+
+Ordering note:
+- Internal gameplay math uses offense-first team arrays for doubles: `[offense, defense]`.
+- Phone UI presentation should display doubles as `Defense + Offense`.
+- Historical match records written by the phone runtime may therefore be stored offense-first even when shown defense-first in the UI.
 
 ## Common Status Codes
 

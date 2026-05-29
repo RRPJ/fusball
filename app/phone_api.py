@@ -482,6 +482,22 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     .badge-muted { background:rgba(159,179,196,0.08); color:var(--muted); border:1px solid var(--line); }
     .h2h-card { margin-top:8px; display:none; }
     .h2h-card.open { display:block; }
+    .h2h-grid { display:grid; gap:8px; }
+    .h2h-pair { border:1px solid var(--line); border-radius:8px; padding:8px; background:rgba(15,38,56,0.5); }
+    .profile-panel { display:grid; gap:10px; }
+    .profile-header { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; flex-wrap:wrap; }
+    .profile-title { font-size:0.95rem; font-weight:700; color:#f7fbff; }
+    .profile-meta { font-size:0.74rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em; }
+    .profile-cards { display:grid; gap:8px; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); }
+    .profile-card { border:1px solid var(--line); border-radius:8px; padding:8px; background:rgba(15,38,56,0.55); }
+    .profile-card .label { font-size:0.68rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; }
+    .profile-card .value { margin-top:4px; font-size:0.88rem; color:#f7fbff; font-weight:700; }
+    .profile-card .subvalue { margin-top:3px; font-size:0.74rem; color:var(--muted); }
+    .trend-row { display:grid; gap:8px; grid-template-columns:repeat(2, minmax(0, 1fr)); }
+    .trend-pill { border:1px solid var(--line); border-radius:8px; padding:8px; background:rgba(15,38,56,0.55); }
+    .profile-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .recent-match { border-top:1px solid rgba(159, 179, 196, 0.12); padding-top:8px; margin-top:8px; }
+    .recent-match:first-child { border-top:0; padding-top:0; margin-top:0; }
     .form-w { color:var(--ok); font-weight:700; }
     .form-l { color:var(--bad); }
     .expand-panel { padding:10px 8px; background:rgba(8,20,30,0.85); border-top:1px solid var(--line); font-size:0.82rem; color:var(--muted); }
@@ -1897,6 +1913,93 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       }).join('');
     }
 
+    function formatSignedDelta(value) {
+      const numeric = Number(value || 0);
+      const fixed = numeric.toFixed(1);
+      return `<span class='${numeric >= 0 ? 'delta-pos' : 'delta-neg'}'>${numeric >= 0 ? '+' : ''}${fixed}</span>`;
+    }
+
+    function recentFormText(form) {
+      if (!form) return 'No recent form';
+      return form.split('').map(ch => ch === 'W' ? `<span class='form-w'>W</span>` : `<span class='form-l'>L</span>`).join(' ');
+    }
+
+    function renderProfileOpponentCard(label, item, actionLabel, playerKey) {
+      if (!item) {
+        return `<div class='profile-card'><div class='label'>${label}</div><div class='value'>No data yet</div></div>`;
+      }
+      return `<div class='profile-card'>` +
+        `<div class='label'>${label}</div>` +
+        `<div class='value'>${item.player}</div>` +
+        `<div class='subvalue'>${item.wins}-${item.losses}` + (item.draws ? ` (${item.draws}D)` : '') + ` in ${item.matches} match${item.matches === 1 ? '' : 'es'}</div>` +
+        (actionLabel
+          ? `<div class='subvalue' style='margin-top:8px;'><button class='btn small' type='button' onclick='openPlayerH2H("${playerKey}", "${item.player.toLowerCase()}")'>${actionLabel}</button></div>`
+          : '') +
+        `</div>`;
+    }
+
+    function renderRecentMatches(matches) {
+      if (!matches || matches.length === 0) {
+        return `<div class='kv'>No matches recorded yet.</div>`;
+      }
+      return matches.map(match => {
+        const result = match.won ? `<span class='form-w'>W</span>` : `<span class='form-l'>L</span>`;
+        const date = match.timestamp ? match.timestamp.slice(0, 10) : '?';
+        const lineup = `${match.team.join(' + ')} vs ${match.opponents.join(' + ')}`;
+        return `<div class='recent-match'>` +
+          `<div class='kv'>${result} ${date} <strong>${match.score_for}-${match.score_against}</strong></div>` +
+          `<div class='sub'>${lineup}</div>` +
+          `<div class='kv'>Off ${formatSignedDelta(match.delta.offense)} Def ${formatSignedDelta(match.delta.defense)}</div>` +
+          `</div>`;
+      }).join('');
+    }
+
+    function renderPlayerProfile(data) {
+      const summary = data.summary || {};
+      const bestPartner = renderProfileOpponentCard('Best Partner', data.best_partner, '', data.player);
+      const toughestOpponent = renderProfileOpponentCard('Toughest Opponent', data.toughest_opponent, 'Open H2H', data.player);
+      const streakValue = summary.streak ? `${summary.streak} straight wins` : 'No current streak';
+      return `<div class='profile-panel'>` +
+        `<div class='profile-header'>` +
+          `<div>` +
+            `<div class='profile-title'>${displayNameForKey(data.player)}</div>` +
+            `<div class='profile-meta'>${summary.wins || 0}-${(summary.games || 0) - (summary.wins || 0)} in ${summary.games || 0} match${summary.games === 1 ? '' : 'es'} · ${Math.round((summary.win_rate || 0) * 100)}% win rate</div>` +
+          `</div>` +
+          `<div class='profile-meta'>Form ${recentFormText(summary.recent_form_5 || '')}</div>` +
+        `</div>` +
+        `<div class='profile-cards'>` +
+          `<div class='profile-card'><div class='label'>Current Streak</div><div class='value'>${streakValue}</div><div class='subvalue'>Last match ${summary.last_match ? summary.last_match.slice(0, 10) : 'n/a'}</div></div>` +
+          bestPartner +
+          toughestOpponent +
+        `</div>` +
+        `<div class='trend-row'>` +
+          `<div class='trend-pill'><div class='label'>Offense Trend</div><div class='value'>${formatSignedDelta((data.trend || {}).offense)}</div><div class='subvalue'>Recent matches</div></div>` +
+          `<div class='trend-pill'><div class='label'>Defense Trend</div><div class='value'>${formatSignedDelta((data.trend || {}).defense)}</div><div class='subvalue'>Recent matches</div></div>` +
+        `</div>` +
+        `<div>` +
+          `<div style='font-size:0.75rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em;'>Recent Matches</div>` +
+          renderRecentMatches(data.recent_matches || []) +
+        `</div>` +
+        `<div class='profile-actions'>` +
+          `<button class='btn small' type='button' onclick='setLeaderboardFilter(state.leaderboardFilter)'>Refresh Scope</button>` +
+        `</div>` +
+      `</div>`;
+    }
+
+    function openPlayerH2H(playerKey, otherPlayerKey) {
+      setStep(2);
+      setMode('singles');
+      state.selected.red_offense = displayNameForKey(playerKey);
+      state.selected.blue_offense = displayNameForKey(otherPlayerKey);
+      state.selected.red_defense = null;
+      state.selected.blue_defense = null;
+      state.h2hOpen = true;
+      renderSlots();
+      updateSummary();
+      updateReview();
+      refreshH2H();
+    }
+
     async function togglePlayerHistory(rowEl, playerKey) {
       if (state.offline) {
         return;
@@ -1912,28 +2015,18 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       const td = document.createElement('td');
       td.colSpan = 3;
       td.className = 'expand-panel';
-      td.innerHTML = '<div class="kv">Loading rating progression...</div>';
+      td.innerHTML = '<div class="kv">Loading player profile...</div>';
       tr.appendChild(td);
       rowEl.after(tr);
       try {
-        const resp = await apiFetch(`/api/player/${encodeURIComponent(playerKey)}/history?n=6`, {
-          trackKey: 'history',
-          trackLabel: 'player history',
+        const resp = await apiFetch(`/api/player/${encodeURIComponent(playerKey)}/profile?scope=${encodeURIComponent(state.leaderboardFilter)}&recent_limit=5`, {
+          trackKey: 'profile',
+          trackLabel: 'player profile',
         });
-        if (!resp.ok) { td.innerHTML = '<div class="kv">No history available.</div>'; return; }
+        if (!resp.ok) { td.innerHTML = '<div class="kv">No profile available.</div>'; return; }
         const data = await resp.json();
-        if (!data.snapshots || data.snapshots.length === 0) { td.innerHTML = '<div class="kv">No matches recorded yet.</div>'; return; }
-        const rows = data.snapshots.slice(-5).reverse().map(s => {
-          const dOff = (s.after.offense_mu - s.before.offense_mu).toFixed(1);
-          const dDef = (s.after.defense_mu - s.before.defense_mu).toFixed(1);
-          const offStr = `<span class='${dOff >= 0 ? "delta-pos" : "delta-neg"}'>${dOff >= 0 ? '+' : ''}${dOff}</span>`;
-          const defStr = `<span class='${dDef >= 0 ? "delta-pos" : "delta-neg"}'>${dDef >= 0 ? '+' : ''}${dDef}</span>`;
-          const result = s.won ? `<span class='form-w'>W</span>` : `<span class='form-l'>L</span>`;
-          const date = s.timestamp ? s.timestamp.slice(0, 10) : '?';
-          return `<div class='kv'>${result} ${date} Off ${offStr} Def ${defStr}</div>`;
-        }).join('');
-        td.innerHTML = `<div style='font-size:0.75rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em;'>Last ${data.snapshots.length} matches</div>${rows}`;
-      } catch { td.innerHTML = '<div class="kv">Could not load history.</div>'; }
+        td.innerHTML = renderPlayerProfile(data);
+      } catch { td.innerHTML = '<div class="kv">Could not load profile.</div>'; }
     }
 
     function updateSummary() {
@@ -2228,6 +2321,8 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     function refreshH2H() {
       const redOff = state.selected.red_offense;
       const blueOff = state.selected.blue_offense;
+      const redDef = state.selected.red_defense;
+      const blueDef = state.selected.blue_defense;
       const card = document.getElementById('h2hCard');
       const toggleRow = document.getElementById('h2hToggleRow');
       if (!redOff || !blueOff) {
@@ -2238,22 +2333,50 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       toggleRow.style.display = '';
       if (!state.h2hOpen) return;
       card.innerHTML = '<span class="muted">Loading head-to-head...</span>';
+      if (state.mode === 'doubles' && redDef && blueDef) {
+        const redTeamDisplay = `${redDef} + ${redOff}`;
+        const blueTeamDisplay = `${blueDef} + ${blueOff}`;
+        const team1 = `${encodeURIComponent(redOff.toLowerCase())},${encodeURIComponent(redDef.toLowerCase())}`;
+        const team2 = `${encodeURIComponent(blueOff.toLowerCase())},${encodeURIComponent(blueDef.toLowerCase())}`;
+        apiFetch(`/api/team-h2h?team1=${team1}&team2=${team2}`, {
+          trackKey: 'h2h',
+          trackLabel: 'head-to-head',
+        })
+          .then(r => r.json())
+          .then(data => {
+            if (data.matches === 0) {
+              card.innerHTML = `<div class='profile-meta' style='margin-bottom:8px;'>Current teams H2H</div>` +
+                `<div class='h2h-pair'><div class='kv'><strong>${redTeamDisplay}</strong> vs <strong>${blueTeamDisplay}</strong></div>` +
+                `<div class='sub'>No recorded doubles matches for this exact lineup order yet.</div></div>`;
+              return;
+            }
+            const last = data.last_match ? data.last_match.slice(0, 10) : '?';
+            card.innerHTML = `<div class='profile-meta' style='margin-bottom:8px;'>Current teams H2H</div>` +
+              `<div class='h2h-pair'>` +
+              `<div class='kv'><strong>${redTeamDisplay}</strong> ${data.team1_wins}\u2013${data.team2_wins} <strong>${blueTeamDisplay}</strong>${data.draws ? ` (${data.draws}D)` : ''}</div>` +
+              `<div class='sub'>${data.matches} match${data.matches === 1 ? '' : 'es'} · last ${last}</div>` +
+              `</div>`;
+          })
+          .catch(() => { card.innerHTML = '<span class="muted">Could not load H2H data.</span>'; });
+        return;
+      }
+
       apiFetch(`/api/h2h?p1=${encodeURIComponent(redOff.toLowerCase())}&p2=${encodeURIComponent(blueOff.toLowerCase())}`, {
         trackKey: 'h2h',
         trackLabel: 'head-to-head',
       })
         .then(r => r.json())
-        .then(d => {
-          if (d.matches === 0) {
+        .then(data => {
+          if (data.matches === 0) {
             card.innerHTML = '<span class="muted">No recorded matches between these players yet.</span>';
-          } else {
-            const last = d.last_match ? d.last_match.slice(0, 10) : '?';
-            card.innerHTML =
-              `<div><strong>${redOff}</strong> ${d.p1_wins}\u2013${d.p2_wins} <strong>${blueOff}</strong>` +
-              (d.draws ? ` (${d.draws} draw${d.draws > 1 ? 's' : ''})` : '') +
-              `</div><div class='muted' style='margin-top:4px;'>` +
-              `${d.matches} match${d.matches > 1 ? 'es' : ''} \u00b7 last ${last}</div>`;
+            return;
           }
+          const last = data.last_match ? data.last_match.slice(0, 10) : '?';
+          card.innerHTML = `<div class='profile-meta' style='margin-bottom:8px;'>Head-to-head</div>` +
+            `<div class='h2h-pair'>` +
+            `<div class='kv'><strong>${redOff}</strong> ${data.p1_wins}\u2013${data.p2_wins} <strong>${blueOff}</strong>${data.draws ? ` (${data.draws}D)` : ''}</div>` +
+            `<div class='sub'>${data.matches} match${data.matches === 1 ? '' : 'es'} · last ${last}</div>` +
+            `</div>`;
         })
         .catch(() => { card.innerHTML = '<span class="muted">Could not load H2H data.</span>'; });
     }
@@ -2798,6 +2921,28 @@ def create_app(
     assert store is not None
     return jsonify(store.query_h2h(p1, p2))
 
+  @app.get("/api/team-h2h")
+  def team_h2h() -> object:
+    denied = require_read_access()
+    if denied is not None:
+      return denied
+
+    team1_raw = request.args.get("team1", "").strip().lower()
+    team2_raw = request.args.get("team2", "").strip().lower()
+    if not team1_raw or not team2_raw:
+      return jsonify({"error": "team1 and team2 are required"}), 400
+
+    team1 = [name.strip() for name in team1_raw.split(",") if name.strip()]
+    team2 = [name.strip() for name in team2_raw.split(",") if name.strip()]
+    if len(team1) != len(team2) or len(team1) not in {1, 2}:
+      return jsonify({"error": "team1 and team2 must be balanced singles or doubles lineups"}), 400
+
+    store, error_response = _resolve_write_store()
+    if error_response is not None:
+      return error_response
+    assert store is not None
+    return jsonify(store.query_team_h2h(team1, team2))
+
   @app.get("/api/stats")
   def player_stats() -> object:
     denied = require_read_access()
@@ -2834,6 +2979,29 @@ def create_app(
     assert store is not None
     snapshots = store.query_rating_snapshots(name, n)
     return jsonify({"player": name, "count": len(snapshots), "snapshots": snapshots})
+
+  @app.get("/api/player/<name>/profile")
+  def player_profile(name: str) -> object:
+    denied = require_read_access()
+    if denied is not None:
+      return denied
+
+    name = name.strip().lower()
+    scope = request.args.get("scope", default="all", type=str)
+    if scope not in {"all", "this_quarter", "this_month", "this_week"}:
+      return jsonify({"error": "invalid scope"}), 400
+    recent_limit = request.args.get("recent_limit", default=5, type=int)
+    recent_limit = max(1, min(recent_limit, 10))
+
+    store, error_response = _resolve_write_store()
+    if error_response is not None:
+      return error_response
+    assert store is not None
+
+    try:
+      return jsonify(store.query_player_profile(name, scope=scope, recent_limit=recent_limit))
+    except ValueError as exc:
+      return jsonify({"error": str(exc)}), 400
 
   @app.get("/api/odds")
   def match_odds() -> object:

@@ -14,8 +14,14 @@ import trueskill
 
 from services.match_history import append_match_history, replay_scope_ratings
 from services.match_history import query_h2h as shelve_query_h2h
+from services.match_history import query_player_profile as shelve_query_player_profile
+from services.match_history import query_player_profile_from_records
 from services.match_history import query_player_stats as shelve_query_player_stats
+from services.match_history import query_player_stats_from_records
 from services.match_history import query_rating_snapshots as shelve_query_rating_snapshots
+from services.match_history import query_rating_snapshots_from_records
+from services.match_history import query_team_h2h as shelve_query_team_h2h
+from services.match_history import query_team_h2h_from_records
 from services.match_log import append_match_log
 from services.match_service import calculate_rating_update
 
@@ -43,7 +49,13 @@ class BaseWriteStore:
     def query_h2h(self, p1: str, p2: str) -> dict:
         raise NotImplementedError
 
+    def query_team_h2h(self, team1: Sequence[str], team2: Sequence[str]) -> dict:
+        raise NotImplementedError
+
     def query_player_stats(self, scope: str = "all") -> dict[str, dict]:
+        raise NotImplementedError
+
+    def query_player_profile(self, player: str, scope: str = "all", recent_limit: int = 5) -> dict[str, object]:
         raise NotImplementedError
 
     def query_rating_snapshots(self, player: str, n: int = 10) -> list[dict]:
@@ -97,8 +109,14 @@ class ShelveWriteStore(BaseWriteStore):
     def query_h2h(self, p1: str, p2: str) -> dict:
         return shelve_query_h2h(self.db_dir, p1, p2)
 
+    def query_team_h2h(self, team1: Sequence[str], team2: Sequence[str]) -> dict:
+        return shelve_query_team_h2h(self.db_dir, team1, team2)
+
     def query_player_stats(self, scope: str = "all") -> dict[str, dict]:
         return shelve_query_player_stats(self.db_dir, scope)
+
+    def query_player_profile(self, player: str, scope: str = "all", recent_limit: int = 5) -> dict[str, object]:
+        return shelve_query_player_profile(self.db_dir, player, scope=scope, recent_limit=recent_limit)
 
     def query_rating_snapshots(self, player: str, n: int = 10) -> list[dict]:
         return shelve_query_rating_snapshots(self.db_dir, player, n)
@@ -370,105 +388,26 @@ class NeonWriteStore(BaseWriteStore):
             "last_match": last_match,
         }
 
+    def query_team_h2h(self, team1: Sequence[str], team2: Sequence[str]) -> dict:
+        return query_team_h2h_from_records(self._history_records(), team1, team2)
+
     def query_player_stats(self, scope: str = "all") -> dict[str, dict]:
         if scope not in {"all", "this_quarter", "this_month", "this_week"}:
             raise ValueError(f"unsupported scope: {scope}")
 
         all_records = self._history_records()
         scoped_records = self._records_for_scope(scope)
-        stat_records = all_records if scope == "all" else scoped_records
+        return query_player_stats_from_records(all_records, scoped_records)
 
-        player_matches: dict[str, list[dict]] = {}
-        latest_level_after: dict[str, float] = {}
-        scope_baseline_level: dict[str, float] = {}
-
-        for record in all_records:
-            winner_team = [n.lower() for n in record.get("winner", [])]
-            all_names = [n.lower() for n in record.get("team1", []) + record.get("team2", [])]
-            entries = {e["name"].lower(): e for e in record.get("players", [])}
-
-            for name in all_names:
-                entry = entries.get(name, {})
-                after = entry.get("after", {})
-                level = self._level_from_rating_dict(after)
-                player_matches.setdefault(name, []).append(
-                    {
-                        "won": name in winner_team,
-                        "timestamp": record.get("timestamp", ""),
-                        "level_after": round(level, 2),
-                    }
-                )
-                latest_level_after[name] = level
-
-        player_matches = {}
-        for record in stat_records:
-            winner_team = [n.lower() for n in record.get("winner", [])]
-            all_names = [n.lower() for n in record.get("team1", []) + record.get("team2", [])]
-
-            for name in all_names:
-                player_matches.setdefault(name, []).append(
-                    {
-                        "won": name in winner_team,
-                        "timestamp": record.get("timestamp", ""),
-                    }
-                )
-
-        for record in scoped_records:
-            entries = {e["name"].lower(): e for e in record.get("players", [])}
-            for name, entry in entries.items():
-                if name in scope_baseline_level:
-                    continue
-                before = entry.get("before", {})
-                scope_baseline_level[name] = self._level_from_rating_dict(before)
-
-        result: dict[str, dict] = {}
-        for name, matches in player_matches.items():
-            games = len(matches)
-            wins = sum(1 for m in matches if m["won"])
-            streak = 0
-            for m in reversed(matches):
-                if m["won"]:
-                    streak += 1
-                else:
-                    break
-            improved = 0.0
-            if scope != "all" and name in scope_baseline_level:
-                improved = round(latest_level_after.get(name, 0.0) - scope_baseline_level[name], 2)
-            recent_form_5 = "".join("W" if m["won"] else "L" for m in matches[-5:])
-            last_match = matches[-1]["timestamp"] if matches else None
-
-            result[name] = {
-                "games": games,
-                "wins": wins,
-                "win_rate": round(wins / games, 3) if games else 0.0,
-                "streak": streak,
-                "improved": improved,
-                "recent_form_5": recent_form_5,
-                "last_match": last_match,
-            }
-
-        return result
+    def query_player_profile(self, player: str, scope: str = "all", recent_limit: int = 5) -> dict[str, object]:
+        if scope not in {"all", "this_quarter", "this_month", "this_week"}:
+            raise ValueError(f"unsupported scope: {scope}")
+        all_records = self._history_records()
+        scoped_records = self._records_for_scope(scope)
+        return query_player_profile_from_records(all_records, scoped_records, player, recent_limit=recent_limit)
 
     def query_rating_snapshots(self, player: str, n: int = 10) -> list[dict]:
-        player = player.lower()
-        snapshots = []
-        for record in self._history_records():
-            all_names = [nm.lower() for nm in record.get("team1", []) + record.get("team2", [])]
-            if player not in all_names:
-                continue
-            entries = {e["name"].lower(): e for e in record.get("players", [])}
-            entry = entries.get(player)
-            if not entry:
-                continue
-            snapshots.append(
-                {
-                    "timestamp": record.get("timestamp", ""),
-                    "won": player in [nm.lower() for nm in record.get("winner", [])],
-                    "before": entry.get("before", {}),
-                    "after": entry.get("after", {}),
-                }
-            )
-        return snapshots[-n:]
+        return query_rating_snapshots_from_records(self._history_records(), player, n)
 
     def add_player(self, player_name: str) -> dict[str, object]:
         with self._connect() as conn:

@@ -169,6 +169,26 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("const redDisplay = formatTeamDisplay('red', ' + ');", html)
             self.assertIn("const blueDisplay = formatTeamDisplay('blue', ' + ');", html)
 
+    def test_phone_page_includes_profile_panel_and_pairwise_h2h_hooks(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            db_path = str(tmp_path / "playerdb")
+            with shelve.open(db_path) as players:
+                players["alice"] = (trueskill.Rating(), trueskill.Rating())
+
+            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+            client = app.test_client()
+            response = client.get("/phone")
+            self.assertEqual(response.status_code, 200)
+
+            html = response.get_data(as_text=True)
+            self.assertIn("Loading player profile...", html)
+            self.assertIn("/api/player/${encodeURIComponent(playerKey)}/profile?scope=${encodeURIComponent(state.leaderboardFilter)}&recent_limit=5", html)
+            self.assertIn("Current teams H2H", html)
+            self.assertIn("/api/team-h2h?team1=${team1}&team2=${team2}", html)
+            self.assertIn("function openPlayerH2H(playerKey, otherPlayerKey)", html)
+            self.assertIn("setMode('singles');", html)
+
     def test_root_redirects_to_phone(self) -> None:
         with TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
@@ -580,6 +600,17 @@ class PhoneApiTests(unittest.TestCase):
                         "last_match": "2026-04-01T12:00:00.000000Z",
                     }
 
+                def query_team_h2h(self, team1: list[str], team2: list[str]):
+                    return {
+                        "team1": [name.title() for name in team1],
+                        "team2": [name.title() for name in team2],
+                        "matches": 1,
+                        "team1_wins": 1,
+                        "team2_wins": 0,
+                        "draws": 0,
+                        "last_match": "2026-04-02T12:00:00.000000Z",
+                    }
+
                 def query_player_stats(self, scope: str = "all"):
                     return {
                         "alice": {
@@ -591,6 +622,40 @@ class PhoneApiTests(unittest.TestCase):
                             "recent_form_5": "WL",
                             "last_match": "2026-04-01T12:00:00.000000Z",
                         }
+                    }
+
+                def query_player_profile(self, player: str, scope: str = "all", recent_limit: int = 5):
+                    return {
+                        "player": player,
+                        "summary": {
+                            "games": 2,
+                            "wins": 1,
+                            "win_rate": 0.5,
+                            "streak": 0,
+                            "recent_form_5": "WL",
+                            "last_match": "2026-04-01T12:00:00.000000Z",
+                        },
+                        "trend": {"offense": 1.5, "defense": -0.5},
+                        "best_partner": None,
+                        "toughest_opponent": {
+                            "player": "Bob",
+                            "matches": 2,
+                            "wins": 1,
+                            "losses": 1,
+                            "draws": 0,
+                            "win_share": 0.5,
+                        },
+                        "recent_matches": [
+                            {
+                                "timestamp": "2026-04-01T12:00:00.000000Z",
+                                "won": True,
+                                "team": ["Alice"],
+                                "opponents": ["Bob"],
+                                "score_for": 5,
+                                "score_against": 3,
+                                "delta": {"offense": 1.5, "defense": -0.5},
+                            }
+                        ][:recent_limit],
                     }
 
                 def query_rating_snapshots(self, player: str, n: int = 10):
@@ -623,6 +688,20 @@ class PhoneApiTests(unittest.TestCase):
             history_payload = history.get_json()
             assert history_payload is not None
             self.assertEqual(history_payload["count"], 1)
+
+            profile = client.get("/api/player/alice/profile?scope=this_month&recent_limit=1")
+            self.assertEqual(profile.status_code, 200)
+            profile_payload = profile.get_json()
+            assert profile_payload is not None
+            self.assertEqual(profile_payload["player"], "alice")
+            self.assertEqual(profile_payload["summary"]["games"], 2)
+            self.assertEqual(len(profile_payload["recent_matches"]), 1)
+
+            team_h2h = client.get("/api/team-h2h?team1=alice,bob&team2=carol,dave")
+            self.assertEqual(team_h2h.status_code, 200)
+            team_h2h_payload = team_h2h.get_json()
+            assert team_h2h_payload is not None
+            self.assertEqual(team_h2h_payload["matches"], 1)
 
     def test_dual_pin_auth_read_and_write_matrix(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -799,6 +878,163 @@ class C3AnalyticsApiTests(unittest.TestCase):
             payload = response.get_json()
             assert payload is not None
             self.assertEqual(payload["count"], 0)
+
+    def test_player_profile_returns_recent_match_context_and_summaries(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            db_path = str(tmp_path / "playerdb")
+            with shelve.open(db_path) as players:
+                for name in ["alice", "bob", "carol", "dave"]:
+                    players[name] = (trueskill.Rating(mu=25, sigma=8.333), trueskill.Rating(mu=25, sigma=8.333))
+
+            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+            client = app.test_client()
+
+            match_responses = [
+                client.post(
+                    "/api/matches",
+                    json={"team1": ["alice", "bob"], "team2": ["carol", "dave"], "score1": 5, "score2": 3},
+                    headers={"X-Operator-Token": self.operator_token},
+                ),
+                client.post(
+                    "/api/matches",
+                    json={"team1": ["alice", "bob"], "team2": ["carol", "dave"], "score1": 3, "score2": 5},
+                    headers={"X-Operator-Token": self.operator_token},
+                ),
+                client.post(
+                    "/api/matches",
+                    json={"team1": ["alice"], "team2": ["carol"], "score1": 2, "score2": 5},
+                    headers={"X-Operator-Token": self.operator_token},
+                ),
+            ]
+            for response in match_responses:
+                self.assertEqual(response.status_code, 201)
+
+            response = client.get("/api/player/alice/profile?scope=all&recent_limit=5")
+            self.assertEqual(response.status_code, 200)
+            payload = response.get_json()
+            assert payload is not None
+            self.assertEqual(payload["player"], "alice")
+            self.assertEqual(payload["summary"]["games"], 3)
+            self.assertEqual(payload["summary"]["wins"], 1)
+            self.assertEqual(payload["best_partner"]["player"], "Bob")
+            self.assertEqual(payload["best_partner"]["matches"], 2)
+            self.assertEqual(payload["toughest_opponent"]["player"], "Carol")
+            self.assertEqual(payload["recent_matches"][0]["team"], ["Alice"])
+            self.assertEqual(payload["recent_matches"][0]["opponents"], ["Carol"])
+            self.assertEqual(payload["recent_matches"][1]["team"], ["Bob", "Alice"])
+            self.assertEqual(payload["recent_matches"][1]["opponents"], ["Dave", "Carol"])
+
+    def test_player_profile_scope_trend_matches_returned_recent_matches(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            now = datetime(2026, 5, 20, 12, 0, tzinfo=timezone.utc)
+            local_now = now.astimezone()
+            quarter_start_month = ((local_now.month - 1) // 3) * 3 + 1
+            start_quarter_local = local_now.replace(
+                month=quarter_start_month,
+                day=1,
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+            in_scope_ts = (start_quarter_local + timedelta(days=10)).astimezone(timezone.utc)
+            out_scope_ts = (start_quarter_local - timedelta(days=1)).astimezone(timezone.utc)
+
+            def player_entry(name: str, off_before: float, off_after: float, def_before: float, def_after: float) -> dict:
+                return {
+                    "name": name,
+                    "before": {
+                        "offense_mu": off_before,
+                        "offense_sigma": 8.333,
+                        "defense_mu": def_before,
+                        "defense_sigma": 8.333,
+                    },
+                    "after": {
+                        "offense_mu": off_after,
+                        "offense_sigma": 8.0,
+                        "defense_mu": def_after,
+                        "defense_sigma": 8.0,
+                    },
+                }
+
+            self._write_history_record(
+                tmp_path,
+                out_scope_ts,
+                ["alice", "bob"],
+                ["carol", "dave"],
+                ["alice", "bob"],
+                5,
+                2,
+                players=[
+                    player_entry("alice", 20.0, 99.0, 20.0, 50.0),
+                    player_entry("bob", 20.0, 20.0, 20.0, 20.0),
+                    player_entry("carol", 20.0, 20.0, 20.0, 20.0),
+                    player_entry("dave", 20.0, 20.0, 20.0, 20.0),
+                ],
+            )
+            self._write_history_record(
+                tmp_path,
+                in_scope_ts,
+                ["alice", "bob"],
+                ["carol", "dave"],
+                ["alice", "bob"],
+                5,
+                3,
+                players=[
+                    player_entry("alice", 25.0, 30.1, 18.0, 16.6),
+                    player_entry("bob", 20.0, 20.0, 20.0, 20.0),
+                    player_entry("carol", 20.0, 20.0, 20.0, 20.0),
+                    player_entry("dave", 20.0, 20.0, 20.0, 20.0),
+                ],
+            )
+            self._write_history_record(
+                tmp_path,
+                (in_scope_ts + timedelta(days=1)),
+                ["alice", "bob"],
+                ["carol", "dave"],
+                ["carol", "dave"],
+                4,
+                5,
+                players=[
+                    player_entry("alice", 30.1, 27.3, 16.6, 19.4),
+                    player_entry("bob", 20.0, 20.0, 20.0, 20.0),
+                    player_entry("carol", 20.0, 20.0, 20.0, 20.0),
+                    player_entry("dave", 20.0, 20.0, 20.0, 20.0),
+                ],
+            )
+
+            with patch("services.match_history._current_utc", return_value=now):
+                app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+                client = app.test_client()
+                response = client.get("/api/player/alice/profile?scope=this_quarter&recent_limit=5")
+                self.assertEqual(response.status_code, 200)
+                payload = response.get_json()
+                assert payload is not None
+                self.assertEqual(len(payload["recent_matches"]), 2)
+                self.assertAlmostEqual(payload["trend"]["offense"], 2.3, places=2)
+                self.assertAlmostEqual(payload["trend"]["defense"], 1.4, places=2)
+
+    def test_team_h2h_is_order_sensitive_for_doubles(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            self._write_history_record(tmp_path, datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc), ["alice", "bob"], ["carol", "dave"], ["alice", "bob"], 5, 3)
+            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+            client = app.test_client()
+
+            matching = client.get("/api/team-h2h?team1=alice,bob&team2=carol,dave")
+            self.assertEqual(matching.status_code, 200)
+            matching_payload = matching.get_json()
+            assert matching_payload is not None
+            self.assertEqual(matching_payload["matches"], 1)
+            self.assertEqual(matching_payload["team1_wins"], 1)
+
+            reordered = client.get("/api/team-h2h?team1=bob,alice&team2=carol,dave")
+            self.assertEqual(reordered.status_code, 200)
+            reordered_payload = reordered.get_json()
+            assert reordered_payload is not None
+            self.assertEqual(reordered_payload["matches"], 0)
 
     def test_scoped_leaderboard_hides_inactive_players(self) -> None:
         with TemporaryDirectory() as tmpdir:
