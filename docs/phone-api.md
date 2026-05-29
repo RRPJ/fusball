@@ -68,7 +68,7 @@ Legacy compatibility:
 - `GET /api/leaderboard?limit=50&scope=all`
 - Query params:
   - `limit` (1-200)
-  - `scope`: `all`, `this_month`, `this_week`
+  - `scope`: `all`, `this_quarter`, `this_month`, `this_week`
 - Returns:
   - `count`
   - `items[]` with `position`, `name`, `rank`, `level`, offense/defense stats
@@ -112,7 +112,7 @@ Notes:
   - Inputs: `red_off`, `blue_off`, optional defenders in doubles
   - Returns probability + ratio text
 - `GET /api/h2h?p1=alice&p2=bob`
-- `GET /api/stats?scope=all|this_month|this_week`
+- `GET /api/stats?scope=all|this_quarter|this_month|this_week`
 - `GET /api/player/<name>/history?n=10`
 
 ### Match Submit

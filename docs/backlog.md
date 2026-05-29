@@ -4,9 +4,8 @@ Use this file to prioritize changes in small, safe slices.
 
 ## Priority 1: Quarterly Leaderboard
 
-- [ ] Add a quarterly (calendar quarter: Jan-Mar, Apr-Jun, etc.) leaderboard view.
-- [ ] Display alongside existing time-window leaderboards (This Week, This Month).
-- [ ] Support leaderboard reset and historical tracking at quarter boundaries.
+- [x] Add a quarterly (calendar quarter: Jan-Mar, Apr-Jun, etc.) leaderboard view.
+- [x] Display alongside existing time-window leaderboards (This Week, This Month).
 
 ## Priority 2: UI Revamp
 

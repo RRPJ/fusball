@@ -587,6 +587,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       </div>
       <div class='row filter-row'>
         <button id='filterAllBtn' class='btn sort active' type='button'>All</button>
+        <button id='filterThisQuarterBtn' class='btn sort' type='button'>This quarter</button>
         <button id='filterThisMonthBtn' class='btn sort' type='button'>This month</button>
         <button id='filterThisWeekBtn' class='btn sort' type='button'>This week</button>
       </div>
@@ -830,6 +831,8 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       const meta = ensureRequestMeta('leaderboard');
       const scopeLabel = state.leaderboardFilter === 'this_month'
         ? 'this month'
+        : state.leaderboardFilter === 'this_quarter'
+          ? 'this quarter'
         : state.leaderboardFilter === 'this_week'
           ? 'this week'
           : 'all-time';
@@ -1842,6 +1845,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       state.playerStats = null;
       state.playerStatsScope = null;
       document.getElementById('filterAllBtn').classList.toggle('active', f === 'all');
+      document.getElementById('filterThisQuarterBtn').classList.toggle('active', f === 'this_quarter');
       document.getElementById('filterThisMonthBtn').classList.toggle('active', f === 'this_month');
       document.getElementById('filterThisWeekBtn').classList.toggle('active', f === 'this_week');
 
@@ -2421,6 +2425,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     document.getElementById('sortStreakBtn').addEventListener('click', () => setLeaderboardSort('streak'));
     document.getElementById('sortImprovedBtn').addEventListener('click', () => setLeaderboardSort('improved'));
     document.getElementById('filterAllBtn').addEventListener('click', () => setLeaderboardFilter('all'));
+    document.getElementById('filterThisQuarterBtn').addEventListener('click', () => setLeaderboardFilter('this_quarter'));
     document.getElementById('filterThisMonthBtn').addEventListener('click', () => setLeaderboardFilter('this_month'));
     document.getElementById('filterThisWeekBtn').addEventListener('click', () => setLeaderboardFilter('this_week'));
     document.getElementById('addPlayerBtn').addEventListener('click', () => addPlayer().catch((e) => setAddPlayerStatus(e.message, 'bad')));
@@ -2587,7 +2592,7 @@ def create_app(
     limit = request.args.get("limit", default=50, type=int)
     limit = max(1, min(limit, 200))
     scope = request.args.get("scope", default="all", type=str)
-    if scope not in {"all", "this_month", "this_week"}:
+    if scope not in {"all", "this_quarter", "this_month", "this_week"}:
       return jsonify({"error": "invalid scope"}), 400
     store, error_response = _resolve_write_store()
     if error_response is not None:
@@ -2791,7 +2796,7 @@ def create_app(
       return denied
 
     scope = request.args.get("scope", default="all", type=str)
-    if scope not in {"all", "this_month", "this_week"}:
+    if scope not in {"all", "this_quarter", "this_month", "this_week"}:
       return jsonify({"error": "invalid scope"}), 400
 
     store, error_response = _resolve_write_store()

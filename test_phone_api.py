@@ -117,6 +117,11 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("function renderLeaderboardFreshness()", html)
             self.assertIn("function startFreshnessTicker()", html)
             self.assertIn("trackKey: 'leaderboard'", html)
+            self.assertLess(html.index(">All</button>"), html.index(">This quarter</button>"))
+            self.assertLess(html.index(">This quarter</button>"), html.index(">This month</button>"))
+            self.assertLess(html.index(">This month</button>"), html.index(">This week</button>"))
+            self.assertIn("document.getElementById('filterThisQuarterBtn').classList.toggle('active', f === 'this_quarter');", html)
+            self.assertIn("document.getElementById('filterThisQuarterBtn').addEventListener('click', () => setLeaderboardFilter('this_quarter'));", html)
 
     def test_phone_page_formats_doubles_display_as_defense_then_offense(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -473,7 +478,7 @@ class PhoneApiTests(unittest.TestCase):
                     return {name: self._ratings[name] for name in names if name in self._ratings}
 
                 def leaderboard_ratings(self, scope: str):
-                    if scope != "all":
+                    if scope not in {"all", "this_quarter"}:
                         return {}
                     return dict(self._ratings)
 
@@ -495,6 +500,12 @@ class PhoneApiTests(unittest.TestCase):
             assert leaderboard_payload is not None
             self.assertEqual(leaderboard_payload["count"], 2)
             self.assertEqual(leaderboard_payload["items"][0]["name"], "Alice")
+
+            quarterly = client.get("/api/leaderboard?limit=2&scope=this_quarter")
+            self.assertEqual(quarterly.status_code, 200)
+            quarterly_payload = quarterly.get_json()
+            assert quarterly_payload is not None
+            self.assertEqual(quarterly_payload["count"], 2)
 
             odds = client.get("/api/odds?red_off=alice&blue_off=bob")
             self.assertEqual(odds.status_code, 200)
@@ -769,6 +780,15 @@ class C3AnalyticsApiTests(unittest.TestCase):
 
             now = datetime(2026, 5, 20, 12, 0, tzinfo=timezone.utc)
             local_now = now.astimezone()
+            quarter_start_month = ((local_now.month - 1) // 3) * 3 + 1
+            start_quarter_local = local_now.replace(
+                month=quarter_start_month,
+                day=1,
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
             start_week_local = (local_now - timedelta(days=local_now.weekday())).replace(
                 hour=0,
                 minute=0,
@@ -777,12 +797,14 @@ class C3AnalyticsApiTests(unittest.TestCase):
             )
             start_month_local = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             start_week = start_week_local.astimezone(timezone.utc)
+            this_quarter_ts = (start_quarter_local + ((local_now - start_quarter_local) / 3)).astimezone(timezone.utc)
             week_base_local = max(start_week_local, start_month_local)
             this_week_ts = (week_base_local + ((local_now - week_base_local) / 2)).astimezone(timezone.utc)
             this_month_ts = (start_month_local + ((local_now - start_month_local) / 4)).astimezone(timezone.utc)
-            previous_month_ts = (min(start_week_local, start_month_local) - timedelta(hours=1)).astimezone(timezone.utc)
+            previous_quarter_ts = (start_quarter_local - timedelta(hours=1)).astimezone(timezone.utc)
 
-            self._write_history_record(tmp_path, previous_month_ts, ["alice"], ["bob"], ["alice"], 5, 3)
+            self._write_history_record(tmp_path, previous_quarter_ts, ["alice"], ["bob"], ["alice"], 5, 3)
+            self._write_history_record(tmp_path, this_quarter_ts, ["gina"], ["hank"], ["gina"], 5, 4)
             self._write_history_record(tmp_path, this_month_ts, ["carol"], ["dave"], ["carol"], 5, 2)
             self._write_history_record(tmp_path, this_week_ts, ["eve"], ["frank"], ["eve"], 5, 1)
 
@@ -790,11 +812,31 @@ class C3AnalyticsApiTests(unittest.TestCase):
                 app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
                 client = app.test_client()
 
+                quarter_resp = client.get("/api/leaderboard?scope=this_quarter")
+                self.assertEqual(quarter_resp.status_code, 200)
+                quarter_payload = quarter_resp.get_json()
+                assert quarter_payload is not None
+                quarter_names = {item["name"].lower() for item in quarter_payload["items"]}
+                self.assertIn("gina", quarter_names)
+                self.assertIn("hank", quarter_names)
+                self.assertIn("carol", quarter_names)
+                self.assertIn("dave", quarter_names)
+                self.assertIn("eve", quarter_names)
+                self.assertIn("frank", quarter_names)
+                self.assertNotIn("alice", quarter_names)
+                self.assertNotIn("bob", quarter_names)
+
                 month_resp = client.get("/api/leaderboard?scope=this_month")
                 self.assertEqual(month_resp.status_code, 200)
                 month_payload = month_resp.get_json()
                 assert month_payload is not None
                 month_names = {item["name"].lower() for item in month_payload["items"]}
+                if this_quarter_ts >= start_month_local.astimezone(timezone.utc):
+                    self.assertIn("gina", month_names)
+                    self.assertIn("hank", month_names)
+                else:
+                    self.assertNotIn("gina", month_names)
+                    self.assertNotIn("hank", month_names)
                 self.assertIn("carol", month_names)
                 self.assertIn("dave", month_names)
                 self.assertIn("eve", month_names)
@@ -822,6 +864,15 @@ class C3AnalyticsApiTests(unittest.TestCase):
 
             now = datetime.now(timezone.utc)
             local_now = now.astimezone()
+            quarter_start_month = ((local_now.month - 1) // 3) * 3 + 1
+            start_quarter_local = local_now.replace(
+                month=quarter_start_month,
+                day=1,
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
             start_week_local = (local_now - timedelta(days=local_now.weekday())).replace(
                 hour=0,
                 minute=0,
@@ -829,13 +880,29 @@ class C3AnalyticsApiTests(unittest.TestCase):
                 microsecond=0,
             )
             start_month_local = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            this_quarter_ts = (start_quarter_local + ((local_now - start_quarter_local) / 3)).astimezone(timezone.utc)
             week_base_local = max(start_week_local, start_month_local)
             this_month_ts = (start_month_local + ((local_now - start_month_local) / 4)).astimezone(timezone.utc)
             this_week_ts = (week_base_local + ((local_now - week_base_local) / 2)).astimezone(timezone.utc)
 
+            self._write_history_record(tmp_path, this_quarter_ts, ["gina"], ["hank"], ["gina"], 5, 4)
             self._write_history_record(tmp_path, this_month_ts, ["carol"], ["dave"], ["carol"], 5, 2)
             self._write_history_record(tmp_path, this_week_ts, ["eve"], ["frank"], ["eve"], 5, 1)
 
+            expected_quarter = playerLevel(calculate_rating_update(
+                {
+                    "gina": (trueskill.Rating(), trueskill.Rating()),
+                    "hank": (trueskill.Rating(), trueskill.Rating()),
+                    "carol": (trueskill.Rating(), trueskill.Rating()),
+                    "dave": (trueskill.Rating(), trueskill.Rating()),
+                    "eve": (trueskill.Rating(), trueskill.Rating()),
+                    "frank": (trueskill.Rating(), trueskill.Rating()),
+                },
+                ["gina"],
+                ["hank"],
+                5,
+                4,
+            )["gina"])
             expected_month = playerLevel(calculate_rating_update(
                 {
                     "carol": (trueskill.Rating(), trueskill.Rating()),
@@ -861,6 +928,13 @@ class C3AnalyticsApiTests(unittest.TestCase):
 
             app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
             client = app.test_client()
+
+            quarter_resp = client.get("/api/leaderboard?scope=this_quarter")
+            self.assertEqual(quarter_resp.status_code, 200)
+            quarter_payload = quarter_resp.get_json()
+            assert quarter_payload is not None
+            quarter_items = {item["name"].lower(): item for item in quarter_payload["items"]}
+            self.assertAlmostEqual(quarter_items["gina"]["level"], round(expected_quarter, 2), places=2)
 
             month_resp = client.get("/api/leaderboard?scope=this_month")
             self.assertEqual(month_resp.status_code, 200)
@@ -967,6 +1041,12 @@ class C3AnalyticsApiTests(unittest.TestCase):
                 month_payload = month_stats.get_json()
                 assert month_payload is not None
                 self.assertAlmostEqual(month_payload["alice"]["improved"], 9.0, places=2)
+
+                quarter_stats = client.get("/api/stats?scope=this_quarter")
+                self.assertEqual(quarter_stats.status_code, 200)
+                quarter_payload = quarter_stats.get_json()
+                assert quarter_payload is not None
+                self.assertAlmostEqual(quarter_payload["alice"]["improved"], 16.0, places=2)
 
                 week_stats = client.get("/api/stats?scope=this_week")
                 self.assertEqual(week_stats.status_code, 200)
