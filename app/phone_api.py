@@ -348,8 +348,23 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       padding: 11px 12px;
       font-size: 0.9rem;
     }
-    .players { max-height: 220px; overflow: auto; padding-right: 4px; }
+    .players {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      max-height: 260px;
+      overflow: auto;
+      padding-right: 4px;
+      align-content: start;
+    }
+    @media (min-width: 560px) {
+      .players {
+        grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));
+      }
+    }
+    .players .muted { grid-column: 1 / -1; }
     .presence-list { width: 100%; margin-top: 8px; }
+    .presence-list + .presence-list { margin-top: 12px; }
     .presence-list h3 {
       margin: 0 0 6px;
       font-size: 0.73rem;
@@ -357,21 +372,26 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       letter-spacing: 0.06em;
       color: var(--muted);
     }
-    .player-item { width: 100%; margin-bottom: 6px; }
-    .player-item.present-row { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
-    .player-item .btn { width: 100%; text-align: left; }
+    .player-item { min-width: 0; display: grid; gap: 6px; }
+    .player-item.present-row { grid-template-columns: minmax(0, 1fr) 38px; align-items: stretch; }
+    .player-item .btn {
+      width: 100%;
+      min-width: 0;
+      text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .player-item .btn.present-player { border-color: rgba(42, 166, 117, 0.45); }
     .player-item .btn.away-player { opacity: 0.72; }
     .player-item .btn.demote {
-      width: 40px;
+      width: 38px;
       text-align: center;
       padding: 8px 0;
       border-color: rgba(180, 81, 81, 0.45);
       color: #ffd4d4;
       font-weight: 700;
     }
-    .presence-toggle { margin-top: 6px; }
-    .presence-collapsed { display: none; }
     .btn.present { border-color: var(--ok); color: var(--ok); }
     .btn.assign-off { opacity: 0.55; }
     .score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; align-items: center; }
@@ -536,13 +556,12 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       <div id='oddsText' class='status' style='margin-top:2px;'></div>
       <div id='presenceStatus' class='status'>No active players selected.</div>
       <div class='presence-list'>
-        <h3>Present Players (tap to assign)</h3>
-        <div id='presentPlayersPanel' class='row players'></div>
+        <h3 id='presentPlayersHeading'>Present Players (tap to assign)</h3>
+        <div id='presentPlayersPanel' class='players'></div>
       </div>
-      <button id='awayToggleBtn' class='btn small presence-toggle' type='button'>Away Players ▾</button>
-      <div id='awayListWrap' class='presence-list presence-collapsed'>
-        <h3>Away Players (tap to mark present)</h3>
-        <div id='awayPlayersPanel' class='row players'></div>
+      <div id='awayListWrap' class='presence-list'>
+        <h3 id='awayPlayersHeading'>Away Players (tap to mark present)</h3>
+        <div id='awayPlayersPanel' class='players'></div>
       </div>
       <div id='h2hToggleRow' class='row' style='margin-top:6px;display:none;'>
         <button id='h2hToggleBtn' class='btn small' type='button' onclick='toggleH2H()'>H2H &#9660;</button>
@@ -664,7 +683,6 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       lastOnlineAt: null,
       lastOfflineAt: null,
       offlineReason: '',
-      awayOpen: false,
       players: [],
       activePlayers: [],
       latestOdds: null,
@@ -1442,6 +1460,8 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     function renderPlayerButtons() {
       const presentPanel = document.getElementById('presentPlayersPanel');
       const awayPanel = document.getElementById('awayPlayersPanel');
+      const presentHeading = document.getElementById('presentPlayersHeading');
+      const awayHeading = document.getElementById('awayPlayersHeading');
       presentPanel.innerHTML = '';
       awayPanel.innerHTML = '';
 
@@ -1489,10 +1509,8 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         awayPanel.appendChild(row);
       }
 
-      const awayToggle = document.getElementById('awayToggleBtn');
-      const awayWrap = document.getElementById('awayListWrap');
-      awayWrap.classList.toggle('presence-collapsed', !state.awayOpen);
-      awayToggle.textContent = state.awayOpen ? `Away Players ▴ (${awayNames.length})` : `Away Players ▾ (${awayNames.length})`;
+      presentHeading.textContent = `Present Players (${presentNames.length}) - tap to assign`;
+      awayHeading.textContent = `Away Players (${awayNames.length}) - tap to mark present`;
 
       if (presentNames.length === 0) {
         presentPanel.innerHTML = "<div class='muted'>No present players yet.</div>";
@@ -1662,13 +1680,6 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       }
       const payload = await response.json();
       state.activePlayers = (payload.items || []).map((name) => name.toLowerCase());
-      renderPlayerButtons();
-    }
-
-    function toggleAwayList() {
-      state.awayOpen = !state.awayOpen;
-      const wrap = document.getElementById('awayListWrap');
-      wrap.classList.toggle('presence-collapsed', !state.awayOpen);
       renderPlayerButtons();
     }
 
@@ -2308,7 +2319,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         throw new Error('Could not load players.');
       }
       const payload = await response.json();
-      state.players = payload.items || [];
+      state.players = (payload.items || []).slice().sort((left, right) => left.localeCompare(right));
       renderPlayerButtons();
     }
 
@@ -2415,7 +2426,6 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     document.getElementById('swapBlueBtn').addEventListener('click', () => swapTeam('blue'));
     document.getElementById('randomBtn').addEventListener('click', () => randomizeLineup().catch((e) => setStatus(e.message, 'bad')));
     document.getElementById('autoBtn').addEventListener('click', () => autoBalanceLineup().catch((e) => setStatus(e.message, 'bad')));
-    document.getElementById('awayToggleBtn').addEventListener('click', toggleAwayList);
     document.getElementById('undoBtn').addEventListener('click', undoLastPick);
     document.getElementById('clearBtn').addEventListener('click', clearSelection);
     document.getElementById('sortTotalBtn').addEventListener('click', () => setLeaderboardSort('total'));
@@ -2453,7 +2463,6 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     updateReview();
     updateScoreHint();
     setLeaderboardFilter('all');
-    document.getElementById('awayListWrap').classList.add('presence-collapsed');
     loadPlayers()
       .then(() => refreshPresence())
       .catch((e) => setStatus(e.message, 'bad'));
