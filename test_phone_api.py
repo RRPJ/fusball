@@ -123,6 +123,30 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("document.getElementById('filterThisQuarterBtn').classList.toggle('active', f === 'this_quarter');", html)
             self.assertIn("document.getElementById('filterThisQuarterBtn').addEventListener('click', () => setLeaderboardFilter('this_quarter'));", html)
 
+    def test_phone_page_uses_compact_always_visible_player_lists(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            db_path = str(tmp_path / "playerdb")
+            with shelve.open(db_path) as players:
+                players["alice"] = (trueskill.Rating(), trueskill.Rating())
+
+            app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
+            client = app.test_client()
+            response = client.get("/phone")
+            self.assertEqual(response.status_code, 200)
+
+            html = response.get_data(as_text=True)
+            self.assertIn("id='presentPlayersHeading'>Present Players (tap to assign)</h3>", html)
+            self.assertIn("id='presentPlayersPanel' class='players'", html)
+            self.assertIn("id='awayPlayersHeading'>Away Players (tap to mark present)</h3>", html)
+            self.assertIn("id='awayPlayersPanel' class='players'", html)
+            self.assertIn("grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));", html)
+            self.assertIn("presentHeading.textContent = `Present Players (${presentNames.length}) - tap to assign`", html)
+            self.assertIn("awayHeading.textContent = `Away Players (${awayNames.length}) - tap to mark present`", html)
+            self.assertIn("state.players = (payload.items || []).slice().sort((left, right) => left.localeCompare(right));", html)
+            self.assertNotIn("awayToggleBtn", html)
+            self.assertNotIn("presence-collapsed", html)
+
     def test_phone_page_formats_doubles_display_as_defense_then_offense(self) -> None:
         with TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
