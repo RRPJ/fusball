@@ -165,10 +165,16 @@ def _read_schema_migrations(cur: Any) -> list[dict[str, str]]:
         ORDER BY version
         """
     )
-    return [
+    recorded = [
         {"version": str(version), "name": str(name), "checksum": str(checksum)}
         for version, name, checksum in cur.fetchall()
     ]
+    expected = {migration.version: migration for migration in discover_migrations()}
+    for item in recorded:
+        migration = expected.get(item["version"])
+        if migration and item["checksum"] in migration.accepted_checksums:
+            item["checksum"] = migration.checksum
+    return recorded
 
 
 def _read_tables(cur: Any) -> dict[str, list[dict[str, Any]]]:

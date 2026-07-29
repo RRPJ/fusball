@@ -23,6 +23,7 @@ class Migration:
     name: str
     path: Path
     checksum: str
+    accepted_checksums: frozenset[str]
 
     @property
     def sql(self) -> str:
@@ -44,12 +45,21 @@ def discover_migrations(migrations_dir: Path = DEFAULT_MIGRATIONS_DIR) -> list[M
         versions.add(version)
 
         content = path.read_bytes()
+        canonical_content = content.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+        crlf_content = canonical_content.replace(b"\n", b"\r\n")
         migrations.append(
             Migration(
                 version=version,
                 name=match.group("name"),
                 path=path,
-                checksum=hashlib.sha256(content).hexdigest(),
+                checksum=hashlib.sha256(canonical_content).hexdigest(),
+                accepted_checksums=frozenset(
+                    {
+                        hashlib.sha256(content).hexdigest(),
+                        hashlib.sha256(canonical_content).hexdigest(),
+                        hashlib.sha256(crlf_content).hexdigest(),
+                    }
+                ),
             )
         )
 
@@ -82,9 +92,18 @@ def apply_migrations(
         for migration in ordered:
             existing_checksum = applied.get(migration.version)
             if existing_checksum is not None:
-                if existing_checksum != migration.checksum:
+                if existing_checksum not in migration.accepted_checksums:
                     raise MigrationError(
                         f"checksum mismatch for applied migration {migration.version}"
+                    )
+                if existing_checksum != migration.checksum:
+                    cur.execute(
+                        """
+                        UPDATE schema_migrations
+                        SET checksum = %s
+                        WHERE version = %s
+                        """,
+                        (migration.checksum, migration.version),
                     )
                 continue
 

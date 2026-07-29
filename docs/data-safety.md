@@ -40,7 +40,9 @@ python scripts/migrate_neon_schema.py --database-url <database-url> --apply
 ```
 
 Migration files are immutable after application. The runner rejects checksum
-changes to previously applied versions.
+changes to previously applied versions. Checksums normalize line endings so
+the same migration has one identity on Windows and Linux; legacy raw CRLF/LF
+checksums are accepted and upgraded to the canonical value.
 
 The lifecycle migration adds `rating_baselines`. The shelve import derives each
 player's baseline from their earliest structured history `before` snapshot. A

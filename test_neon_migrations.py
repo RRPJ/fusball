@@ -43,6 +43,19 @@ class NeonMigrationTests(unittest.TestCase):
             with self.assertRaisesRegex(MigrationError, "invalid migration filename"):
                 discover_migrations(migrations_dir)
 
+    def test_checksum_is_independent_of_platform_line_endings(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            migrations_dir = Path(tmpdir)
+            path = migrations_dir / "0001_initial.sql"
+            path.write_bytes(b"SELECT 1;\nSELECT 2;\n")
+            lf_migration = discover_migrations(migrations_dir)[0]
+
+            path.write_bytes(b"SELECT 1;\r\nSELECT 2;\r\n")
+            crlf_migration = discover_migrations(migrations_dir)[0]
+
+            self.assertEqual(lf_migration.checksum, crlf_migration.checksum)
+            self.assertIn(lf_migration.checksum, crlf_migration.accepted_checksums)
+
 
 if __name__ == "__main__":
     unittest.main()
