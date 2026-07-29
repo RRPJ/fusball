@@ -26,7 +26,22 @@ def create_admin_blueprint(ctx: PhoneApiContext) -> Blueprint:
         limit = request.args.get("limit", default=30, type=int)
         limit = max(1, min(limit, 100))
         items = store.list_match_lifecycle(limit=limit, include_voided=True)
-        return jsonify({"count": len(items), "items": items})
+        subjects = [
+            str(subject).strip()
+            for subject in (item.get("submitted_by") for item in items)
+            if isinstance(subject, str) and subject.strip()
+        ]
+        display_names = ctx.resolve_display_names(subjects)
+        enriched_items: list[dict[str, object]] = []
+        for item in items:
+            enriched = dict(item)
+            subject = enriched.get("submitted_by")
+            if isinstance(subject, str):
+                enriched["submitted_by_display_name"] = display_names.get(subject.strip())
+            else:
+                enriched["submitted_by_display_name"] = None
+            enriched_items.append(enriched)
+        return jsonify({"count": len(enriched_items), "items": enriched_items})
 
     def _change_match_lifecycle(match_id: str, target_status: str) -> object:
         match_id = unquote(match_id)

@@ -334,8 +334,8 @@ These routes always require a managed actor with the `admin` role.
 ### `GET /api/admin/matches`
 
 Query parameter `limit` is clamped to `1`-`100`; default `30`. Returns active
-and voided matches with lifecycle `status`, `version`, `submitted_by`, and
-ordered audit `events`.
+and voided matches with lifecycle `status`, `version`, `submitted_by`,
+`submitted_by_display_name` (when resolvable), and ordered audit `events`.
 
 ### `POST /api/admin/matches/<match-id>/void`
 

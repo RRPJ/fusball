@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, Protocol, cast
+from typing import Literal, Protocol, Sequence, cast
 
 import httpx
 from flask import Request
@@ -67,6 +67,36 @@ class NeonUserRoleStore:
             display_name=str(row[1]),
             role=cast(AuthRole, role),
         )
+
+
+def resolve_managed_display_names(
+    database_url: str | None,
+    subjects: Sequence[str],
+) -> dict[str, str]:
+    unique_subjects = sorted({subject.strip() for subject in subjects if subject.strip()})
+    if not database_url or not unique_subjects:
+        return {}
+
+    import psycopg
+
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT provider_subject, display_name
+                FROM app_users
+                WHERE status = 'active' AND provider_subject = ANY(%s)
+                """,
+                (unique_subjects,),
+            )
+            rows = cur.fetchall()
+
+    resolved: dict[str, str] = {}
+    for provider_subject, display_name in rows:
+        normalized_name = str(display_name).strip() if display_name is not None else ""
+        if normalized_name:
+            resolved[str(provider_subject)] = normalized_name
+    return resolved
 
 
 class ClerkRequestAuthenticator:

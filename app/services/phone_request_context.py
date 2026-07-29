@@ -27,5 +27,6 @@ class PhoneApiContext:
     require_read_access: Callable[[], object | None]
     require_write_access: Callable[[], object | None]
     require_admin_access: Callable[[], object | None]
+    resolve_display_names: Callable[[list[str]], dict[str, str]]
     acquire_write_lock: Callable[[str], bool]
     release_write_lock: Callable[[], None]

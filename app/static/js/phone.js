@@ -1934,7 +1934,10 @@
         title.textContent = `${storedTeamDisplay(match.team1)} ${match.score1}-${match.score2} ${storedTeamDisplay(match.team2)}`;
         const details = document.createElement('div');
         details.className = 'muted';
-        details.textContent = `${match.status} · version ${match.version} · ${match.timestamp} · by ${match.submitted_by || 'unknown'}`;
+        const submitterName = typeof match.submitted_by_display_name === 'string' && match.submitted_by_display_name.trim()
+          ? match.submitted_by_display_name.trim()
+          : (match.submitted_by || 'unknown');
+        details.textContent = `${match.status} · version ${match.version} · ${match.timestamp} · by ${submitterName}`;
         const latestEvent = (match.events || []).slice(-1)[0];
         const audit = document.createElement('div');
         audit.className = 'muted';
