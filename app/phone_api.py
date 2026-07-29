@@ -2616,6 +2616,11 @@ def _render_phone_html(
       await refreshLeaderboard();
     }
 
+    function storedTeamDisplay(team) {
+      const names = Array.isArray(team) ? team : [];
+      return (names.length === 2 ? [names[1], names[0]] : names).join(' + ');
+    }
+
     function renderAdminMatches() {
       const container = document.getElementById('adminMatchesList');
       container.replaceChildren();
@@ -2623,7 +2628,7 @@ def _render_phone_html(
         const card = document.createElement('div');
         card.className = 'review-card';
         const title = document.createElement('strong');
-        title.textContent = `${match.team1.join(' + ')} ${match.score1}-${match.score2} ${match.team2.join(' + ')}`;
+        title.textContent = `${storedTeamDisplay(match.team1)} ${match.score1}-${match.score2} ${storedTeamDisplay(match.team2)}`;
         const details = document.createElement('div');
         details.className = 'muted';
         details.textContent = `${match.status} · version ${match.version} · ${match.timestamp} · by ${match.submitted_by || 'unknown'}`;

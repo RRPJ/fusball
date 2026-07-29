@@ -933,6 +933,10 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("id='adminMatchesSection'", html)
             self.assertIn("/api/admin/matches?limit=30", html)
             self.assertIn("expected_version: match.version", html)
+            self.assertIn(
+                "names.length === 2 ? [names[1], names[0]] : names",
+                html,
+            )
 
     def test_admin_can_list_void_and_restore_match(self) -> None:
         with TemporaryDirectory() as tmpdir:
