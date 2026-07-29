@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang='en'>
+<head>
+  <meta charset='utf-8' />
+  <meta name='viewport' content='width=device-width, initial-scale=1' />
+  <title>Sign in | Fusball</title>
+  <link rel='stylesheet' href="{{ url_for('static', filename='css/phone.css') }}?v={{ asset_version }}" />
+</head>
+<body class='login-page'>
+  <main class='login-shell'>
+    <header class='login-header'>
+      <h1>Fusball</h1>
+      <div class='muted'>Sign in to open the leaderboard and match controls.</div>
+    </header>
+    <section class='login-card' aria-labelledby='loginHeading'>
+      <h2 id='loginHeading'>Welcome back</h2>
+      <div id='loginLoading' class='muted' role='status'>Loading secure sign-in...</div>
+      <div id='clerkSignIn' class='clerk-sign-in'></div>
+      <div id='loginStatus' class='status' role='alert'></div>
+    </section>
+  </main>
+
+  <script defer crossorigin="anonymous"
+    src="{{ clerk_frontend_api_url }}/npm/@clerk/ui@1/dist/ui.browser.js"></script>
+  <script defer crossorigin="anonymous"
+    data-clerk-publishable-key="{{ clerk_publishable_key }}"
+    src="{{ clerk_frontend_api_url }}/npm/@clerk/clerk-js@6/dist/clerk.browser.js"></script>
+  <script>const LOGIN_NEXT = {{ login_next|tojson }};</script>
+  <script src="{{ url_for('static', filename='js/login.js') }}?v={{ asset_version }}"></script>
+</body>
+</html>

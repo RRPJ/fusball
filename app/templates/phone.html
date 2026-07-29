@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang='en'>
+<head>
+  <meta charset='utf-8' />
+  <meta name='viewport' content='width=device-width, initial-scale=1' />
+  <title>Fusball Phone API</title>
+  <link rel='stylesheet' href="{{ url_for('static', filename='css/phone.css') }}?v={{ asset_version }}" />
+</head>
+<body{% if auth_mode == 'clerk' %} class='strict-auth-pending'{% endif %}>
+  <main class='panel'>
+    <header>
+      <h1>Fusball Phone API</h1>
+      <div class='muted'>Button-driven setup, score, confirm, submit</div>
+      <div id='offlineBanner' class='offline-banner' style='display:none;'>API offline. Showing leaderboard snapshot only.</div>
+      <div id='liveStatusCard' class='live-status review-card' aria-live='polite'>
+        <div class='live-status-row'>
+          <span id='liveStatusChip' class='status-chip'>Checking connection</span>
+          <span id='liveStatusAge' class='muted'>Waiting for first refresh.</span>
+        </div>
+        <div id='liveStatusDetail' class='muted'>The page will show whether data is live, fetching, or using a cached snapshot.</div>
+      </div>
+      <div id='managedAuthPanel' class='review-card' style='margin-top:10px; display:none;'>
+        {% if auth_mode == 'hybrid' %}
+        <div id='clerkSignIn'></div>
+        {% endif %}
+        <div id='clerkUserButton'></div>
+        <div id='managedAuthStatus' class='muted'></div>
+      </div>
+      <div class='progress'>
+          <button id='stepBtn1' type='button' class='active'>Mode</button>
+          <button id='stepBtn2' type='button'>Players</button>
+          <button id='stepBtn3' type='button'>Score</button>
+          <button id='stepBtn4' type='button'>Confirm</button>
+      </div>
+      <button id='adminNavBtn' class='btn small' type='button' style='display:none; margin-top:8px;'>Admin</button>
+    </header>
+
+    <div id='appContent'{% if auth_mode == 'clerk' %} style='display:none;'{% endif %}>
+    <section id='step1' class='section active'>
+      <h2>Step 1: Match Mode</h2>
+      <div class='row'>
+        <button id='modeSingles' class='btn active' type='button'>Singles</button>
+        <button id='modeDoubles' class='btn' type='button'>Doubles</button>
+      </div>
+      <div class='muted' style='margin-top:10px;'>In singles, offense slots are used. In doubles, all four slots are required.</div>
+    </section>
+
+    <section id='step2' class='section'>
+      <h2>Step 2: Players And Positions</h2>
+      <div class='row' style='margin-bottom:8px;'>
+        <button id='slotRedDef' class='btn slot' type='button'><span class='label'>Red Defense</span><span id='valRedDef' class='value'>Optional in singles</span></button>
+        <button id='slotRedOff' class='btn slot active' type='button'><span class='label'>Red Offense</span><span id='valRedOff' class='value'>Tap a player</span></button>
+        <button id='slotBlueDef' class='btn slot' type='button'><span class='label'>Blue Defense</span><span id='valBlueDef' class='value'>Optional in singles</span></button>
+        <button id='slotBlueOff' class='btn slot' type='button'><span class='label'>Blue Offense</span><span id='valBlueOff' class='value'>Tap a player</span></button>
+      </div>
+      <div class='row' style='margin-bottom:10px;'>
+        <button id='swapSidesBtn' class='btn small' type='button'>Swap Sides</button>
+        <button id='swapRedBtn' class='btn small' type='button'>Swap Red</button>
+        <button id='swapBlueBtn' class='btn small' type='button'>Swap Blue</button>
+        <button id='randomBtn' class='btn small' type='button'>Random</button>
+        <button id='autoBtn' class='btn small' type='button'>Auto</button>
+        <button id='undoBtn' class='btn small' type='button'>Undo Last Pick</button>
+        <button id='clearBtn' class='btn small' type='button'>Clear</button>
+      </div>
+      <div id='oddsText' class='status' style='margin-top:2px;'></div>
+      <div id='presenceStatus' class='status'>No active players selected.</div>
+      <div class='presence-list'>
+        <h3 id='presentPlayersHeading'>Present Players (tap to assign)</h3>
+        <div id='presentPlayersPanel' class='players'></div>
+      </div>
+      <div id='awayListWrap' class='presence-list'>
+        <h3 id='awayPlayersHeading'>Away Players (tap to mark present)</h3>
+        <div id='awayPlayersPanel' class='players'></div>
+      </div>
+      <div id='h2hToggleRow' class='row' style='margin-top:6px;display:none;'>
+        <button id='h2hToggleBtn' class='btn small' type='button' onclick='toggleH2H()'>H2H &#9660;</button>
+      </div>
+      <div id='h2hCard' class='h2h-card review-card'></div>
+    </section>
+
+    <section id='step3' class='section'>
+      <h2>Step 3: Final Score</h2>
+      <div class='score-grid'>
+        <div id='redScoreLabel' class='muted'>Red</div>
+        <div id='blueScoreLabel' class='muted'>Blue</div>
+        <div id='scoreRed' class='row'></div>
+        <div id='scoreBlue' class='row'></div>
+      </div>
+      <div id='scoreHint' class='muted' style='margin-top:10px;'></div>
+      <div id='statusText' class='status'></div>
+    </section>
+
+    <section id='step4' class='section'>
+      <h2>Step 4: Confirm And Submit</h2>
+      <div class='review-card' id='reviewText'>Complete setup to review match.</div>
+      <div id='legacyAuthPanel' style='margin-top:10px;'>
+        <input id='readPin' class='token' type='password' placeholder='Read PIN (optional if using writer PIN only)' />
+        <div style='margin-top:8px;'>
+          <input id='writePin' class='token' type='password' placeholder='Writer PIN (required for writes)' />
+        </div>
+        <div class='muted' style='margin-top:8px;'>PINs are remembered for this tab session.</div>
+      </div>
+      <div class='muted' style='margin-top:8px;'>Submit is enabled only when lineup and score are valid.</div>
+    </section>
+
+    <section id='leaderboardSection' class='section active'>
+      <h2>Leaderboard</h2>
+      <div id='leaderboardFreshness' class='muted'>Live standings refresh after successful submit and when you change filters.</div>
+      <div class='row sort-row'>
+        <button id='sortTotalBtn' class='btn sort active' type='button'>Total</button>
+        <button id='sortAtkBtn' class='btn sort' type='button'>Offense</button>
+        <button id='sortDefBtn' class='btn sort' type='button'>Defense</button>
+        <button id='sortFormBtn' class='btn sort' type='button'>Form</button>
+        <button id='sortStreakBtn' class='btn sort' type='button'>Streak</button>
+        <button id='sortImprovedBtn' class='btn sort' type='button'>Improved</button>
+      </div>
+      <div class='row filter-row'>
+        <button id='filterAllBtn' class='btn sort active' type='button'>All</button>
+        <button id='filterThisQuarterBtn' class='btn sort' type='button'>This quarter</button>
+        <button id='filterThisMonthBtn' class='btn sort' type='button'>This month</button>
+        <button id='filterThisWeekBtn' class='btn sort' type='button'>This week</button>
+      </div>
+      <div id='metricHint' class='muted'></div>
+      <table aria-label='Leaderboard'>
+        <thead>
+          <tr><th>#</th><th>Player</th><th id='lbMetricHeader'>Total</th></tr>
+        </thead>
+        <tbody id='leaderboardBody'>{% for row in rows %}<tr><td>{{ row.position }}</td><td><div>{{ row.name }}</div><div class='sub'>Off&nbsp;{{ row.offense_level }} &middot; Def&nbsp;{{ row.defense_level }}</div></td><td>{{ row.level }}</td></tr>{% else %}<tr><td colspan='3'>No players found.</td></tr>{% endfor %}</tbody>
+      </table>
+      <div class='add-player'>
+        <div class='muted'>Add player</div>
+        <div class='row' style='margin-top:6px;'>
+          <input id='newPlayerName' class='token' type='text' placeholder='New player name' maxlength='30' />
+          <button id='addPlayerBtn' class='btn small' type='button'>Add Player</button>
+        </div>
+        <div id='addPlayerStatus' class='status'></div>
+      </div>
+    </section>
+
+    <section id='adminMatchesSection' class='section'>
+      <h2>Match Corrections</h2>
+      <div class='muted'>Admin only. Voiding or restoring a match recalculates rankings.</div>
+      <div id='adminMatchesStatus' class='status'></div>
+      <div id='adminMatchesList' style='display:grid; gap:8px; margin-top:10px;'></div>
+    </section>
+    </div>
+  </main>
+
+  <div id='stickyBar' class='sticky'{% if auth_mode == 'clerk' %} style='display:none;'{% endif %}>
+    <div class='sticky-wrap'>
+      <div id='summaryText' class='summary'>No lineup selected.</div>
+      <div class='row'>
+        <button id='backBtn' class='btn small' type='button'>Back</button>
+        <button id='nextBtn' class='btn primary' type='button'>Next</button>
+        <button id='submitBtn' class='btn primary' type='button' style='display:none;'>Submit Result</button>
+      </div>
+    </div>
+  </div>
+
+  {% if auth_mode in ['hybrid', 'clerk'] and clerk_publishable_key and clerk_frontend_api_url %}
+  <script defer crossorigin="anonymous"
+    src="{{ clerk_frontend_api_url }}/npm/@clerk/ui@1/dist/ui.browser.js"></script>
+  <script defer crossorigin="anonymous"
+    data-clerk-publishable-key="{{ clerk_publishable_key }}"
+    src="{{ clerk_frontend_api_url }}/npm/@clerk/clerk-js@6/dist/clerk.browser.js"></script>
+  {% endif %}
+  <script>const AUTH_MODE = '{{ auth_mode }}';</script>
+  <script src="{{ url_for('static', filename='js/phone.js') }}?v={{ asset_version }}"></script>
+</body>
+</html>

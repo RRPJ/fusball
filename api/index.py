@@ -24,4 +24,9 @@ app = create_app(
   read_pin_hash=os.environ.get("READ_PIN_HASH"),
   write_pin_hash=os.environ.get("WRITE_PIN_HASH"),
   database_url=os.environ.get("DATABASE_URL"),
+  auth_mode=os.environ.get("FUSBALL_AUTH_MODE", "legacy"),
+  clerk_secret_key=os.environ.get("CLERK_SECRET_KEY"),
+  clerk_authorized_parties=os.environ.get("CLERK_AUTHORIZED_PARTIES"),
+  clerk_publishable_key=os.environ.get("CLERK_PUBLISHABLE_KEY"),
+  clerk_frontend_api_url=os.environ.get("CLERK_FRONTEND_API_URL"),
 )

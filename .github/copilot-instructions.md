@@ -2,57 +2,70 @@
 
 ## Mission
 
-- Preserve gameplay, ranking, and phone API behavior while modernizing safely.
+- Preserve gameplay, ranking, phone API, and recovery behavior while modernizing safely.
 - Prefer small changes with explicit verification.
 
 ## Read First
 
-- `README.md` for run modes and entrypoints.
-- `docs/development.md` for setup, lint, format, and smoke commands.
-- `docs/architecture.md` for runtime boundaries.
-- `docs/data-safety.md` before touching persistence or migrations.
-- `docs/phone-api.md` and `docs/phone-write-policy.md` before changing request handling or write flows.
+- `README.md` for production, preview, and local run modes.
+- `docs/architecture.md` for composition-root, blueprint, asset, and store boundaries.
+- `docs/development.md` for setup and the full verification matrix.
+- `docs/authentication.md` for Clerk modes and Neon-owned roles.
+- `docs/data-safety.md` before persistence, migration, export, or restore work.
+- `docs/phone-api.md` and `docs/phone-write-policy.md` before request or write-flow changes.
 
-## Non-Obvious Repo Facts
+## Runtime Model
 
-- Primary runtime is `app/phone_api.py`; `api/index.py` exposes the same app for Vercel.
-- Phone UI HTML/CSS/JS is embedded in `app/phone_api.py`.
-- State is still shelve-backed under `app/`; treat `playerdb*`, `recentplayers*`, and `match_history*` as production-like data.
-- Local production-style scripts target `app/`; development scripts may target `sandbox/dev-data`.
-- Internal doubles/team rating math uses offense-first ordering; do not change presentation order assumptions without checking existing phone/history behavior.
+- Production is the Vercel Flask deployment through `api/index.py`, with Neon authoritative and `FUSBALL_AUTH_MODE=clerk`.
+- Clerk authenticates hosted users; active Neon `app_users` rows authorize `reader`, `operator`, and `admin` capabilities.
+- Preview must use an isolated Vercel Preview, Neon branch/project, and Clerk configuration. Never connect it to production Neon.
+- Local development defaults to the shelve adapter under `app/` or `FUSBALL_PHONE_API_DB_DIR`. `legacy` PIN/token and `hybrid` modes are compatibility paths.
+- `app/phone_api.py` is the composition root/local launcher. Routes live in `app/blueprints/`; templates and browser assets live in `app/templates/` and `app/static/`.
+- Hosted presence uses Neon `player_presence` rows with an eight-hour expiry; local shelve presence is process-local.
+- Internal doubles/rating order is `[offense, defense]`; phone presentation is Defense + Offense.
 
 ## Default Workflow
 
-1. State the intended behavior change.
-2. Pick the smallest useful verification path.
-3. Make the minimal localized edit.
-4. Re-run the relevant checks.
-5. Update docs if behavior, operations, or migration expectations changed.
+1. State the intended behavior change and affected runtime mode.
+2. Read the relevant contract and safety docs.
+3. Make the smallest localized edit across the correct blueprint/template/static/service boundary.
+4. Run targeted checks, escalating to the full matrix for cross-cutting changes.
+5. Update docs when behavior, operations, configuration, migration, or recovery expectations change.
 
 ## Verification Baseline
 
-- General smoke: `python scripts/smoke_check.py`
-- Phone/API regression: `python -m unittest test_phone_api.py`
-- Match/ranking flow: `python -m unittest test_match_flow.py`
+- Smoke: `python scripts/smoke_check.py`
+- Full regression: `python -m unittest test_phone_api.py test_match_flow.py test_integration.py test_neon_store.py test_neon_migrations.py test_neon_data_safety.py test_auth.py`
 - Lint: `ruff check app api test_*.py scripts`
-- Format check: `black --check app api test_*.py scripts`
+- Format: `black --check app api test_*.py scripts`
+- Auth smoke: `python scripts/smoke_phone_api_auth.py`
+- Neon migration discovery: `python scripts/migrate_neon_schema.py`
+- Neon integrity, with an explicitly selected database: `python scripts/check_neon_integrity.py`
+
+CI runs the smoke and seven unittest modules on Python 3.11 and 3.14, plus `test_neon_store.py` against PostgreSQL 17.
 
 ## Editing Rules
 
-- Keep logic changes localized; avoid unrelated formatting churn.
-- Use clear names and small helpers for ranking, persistence, and transforms.
-- Add comments only when intent is not obvious.
-- Check indentation carefully before finalizing; indentation mistakes are a recurring regression source here.
+- Keep logic changes localized and avoid unrelated formatting churn.
+- Preserve route contracts, Clerk role enforcement, managed actor attribution, transaction boundaries, idempotency, audit events, and replay parity.
+- Preserve local `phone_api_write.lock` conflict behavior and the 60-second no-key duplicate fallback.
+- Do not apply the local file-lock model to Neon: hosted writes use transactions, a transaction-scoped advisory lock, row locking, and persisted idempotency.
+- Admin void/restore remains managed-admin-only and requires a reason, `expected_version`, and `Idempotency-Key`.
+- Add comments only when intent is not obvious; check indentation carefully.
 
 ## Data Safety Rules
 
-- Back up state with `python scripts/backup_state.py` before changing persistence logic, migrations, or data-shape assumptions.
-- Never mutate shelve schema casually.
-- Prefer additive migrations over destructive rewrites.
-- Document migration and rollback impact in `docs/data-safety.md` when behavior changes.
+- Before changing local shelve persistence or data-shape assumptions, run `python scripts/backup_state.py`.
+- Treat `app/playerdb*`, `app/recentplayers*`, `app/match_history*`, `app/match_events*`, and `app/rating_baselines*` as valuable compatibility state; never assume they are disposable.
+- `backup_state.py` does not currently copy the lifecycle shelves; preserve `match_events*` and `rating_baselines*` separately when present.
+- Use additive ordered SQL migrations under `scripts/sql/migrations/`; never rewrite an applied migration.
+- Neon-sensitive changes require migration/store/data-safety tests, integrity verification, and a documented encrypted-export and isolated-restore story.
+- Never run Preview, parity, migration, or restore verification against production Neon unless production operation is explicitly the task.
 
 ## Runtime Rules
 
-- Preserve `/phone` and `/api/*` behavior unless the change explicitly targets those contracts.
-- Preserve write-auth and conflict semantics unless the change intentionally updates that policy.
-- Update docs and operational scripts when the supported phone workflow changes.
+- Preserve `/`, `/login`, `/phone`, and `/api/*` behavior unless the task explicitly changes those contracts.
+- In `clerk` mode, legacy headers are ignored; do not weaken strict production auth.
+- Preserve `/api/health` readiness semantics, including `503` for unavailable or incompatible stores.
+- Preserve durable hosted presence and process-local shelve presence semantics.
+- Update relevant docs and operational commands whenever supported workflows change.

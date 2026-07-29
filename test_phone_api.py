@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from datetime import datetime, timedelta, timezone
 import re
 import shelve
@@ -19,11 +20,38 @@ if str(APP_DIR) not in sys.path:
 
 from odds import playerLevel  # noqa: E402
 from phone_api import WRITE_LOCK_NAME, create_app  # noqa: E402
+from services.auth import AuthActor  # noqa: E402
 from services.match_service import best_balanced_lineup, calculate_rating_update  # noqa: E402
+from services.phone_write_store import ShelveWriteStore  # noqa: E402
 
 
 class PhoneApiTests(unittest.TestCase):
     operator_token = "secret-token"
+
+    def test_health_returns_unavailable_when_store_is_not_ready(self) -> None:
+        class UnavailableStore:
+            uses_local_lock = False
+
+            @staticmethod
+            def readiness() -> dict[str, object]:
+                return {
+                    "ok": False,
+                    "store": "neon",
+                    "reason": "database_unavailable",
+                }
+
+        app = create_app(operator_token=self.operator_token, write_store=UnavailableStore())
+        response = app.test_client().get("/api/health")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(
+            response.get_json(),
+            {
+                "ok": False,
+                "store": "neon",
+                "reason": "database_unavailable",
+            },
+        )
 
     def test_leaderboard_api_returns_sorted_items(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -110,18 +138,34 @@ class PhoneApiTests(unittest.TestCase):
             self.assertNotIn("3 Score", html)
             self.assertNotIn("4 Confirm", html)
             self.assertIn("id='leaderboardSection' class='section active'>", html)
-            self.assertIn("const leaderboardSection = document.getElementById('leaderboardSection');", html)
-            self.assertIn("leaderboardSection.classList.toggle('active', state.step === 1);", html)
-            self.assertIn("const LEADERBOARD_CACHE_STORAGE_KEY = 'fusball_leaderboard_snapshot';", html)
-            self.assertIn("function renderLiveStatus()", html)
-            self.assertIn("function renderLeaderboardFreshness()", html)
-            self.assertIn("function startFreshnessTicker()", html)
-            self.assertIn("trackKey: 'leaderboard'", html)
             self.assertLess(html.index(">All</button>"), html.index(">This quarter</button>"))
             self.assertLess(html.index(">This quarter</button>"), html.index(">This month</button>"))
             self.assertLess(html.index(">This month</button>"), html.index(">This week</button>"))
-            self.assertIn("document.getElementById('filterThisQuarterBtn').classList.toggle('active', f === 'this_quarter');", html)
-            self.assertIn("document.getElementById('filterThisQuarterBtn').addEventListener('click', () => setLeaderboardFilter('this_quarter'));", html)
+
+            # The phone UI's JS logic now lives in a versioned static asset
+            # rather than being embedded in the /phone HTML response.
+            js = client.get("/static/js/phone.js").get_data(as_text=True)
+            self.assertIn(
+                "const leaderboardSection = document.getElementById('leaderboardSection');", js
+            )
+            self.assertIn("leaderboardSection.classList.toggle('active', state.step === 1);", js)
+            self.assertIn(
+                "const LEADERBOARD_CACHE_STORAGE_KEY = 'fusball_leaderboard_snapshot';", js
+            )
+            self.assertIn("function renderLiveStatus()", js)
+            self.assertIn("function renderLeaderboardFreshness()", js)
+            self.assertIn("function startFreshnessTicker()", js)
+            self.assertIn("trackKey: 'leaderboard'", js)
+            self.assertIn(
+                "document.getElementById('filterThisQuarterBtn').classList.toggle("
+                "'active', f === 'this_quarter');",
+                js,
+            )
+            self.assertIn(
+                "document.getElementById('filterThisQuarterBtn').addEventListener("
+                "'click', () => setLeaderboardFilter('this_quarter'));",
+                js,
+            )
 
     def test_phone_page_uses_compact_always_visible_player_lists(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -140,14 +184,31 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("id='presentPlayersPanel' class='players'", html)
             self.assertIn("id='awayPlayersHeading'>Away Players (tap to mark present)</h3>", html)
             self.assertIn("id='awayPlayersPanel' class='players'", html)
-            self.assertIn("grid-template-columns: repeat(2, minmax(0, 1fr));", html)
-            self.assertIn("@media (min-width: 560px)", html)
-            self.assertIn("grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));", html)
-            self.assertIn("presentHeading.textContent = `Present Players (${presentNames.length}) - tap to assign`", html)
-            self.assertIn("awayHeading.textContent = `Away Players (${awayNames.length}) - tap to mark present`", html)
-            self.assertIn("state.players = (payload.items || []).slice().sort((left, right) => left.localeCompare(right));", html)
-            self.assertNotIn("awayToggleBtn", html)
-            self.assertNotIn("presence-collapsed", html)
+
+            css = client.get("/static/css/phone.css").get_data(as_text=True)
+            self.assertIn("grid-template-columns: repeat(2, minmax(0, 1fr));", css)
+            self.assertIn("@media (min-width: 560px)", css)
+            self.assertIn("grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));", css)
+            self.assertNotIn("presence-collapsed", css)
+
+            js = client.get("/static/js/phone.js").get_data(as_text=True)
+            self.assertIn(
+                "presentHeading.textContent = "
+                "`Present Players (${presentNames.length}) - tap to assign`",
+                js,
+            )
+            self.assertIn(
+                "awayHeading.textContent = "
+                "`Away Players (${awayNames.length}) - tap to mark present`",
+                js,
+            )
+            self.assertIn(
+                "state.players = (payload.items || []).slice().sort("
+                "(left, right) => left.localeCompare(right));",
+                js,
+            )
+            self.assertNotIn("awayToggleBtn", js)
+            self.assertNotIn("presence-collapsed", js)
 
     def test_phone_page_formats_doubles_display_as_defense_then_offense(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -161,13 +222,21 @@ class PhoneApiTests(unittest.TestCase):
             response = client.get("/phone")
             self.assertEqual(response.status_code, 200)
 
-            html = response.get_data(as_text=True)
-            self.assertIn("state.selected.red_defense || placeholder, state.selected.red_offense || placeholder", html)
-            self.assertIn("state.selected.blue_defense || placeholder, state.selected.blue_offense || placeholder", html)
-            self.assertIn("const red = formatTeamDisplay('red');", html)
-            self.assertIn("const blue = formatTeamDisplay('blue');", html)
-            self.assertIn("const redDisplay = formatTeamDisplay('red', ' + ');", html)
-            self.assertIn("const blueDisplay = formatTeamDisplay('blue', ' + ');", html)
+            js = client.get("/static/js/phone.js").get_data(as_text=True)
+            self.assertIn(
+                "state.selected.red_defense || placeholder, "
+                "state.selected.red_offense || placeholder",
+                js,
+            )
+            self.assertIn(
+                "state.selected.blue_defense || placeholder, "
+                "state.selected.blue_offense || placeholder",
+                js,
+            )
+            self.assertIn("const red = formatTeamDisplay('red');", js)
+            self.assertIn("const blue = formatTeamDisplay('blue');", js)
+            self.assertIn("const redDisplay = formatTeamDisplay('red', ' + ');", js)
+            self.assertIn("const blueDisplay = formatTeamDisplay('blue', ' + ');", js)
 
     def test_phone_page_includes_profile_panel_and_pairwise_h2h_hooks(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -181,13 +250,17 @@ class PhoneApiTests(unittest.TestCase):
             response = client.get("/phone")
             self.assertEqual(response.status_code, 200)
 
-            html = response.get_data(as_text=True)
-            self.assertIn("Loading player profile...", html)
-            self.assertIn("/api/player/${encodeURIComponent(playerKey)}/profile?scope=${encodeURIComponent(state.leaderboardFilter)}&recent_limit=5", html)
-            self.assertIn("Current teams H2H", html)
-            self.assertIn("/api/team-h2h?team1=${team1}&team2=${team2}", html)
-            self.assertIn("function openPlayerH2H(playerKey, otherPlayerKey)", html)
-            self.assertIn("setMode('singles');", html)
+            js = client.get("/static/js/phone.js").get_data(as_text=True)
+            self.assertIn("Loading player profile...", js)
+            self.assertIn(
+                "/api/player/${encodeURIComponent(playerKey)}/profile?"
+                "scope=${encodeURIComponent(state.leaderboardFilter)}&recent_limit=5",
+                js,
+            )
+            self.assertIn("Current teams H2H", js)
+            self.assertIn("/api/team-h2h?team1=${team1}&team2=${team2}", js)
+            self.assertIn("function openPlayerH2H(playerKey, otherPlayerKey)", js)
+            self.assertIn("setMode('singles');", js)
 
     def test_root_redirects_to_phone(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -210,7 +283,7 @@ class PhoneApiTests(unittest.TestCase):
             response = client.get("/phone")
             self.assertEqual(response.status_code, 200)
 
-            html = response.get_data(as_text=True)
+            js = client.get("/static/js/phone.js").get_data(as_text=True)
             categories = [
                 "expected_blowout",
                 "expected_close_win",
@@ -221,7 +294,7 @@ class PhoneApiTests(unittest.TestCase):
             ]
             for category in categories:
                 pattern = rf"{category}: \[(.*?)\]"
-                match = re.search(pattern, html, re.DOTALL)
+                match = re.search(pattern, js, re.DOTALL)
                 self.assertIsNotNone(match)
                 assert match is not None
                 lines = re.findall(r"'[^']+'", match.group(1))
@@ -315,6 +388,27 @@ class PhoneApiTests(unittest.TestCase):
                 headers={"X-Operator-Token": self.operator_token},
             )
             self.assertEqual(duplicate.status_code, 409)
+
+            idempotent_headers = {
+                "X-Operator-Token": self.operator_token,
+                "Idempotency-Key": "phone-request-1",
+            }
+            first_idempotent = client.post(
+                "/api/matches",
+                json={"team1": ["alice"], "team2": ["bob"], "score1": 5, "score2": 2},
+                headers=idempotent_headers,
+            )
+            second_idempotent = client.post(
+                "/api/matches",
+                json={"team1": ["alice"], "team2": ["bob"], "score1": 5, "score2": 2},
+                headers=idempotent_headers,
+            )
+            self.assertEqual(first_idempotent.status_code, 201)
+            self.assertEqual(second_idempotent.status_code, 201)
+            self.assertEqual(
+                first_idempotent.get_json()["match_id"],
+                second_idempotent.get_json()["match_id"],
+            )
 
     def test_players_api_returns_names(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -534,7 +628,7 @@ class PhoneApiTests(unittest.TestCase):
                 def add_player(self, player_name: str):
                     raise NotImplementedError
 
-                def submit_match(self, team1: list[str], team2: list[str], score1: int, score2: int, source: str):
+                def submit_match(self, team1: list[str], team2: list[str], score1: int, score2: int, source: str, **kwargs):
                     raise NotImplementedError
 
             app = create_app(db_dir=tmp_path, operator_token=self.operator_token, write_store=StubStore())
@@ -586,7 +680,7 @@ class PhoneApiTests(unittest.TestCase):
                 def add_player(self, player_name: str):
                     raise NotImplementedError
 
-                def submit_match(self, team1: list[str], team2: list[str], score1: int, score2: int, source: str):
+                def submit_match(self, team1: list[str], team2: list[str], score1: int, score2: int, source: str, **kwargs):
                     raise NotImplementedError
 
                 def query_h2h(self, p1: str, p2: str):
@@ -765,6 +859,273 @@ class PhoneApiTests(unittest.TestCase):
                 headers={"X-Write-Pin": "write-5678"},
             )
             self.assertEqual(write_with_writer_pin.status_code, 201)
+
+    def test_managed_auth_role_matrix_and_strict_legacy_rejection(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            db_path = str(tmp_path / "playerdb")
+            with shelve.open(db_path) as players:
+                players["alice"] = (trueskill.Rating(), trueskill.Rating())
+                players["bob"] = (trueskill.Rating(), trueskill.Rating())
+
+            class StubAuthenticator:
+                def authenticate(self, request):
+                    role = request.headers.get("X-Test-Role")
+                    if role not in {"reader", "operator", "admin"}:
+                        return None
+                    return AuthActor(f"user_{role}", role.title(), role)
+
+            app = create_app(
+                db_dir=tmp_path,
+                operator_token=self.operator_token,
+                auth_mode="clerk",
+                authenticator=StubAuthenticator(),
+            )
+            client = app.test_client()
+
+            self.assertEqual(client.get("/api/leaderboard").status_code, 401)
+            legacy_read = client.get(
+                "/api/leaderboard",
+                headers={"X-Read-Pin": "legacy-read"},
+            )
+            self.assertEqual(legacy_read.status_code, 401)
+            reader_read = client.get(
+                "/api/leaderboard",
+                headers={"X-Test-Role": "reader"},
+            )
+            self.assertEqual(reader_read.status_code, 200)
+            identity = client.get(
+                "/api/auth/me",
+                headers={"X-Test-Role": "reader"},
+            )
+            self.assertEqual(
+                identity.get_json(),
+                {
+                    "subject": "user_reader",
+                    "display_name": "Reader",
+                    "role": "reader",
+                },
+            )
+
+            reader_write = client.post(
+                "/api/matches",
+                json={"team1": ["alice"], "team2": ["bob"], "score1": 5, "score2": 3},
+                headers={"X-Test-Role": "reader"},
+            )
+            self.assertEqual(reader_write.status_code, 403)
+            self.assertEqual(
+                reader_write.get_json(),
+                {"error": "operator authorization required"},
+            )
+
+            operator_write = client.post(
+                "/api/matches",
+                json={"team1": ["alice"], "team2": ["bob"], "score1": 5, "score2": 3},
+                headers={"X-Test-Role": "operator"},
+            )
+            self.assertEqual(operator_write.status_code, 201)
+
+    def test_hybrid_auth_accepts_legacy_pin(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+
+            class AnonymousAuthenticator:
+                def authenticate(self, request):
+                    return None
+
+            app = create_app(
+                db_dir=tmp_path,
+                read_pin_hash=generate_password_hash("read-1234"),
+                write_pin_hash=generate_password_hash("write-5678"),
+                auth_mode="hybrid",
+                authenticator=AnonymousAuthenticator(),
+            )
+            client = app.test_client()
+            response = client.get(
+                "/api/leaderboard",
+                headers={"X-Read-Pin": "read-1234"},
+            )
+            self.assertEqual(response.status_code, 200)
+
+    def test_strict_clerk_mode_wires_dedicated_login_flow(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            with shelve.open(str(tmp_path / "playerdb")) as players:
+                players["private-player"] = (
+                    trueskill.Rating(),
+                    trueskill.Rating(),
+                )
+
+            class AnonymousAuthenticator:
+                def authenticate(self, request):
+                    return None
+
+            frontend_domain = "correct.clerk.accounts.dev"
+            encoded_domain = base64.urlsafe_b64encode(
+                f"{frontend_domain}$".encode("ascii")
+            ).decode("ascii").rstrip("=")
+            app = create_app(
+                db_dir=tmp_path,
+                auth_mode="clerk",
+                authenticator=AnonymousAuthenticator(),
+                clerk_publishable_key=f"pk_test_{encoded_domain}",
+                clerk_frontend_api_url="https://incorrect.clerk.accounts.dev",
+            )
+            client = app.test_client()
+            html = client.get("/phone").get_data(as_text=True)
+
+            self.assertIn("const AUTH_MODE = 'clerk';", html)
+            self.assertIn(f"https://{frontend_domain}/npm/@clerk/ui@1", html)
+            self.assertIn("@clerk/clerk-js@6/dist/clerk.browser.js", html)
+            self.assertNotIn("incorrect.clerk.accounts.dev", html)
+            self.assertIn("id='adminMatchesSection'", html)
+            self.assertIn("<body class='strict-auth-pending'>", html)
+            self.assertNotIn("id='clerkSignIn'", html)
+            self.assertIn("id='appContent' style='display:none;'", html)
+            self.assertIn("id='stickyBar' class='sticky' style='display:none;'", html)
+            self.assertNotIn("Private-Player", html)
+            self.assertIn(
+                "id='adminNavBtn' class='btn small' type='button' style='display:none;", html
+            )
+
+            js = client.get("/static/js/phone.js").get_data(as_text=True)
+            self.assertIn("window.__internal_ClerkUICtor", js)
+            self.assertIn("headers.set('Authorization', `Bearer ${managedToken}`);", js)
+            self.assertIn(
+                "window.location.replace(`/login?next=${encodeURIComponent(returnPath)}`)",
+                js,
+            )
+            self.assertIn("afterSignOutUrl: '/login'", js)
+            self.assertIn("/api/admin/matches?limit=30", js)
+            self.assertIn("expected_version: match.version", js)
+            self.assertIn(
+                "names.length === 2 ? [names[1], names[0]] : names",
+                js,
+            )
+
+            login_response = client.get("/login?next=/phone")
+            self.assertEqual(login_response.status_code, 200)
+            login_html = login_response.get_data(as_text=True)
+            self.assertIn("<body class='login-page'>", login_html)
+            self.assertIn("id='clerkSignIn' class='clerk-sign-in'", login_html)
+            self.assertIn('const LOGIN_NEXT = "/phone";', login_html)
+            self.assertIn(f"https://{frontend_domain}/npm/@clerk/ui@1", login_html)
+            self.assertIn("/static/js/login.js?v=", login_html)
+
+            login_js = client.get("/static/js/login.js").get_data(as_text=True)
+            self.assertIn("Clerk.mountSignIn", login_js)
+            self.assertIn("window.location.replace(LOGIN_NEXT)", login_js)
+            self.assertIn("fallbackRedirectUrl: LOGIN_NEXT", login_js)
+
+            unsafe_login_html = client.get(
+                "/login?next=https://example.com/stolen"
+            ).get_data(as_text=True)
+            self.assertIn('const LOGIN_NEXT = "/phone";', unsafe_login_html)
+            self.assertNotIn("example.com", unsafe_login_html)
+
+    def test_login_route_is_disabled_outside_strict_clerk_mode(self) -> None:
+        class AnonymousAuthenticator:
+            def authenticate(self, request):
+                return None
+
+        for auth_mode in ("legacy", "hybrid"):
+            with self.subTest(auth_mode=auth_mode):
+                with TemporaryDirectory() as tmpdir:
+                    app = create_app(
+                        db_dir=Path(tmpdir),
+                        operator_token=self.operator_token,
+                        auth_mode=auth_mode,
+                        authenticator=AnonymousAuthenticator(),
+                    )
+                    response = app.test_client().get(
+                        "/login", follow_redirects=False
+                    )
+                    self.assertEqual(response.status_code, 302)
+                    self.assertEqual(response.headers.get("Location"), "/phone")
+
+    def test_admin_can_list_void_and_restore_match(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            with shelve.open(str(tmp_path / "playerdb")) as players:
+                players["alice"] = (trueskill.Rating(), trueskill.Rating())
+                players["bob"] = (trueskill.Rating(), trueskill.Rating())
+            store = ShelveWriteStore(tmp_path)
+            submitted = store.submit_match(["alice"], ["bob"], 5, 3, source="test")
+
+            class StubAuthenticator:
+                def authenticate(self, request):
+                    role = request.headers.get("X-Test-Role")
+                    if role not in {"reader", "admin"}:
+                        return None
+                    return AuthActor(f"user_{role}", role.title(), role)
+
+            app = create_app(
+                db_dir=tmp_path,
+                auth_mode="clerk",
+                authenticator=StubAuthenticator(),
+                write_store=store,
+            )
+            client = app.test_client()
+
+            reader_list = client.get(
+                "/api/admin/matches",
+                headers={"X-Test-Role": "reader"},
+            )
+            self.assertEqual(reader_list.status_code, 403)
+
+            admin_headers = {"X-Test-Role": "admin"}
+            matches = client.get("/api/admin/matches", headers=admin_headers)
+            self.assertEqual(matches.status_code, 200)
+            item = matches.get_json()["items"][0]
+            self.assertEqual(item["status"], "active")
+            self.assertEqual(item["version"], 1)
+            vercel_encoded_match_id = submitted["match_id"].replace(":", "%253A")
+
+            void_headers = {
+                **admin_headers,
+                "Idempotency-Key": "void-api-1",
+            }
+            (tmp_path / WRITE_LOCK_NAME).write_text("another-writer", encoding="utf-8")
+            locked = client.post(
+                f"/api/admin/matches/{vercel_encoded_match_id}/void",
+                headers=void_headers,
+                json={"reason": "Incorrect score", "expected_version": 1},
+            )
+            self.assertEqual(locked.status_code, 409)
+            (tmp_path / WRITE_LOCK_NAME).unlink()
+
+            voided = client.post(
+                f"/api/admin/matches/{vercel_encoded_match_id}/void",
+                headers=void_headers,
+                json={"reason": "Incorrect score", "expected_version": 1},
+            )
+            self.assertEqual(voided.status_code, 200)
+            self.assertEqual(voided.get_json()["status"], "voided")
+
+            stale_restore = client.post(
+                f"/api/admin/matches/{submitted['match_id']}/restore",
+                headers={**admin_headers, "Idempotency-Key": "restore-stale"},
+                json={"reason": "Restore result", "expected_version": 1},
+            )
+            self.assertEqual(stale_restore.status_code, 409)
+
+            restored = client.post(
+                f"/api/admin/matches/{submitted['match_id']}/restore",
+                headers={**admin_headers, "Idempotency-Key": "restore-api-1"},
+                json={"reason": "Restore result", "expected_version": 2},
+            )
+            self.assertEqual(restored.status_code, 200)
+            self.assertEqual(restored.get_json()["status"], "active")
+
+            audited = client.get("/api/admin/matches", headers=admin_headers).get_json()
+            self.assertEqual(
+                [event["event_type"] for event in audited["items"][0]["events"]],
+                ["submit", "void", "restore"],
+            )
+            self.assertEqual(
+                audited["items"][0]["events"][-1]["actor_subject"],
+                "user_admin",
+            )
 
 
 class C3AnalyticsApiTests(unittest.TestCase):
