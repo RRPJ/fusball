@@ -1,13 +1,17 @@
 # Development Setup
 
-This document describes how to set up and run the project on modern developer machines.
+Production is the Vercel-hosted Flask app with Neon-authoritative persistence
+and strict Clerk authentication. This guide also keeps the shelve and shared
+credential paths available for local development and rollback compatibility.
 
 ## Supported Baseline
 
-- Python: 3.11+ supported baseline
-- OS: Windows 11 and Ubuntu 22.04+ (headless CI uses Ubuntu)
+- Python 3.11 and 3.14 are exercised by CI.
+- Windows 11 and Ubuntu 22.04+ are supported development environments.
+- `api/index.py` is the Vercel entrypoint; `app/phone_api.py` is the direct
+  local entrypoint.
 
-## 1) Create a Virtual Environment
+## Install
 
 Windows PowerShell:
 
@@ -15,16 +19,7 @@ Windows PowerShell:
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-Windows PowerShell (explicit Python 3.14):
-
-```powershell
-py -3.14 -m venv .venv314
-.\.venv314\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
 Linux/macOS:
@@ -33,154 +28,275 @@ Linux/macOS:
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-## 2) Run Smoke Check
-
-The smoke check validates ranking-related logic and shelve compatibility assumptions for the phone API workflow.
-
-```bash
-python scripts/smoke_check.py
-```
-
-## 3) Run The Phone API
-
-Preferred production phone API service flow is manual and double-click driven:
-
-- Start production phone API (prompts writer PIN): `start_phone_api_service.bat`
-- Stop production phone API: `stop_phone_api_service.bat`
-- Check watchdog/API status: `status_phone_api_service.bat`
-
-Behavior notes:
-
-- Start performs a production backup before launching.
-- A watchdog process keeps the phone API service running and restarts it after repeated `/health` failures.
-- Stop shuts down the watchdog and phone API process.
-- Production writes target `app/` data; development flow remains `run_phone_api_dev.bat` with `sandbox/dev-data`.
-
-Primary mobile URL:
-
-- `http://<host>:8080/phone`
-
-Split auth testing in DEV mode:
-
-- Generate hashes manually:
-
-```bash
-python scripts/generate_pin_hash.py --read-pin read1234 --write-pin write5678 --format dotenv
-```
-
-- Start dev API with prompted split PINs:
-
-```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run_phone_api_dev.ps1 -PromptPins
-```
-
-- Start dev API with explicit split PINs:
-
-```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run_phone_api_dev.ps1 -ReadPin "read1234" -WritePin "write5678"
-```
-
-Notes:
-- `run_phone_api_dev.bat` still works and calls the same script.
-- If split PINs are not provided and no PIN hashes are configured, the script falls back to legacy token mode.
-
-Direct local run:
-
-```bash
-cd app
-python phone_api.py
-```
-
-Staging/production auth smoke checks:
-
-```bash
-python scripts/smoke_phone_api_auth.py --base-url https://<your-deployment-host> --expect-auth --read-pin <read-pin> --write-pin <write-pin>
-```
-
-Neon parity smoke check (before cutover):
-
-```bash
-python scripts/smoke_neon_parity.py --db-dir app --database-url <database-url> --mode strict
-```
-
-Use `--mode counts` when you only want fast count-level verification.
-Strict mode also compares exact rating components, match payloads, lifecycle
-state, and Neon replay/audit integrity.
-
-List ordered Neon schema migrations without applying them:
-
-```bash
-python scripts/migrate_neon_schema.py
-```
-
-Apply pending migrations:
-
-```bash
-python scripts/migrate_neon_schema.py --database-url <database-url> --apply
-```
-
-Applied migration versions and checksums are stored in `schema_migrations`.
-Never edit an applied migration; add the next numbered SQL file instead.
-
-Hosted integrity check:
-
-```bash
-python scripts/check_neon_integrity.py --database-url <database-url>
-```
-
-Encrypted export and isolated restore drill:
-
-```bash
-python scripts/export_neon_backup.py --database-url <source-url> --output <outside-repo-path>.fusball-backup
-python scripts/restore_neon_backup.py <backup-path> --database-url <isolated-url> --target-environment restore-drill --confirm-isolated-target
-```
-
-Both commands require `FUSBALL_BACKUP_KEY`; restore defaults to
-`RESTORE_DATABASE_URL`, not the live `DATABASE_URL`.
-
-Recommended environment model:
-- Vercel Production -> Neon Production
-- Vercel Preview -> Neon Preview
-- Local coding -> local shelve sandbox unless cloud-like testing is needed
-
-Legacy-token fallback smoke check:
-
-```bash
-python scripts/smoke_phone_api_auth.py --base-url http://127.0.0.1:8080 --operator-token <token>
-```
-
-## 4) Coding Standards
-
-Install development dependencies:
-
-```bash
 pip install -r requirements-dev.txt
 ```
 
-Run lint and formatting checks:
+## Local Shelve Workflow
 
-```bash
+The smallest local workflow uses shelve state and `legacy` auth:
+
+```powershell
+$env:FUSBALL_AUTH_MODE = "legacy"
+python scripts\smoke_check.py
+python app\phone_api.py
+```
+
+With no `WRITE_PIN_HASH` or `FUSBALL_PHONE_API_TOKEN`, this direct launch
+allows open legacy reads but returns `503` for writes.
+
+By default, direct local execution reads `app/playerdb*`,
+`app/recentplayers*`, and `app/match_history*`. Set
+`FUSBALL_PHONE_API_DB_DIR` to use another directory.
+
+For an isolated sandbox and prompted credentials:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\run_phone_api_dev.ps1 -PromptPins
+```
+
+Explicit local PINs:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\run_phone_api_dev.ps1 `
+  -ReadPin "read1234" -WritePin "write5678"
+```
+
+`run_phone_api_dev.bat` calls the same PowerShell script and writes to
+`sandbox/dev-data`. If no split PIN hashes are present, the launcher can fall
+back to `FUSBALL_PHONE_API_TOKEN`.
+
+The Windows service/watchdog files are historical local wrappers:
+
+- `start_phone_api_service.bat`
+- `stop_phone_api_service.bat`
+- `status_phone_api_service.bat`
+
+They target local shelve data under `app/`, but their watchdog still probes
+the legacy `/health` path instead of the current `/api/health` readiness
+endpoint. Use the direct launcher or `run_phone_api_dev.bat` until the wrapper
+is updated; these files are not the Vercel production workflow.
+
+## Cloud-Like Local Workflow
+
+Use a disposable Neon database and a Clerk test/development instance. Never
+point local cloud-like testing at production Neon.
+
+```powershell
+$env:DATABASE_URL = "<isolated-neon-url>"
+$env:FUSBALL_AUTH_MODE = "clerk"
+$env:CLERK_SECRET_KEY = "<clerk-secret>"
+$env:CLERK_PUBLISHABLE_KEY = "<clerk-publishable-key>"
+$env:CLERK_AUTHORIZED_PARTIES = "http://127.0.0.1:8080"
+# Optional only when origin derivation from the publishable key is unsuitable:
+$env:CLERK_FRONTEND_API_URL = "https://<clerk-frontend-origin>"
+
+python scripts\migrate_neon_schema.py --apply
+python scripts\check_neon_integrity.py
+python app\phone_api.py
+```
+
+Open `http://127.0.0.1:8080/phone`. Provision the Clerk subject in that
+database's `app_users` table as described in `authentication.md`.
+
+`DATABASE_URL` selects the Neon adapter. Without it, the runtime selects
+shelve. Strict Clerk also requires a valid publishable key, secret key,
+authorized party, and Neon database.
+
+## Vercel Preview And Production
+
+`vercel.json` sends all routes to `api/index.py`. Configure variables in the
+matching Vercel environment rather than committing an env file.
+
+| Variable | Preview | Production |
+| --- | --- | --- |
+| `DATABASE_URL` | Isolated Neon preview branch/project | Dedicated Neon production database |
+| `FUSBALL_AUTH_MODE` | `clerk` | `clerk` |
+| `CLERK_SECRET_KEY` | Preview/test Clerk key | Production Clerk key |
+| `CLERK_PUBLISHABLE_KEY` | Matching preview/test key | Matching production key |
+| `CLERK_AUTHORIZED_PARTIES` | Exact preview origin(s) | Exact production origin(s) |
+| `CLERK_FRONTEND_API_URL` | Optional derivation fallback | Optional derivation fallback |
+
+Operational-only secrets:
+
+- `FUSBALL_BACKUP_KEY`: encryption key for hosted exports/restores
+- `RESTORE_DATABASE_URL`: empty isolated restore target
+
+These belong in the approved environment used to run recovery commands; they
+do not need to be exposed to the Vercel application runtime.
+
+Local/rollback compatibility variables:
+
+- `FUSBALL_PHONE_API_DB_DIR`
+- `READ_PIN_HASH`
+- `WRITE_PIN_HASH`
+- `FUSBALL_PHONE_API_TOKEN`
+
+Do not use local shelve as a hosted failover store. Do not give Preview the
+Production `DATABASE_URL`, Clerk secret, or backup target.
+
+## Database Setup And Verification
+
+List migrations without applying them:
+
+```powershell
+python scripts\migrate_neon_schema.py
+```
+
+Apply ordered migrations:
+
+```powershell
+python scripts\migrate_neon_schema.py --database-url "<database-url>" --apply
+```
+
+Applied versions and checksums are recorded in `schema_migrations`. Never edit
+an applied migration; add the next numbered file under
+`scripts/sql/migrations/`.
+
+Dry-run a shelve import, then apply only to the intended empty or controlled
+target:
+
+```powershell
+python scripts\migrate_shelve_to_neon.py --db-dir app
+python scripts\migrate_shelve_to_neon.py --db-dir app `
+  --database-url "<database-url>" --apply
+```
+
+The current importer reads `playerdb*`, `recentplayers*`, and
+`match_history*`. It derives baselines and synthetic submit events, but it
+does not import local `match_events*` or `rating_baselines*`, and imported
+lifecycle columns are reset to active version 1. Do not use it to cut over a
+local history containing void/restore state or lifecycle/idempotency
+provenance that must be preserved; see `data-safety.md`.
+
+Run exact parity when migrating known shelve state:
+
+```powershell
+python scripts\smoke_neon_parity.py --db-dir app `
+  --database-url "<database-url>" --mode strict
+```
+
+`--mode counts` is a faster diagnostic, not a cutover substitute. Strict mode
+compares exact ratings, recent ordering, match payloads, lifecycle state, and
+replay/audit integrity.
+
+Run hosted integrity independently:
+
+```powershell
+python scripts\check_neon_integrity.py --database-url "<database-url>"
+```
+
+`GET /api/health` is a readiness check. Neon mode returns `503` if the
+connection or exact ordered schema is unavailable/incompatible.
+
+## Authentication Verification
+
+The compatibility smoke script exercises PIN/token behavior; it does not
+obtain a Clerk browser session:
+
+```powershell
+python scripts\smoke_phone_api_auth.py `
+  --base-url http://127.0.0.1:8080 `
+  --expect-auth --read-pin "<read-pin>" --write-pin "<write-pin>"
+```
+
+For strict Clerk, validate through `/login` and `/phone`, then use
+`GET /api/auth/me` to confirm the active subject and role. Verify:
+
+- anonymous reads/writes are rejected;
+- `reader` cannot write;
+- `operator` can perform normal writes but not admin corrections;
+- `admin` can list and correct matches;
+- disabled or unprovisioned Clerk subjects are rejected;
+- PIN/token headers do not bypass strict mode.
+
+Perform mutating checks only against isolated preview/test data.
+
+## Backup And Restore Drill
+
+Set `FUSBALL_BACKUP_KEY` in an approved administrative environment:
+
+```powershell
+python scripts\export_neon_backup.py `
+  --database-url "<source-url>" `
+  --output "C:\secure-backups\fusball-<timestamp>.fusball-backup"
+
+$env:RESTORE_DATABASE_URL = "<empty-isolated-url>"
+python scripts\restore_neon_backup.py `
+  "C:\secure-backups\fusball-<timestamp>.fusball-backup" `
+  --target-environment restore-drill --confirm-isolated-target
+```
+
+The restore command defaults to `RESTORE_DATABASE_URL` and refuses a
+production target label. Follow it with the integrity check and an app read
+against the restored database. Store the encrypted artifact outside the
+repository.
+
+## Regression And Style Checks
+
+The CI regression matrix runs:
+
+```powershell
+python scripts\smoke_check.py
+python -m unittest test_phone_api.py test_match_flow.py test_integration.py `
+  test_neon_store.py test_neon_migrations.py test_neon_data_safety.py test_auth.py
+```
+
+The PostgreSQL transaction tests require `TEST_DATABASE_URL`; without it,
+their database-backed cases are skipped.
+
+Lint and format:
+
+```powershell
 ruff check app api test_*.py scripts
 black --check app api test_*.py scripts
 ```
 
-Enable pre-commit hooks:
+Optional hooks:
 
-```bash
+```powershell
 pre-commit install
 ```
 
-Hook configuration lives in `.pre-commit-config.yaml`.
+## Rollout Evidence
 
-Function documentation tip:
-- The inline function documentation you asked about is called a `docstring`.
-- For new or changed functions, prefer short docstrings that describe purpose, inputs, and return value.
+Passing repository tests proves branch behavior, not provider deployment.
+Keep a redacted rollout record containing:
 
-## 5) Troubleshooting
+- Vercel Preview/Production deployment URL or ID and commit SHA;
+- intended Vercel-to-Neon environment mapping;
+- migration and integrity output with timestamps;
+- `/api/health` readiness result;
+- Clerk authorized-party and role checks;
+- strict-mode negative auth checks;
+- isolated restore-drill result and credential cleanup;
+- controlled preview and production read/write observations.
 
-- If the phone API cannot write, verify `READ_PIN_HASH` / `WRITE_PIN_HASH` or the legacy token fallback configuration.
-- If the service starts but the phone page is empty, verify the selected data directory contains `playerdb*` and related state.
-- If shelve files fail to open across OS boundaries, restore from backup and re-seed/migrate data before use.
+Do not claim Preview or Production rollout complete until those external checks
+have actually been performed. Never record secrets or full connection strings.
+
+## Troubleshooting
+
+Hosted:
+
+- Startup failure in `clerk` mode: verify all Clerk values, exact authorized
+  origins, and `DATABASE_URL`.
+- `/api/health` returns `503`: check Neon reachability and run
+  `migrate_neon_schema.py` plus `check_neon_integrity.py`.
+- Signed in but unauthorized: provision an active `app_users` row using the
+  immutable Clerk subject.
+- Preview changes production data: stop writes immediately and replace the
+  preview `DATABASE_URL` with an isolated target.
+
+Local:
+
+- Writes return `503`: configure `WRITE_PIN_HASH` or
+  `FUSBALL_PHONE_API_TOKEN` in `legacy` mode.
+- Empty leaderboard: verify the selected directory contains `playerdb*`.
+- Shelve files fail across OS/Python versions: restore a compatible backup or
+  migrate through an exported snapshot rather than modifying files in place.
+
+## See Also
+
+- `authentication.md`
+- `data-safety.md`
+- `phone-api.md`

@@ -2,42 +2,46 @@
 
 ## Development Flow
 
-1. Create a branch.
-2. Run setup from [docs/development.md](docs/development.md).
-3. Run `python scripts/smoke_check.py` before opening a PR.
-4. Keep changes small and behavior-preserving unless intentionally changing gameplay.
+1. Create a branch and follow [docs/development.md](docs/development.md).
+2. Choose the correct mode: local shelve, explicitly configured cloud-like Neon/Clerk, or isolated Vercel Preview.
+3. Keep changes small and behavior-preserving unless gameplay or an API contract is intentionally changing.
+4. Run the smallest relevant checks, then the CI-equivalent matrix before opening a high-risk PR.
+
+Never point local experiments, Vercel Preview, migration tests, or restore drills at production Neon.
 
 ## Communication Expectation
 
-- For every code or documentation change, explain what changed and why.
-- Include a short validation note (what was run/checked) and any known trade-offs.
-- Write explanations for maintainers who are learning the codebase as changes land.
+- Explain what changed, why, validation performed, and known trade-offs.
+- Describe production behavior as Vercel + Neon + strict Clerk; label shelve and legacy PIN/token paths as local or rollback compatibility.
+- Update maintainers' documentation when configuration, auth, write, migration, deployment, or recovery behavior changes.
 
 ## Coding Standards
 
-- Use `docs/development.md` as the source of truth for dev-tool installation, lint/format commands, and pre-commit setup.
-- For changed functions, add concise docstrings when intent is not immediately obvious.
-
-## Naming Policy
-
-- Repository-facing names should describe the phone API workflow and use Fusball terminology.
-- Remove or rewrite legacy kiosk, LCARS, and kickers references when they no longer serve an active compatibility need.
+- Use `docs/development.md` as the source of truth for setup, lint, format, and pre-commit commands.
+- Preserve offense-first internal rating/team ordering even though the phone UI displays doubles as Defense + Offense.
+- Add concise docstrings only when a changed function's intent is not immediately obvious.
 
 ## Data Safety Requirements
 
-- Before modifying persistence logic, run `python scripts/backup_state.py`.
-- Document migration impact in [docs/data-safety.md](docs/data-safety.md).
+- Run `python scripts/backup_state.py` before changing local persistence logic or data-shape assumptions, and separately preserve `match_events*` and `rating_baselines*` because the script does not currently copy those lifecycle shelves.
+- Put hosted schema changes in ordered, checksum-verified files under `scripts/sql/migrations/`; never rewrite an applied migration.
+- Document migration, integrity, encrypted-export, isolated-restore, rollback, and rollout impact in [docs/data-safety.md](docs/data-safety.md).
+- Verify Neon-sensitive changes against an isolated database with the relevant migration, store, integrity, parity, export, and restore-drill checks.
 
 ## Automated Checks
 
-CI runs lint/format checks and smoke checks on push/PR.
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs:
 
-- Workflow: `.github/workflows/ci.yml`
-- Runbook and local commands: `docs/development.md`
+- Ruff and Black on Python 3.11.
+- `python scripts/smoke_check.py` plus `test_phone_api.py`, `test_match_flow.py`, `test_integration.py`, `test_neon_store.py`, `test_neon_migrations.py`, `test_neon_data_safety.py`, and `test_auth.py` on Python 3.11 and 3.14.
+- `test_neon_store.py` against PostgreSQL 17 on Python 3.11 to verify transaction rollback behavior.
 
 ## Pull Request Checklist
 
-- [ ] Smoke check passes locally.
-- [ ] Ruff and Black checks pass locally.
-- [ ] Any data-shape changes have migration and rollback notes.
-- [ ] README/docs are updated for behavior or workflow changes.
+- [ ] Relevant targeted tests pass.
+- [ ] Full smoke/regression matrix passes for cross-cutting changes.
+- [ ] Ruff and Black checks pass.
+- [ ] Auth, role, locking, idempotency, replay, presence, and readiness behavior remain correct where affected.
+- [ ] Local shelve changes have a backup and compatibility/rollback notes.
+- [ ] Neon changes use ordered migrations and include integrity plus isolated restore-readiness evidence.
+- [ ] README/docs reflect behavior, configuration, deployment, or recovery changes.

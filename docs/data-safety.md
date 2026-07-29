@@ -1,35 +1,36 @@
 # Data Safety And Migration
 
-This project stores operational data in Python shelve files. Treat these files as stateful assets.
+## Storage Authority By Environment
 
-## Before Any Refactor Or Dependency Upgrade
+| Environment | Authoritative state | Recovery model |
+| --- | --- | --- |
+| Vercel Production | Dedicated Neon production database | Neon provider recovery plus encrypted application exports |
+| Vercel Preview | Isolated Neon preview branch/project | Disposable/reseedable; may be used as an isolated restore target |
+| Local development | Shelve under `app/`, `sandbox/dev-data`, or `FUSBALL_PHONE_API_DB_DIR` | Timestamped file copies |
 
-1. Stop the app.
-2. Copy all shelve-related files from `app/` to a timestamped backup folder.
-3. Copy `app/logfile.log` if present.
-4. If phone API is in use, also back up `app/match_history*` and confirm whether writes were targeting `app/` or `sandbox/dev-data`.
+Neon is authoritative for hosted production. Shelve is a supported local and
+rollback compatibility store, not a hosted failover mechanism. Never connect
+Vercel Preview, a restore drill, or local experiments to the production Neon
+database.
 
-Example backup layout:
+## Hosted Safety Baseline
 
-- `backups/2026-04-09/playerdb*`
-- `backups/2026-04-09/recentplayers*`
-- `backups/2026-04-09/match_history*`
-- `backups/2026-04-09/logfile.log`
+Before a hosted schema change, data import, correction rollout, or other
+high-risk operation:
 
-Historical kiosk-only files may still exist in older backups. Keep them for archive purposes, but they are no longer part of the active runtime contract.
+1. Confirm the target URL belongs to the intended Neon environment.
+2. Create an encrypted application export and confirm its source integrity
+   result.
+3. Confirm provider recovery/point-in-time recovery is available for the
+   production recovery window.
+4. Apply only ordered migrations from `scripts/sql/migrations/`.
+5. Run `check_neon_integrity.py`.
+6. Validate the change against isolated Preview before Production.
+7. Record redacted evidence; never record credentials or connection strings.
 
-## Compatibility Caveat
-
-Shelve backend formats are platform-dependent. Files created on one OS/Python build may not always be readable on another.
-
-Recommended policy:
-- Keep one canonical runtime environment for production data.
-- Use exported snapshots (for example JSON) for cross-platform migration work.
-
-## Existing Migration Helper
-
-- `app/dbmigration.py` upgrades old player records from single-rating to offense/defense tuple format.
-- Run it from the `app/` directory after creating a backup.
+The repository contains the safety tooling, but repository history alone does
+not prove that a provider backup, restore drill, Preview validation, or
+Production rollout has occurred.
 
 ## Neon Parity Verification
 
@@ -60,6 +61,18 @@ before corrections are enabled.
 Imported matches receive an append-only `submit` event attributed to
 `migration:shelve`; original match payloads are not rewritten.
 
+The current shelve importer reads only `playerdb*`, `recentplayers*`, and
+`match_history*`. It derives new baselines and submit events rather than
+importing local `rating_baselines*` or `match_events*`; relational lifecycle
+columns are written as `active`, version `1`, with
+`submitted_by='migration:shelve'` and no relational idempotency key. Before
+applying it, inspect the source history. If any record is voided, has a
+non-default lifecycle version, or requires existing actor/request-key audit
+state to remain authoritative, do not cut over with this importer. Preserve a
+complete local backup and implement a dedicated validated migration path.
+Strict parity detects status/version differences, but it is not a substitute
+for lifecycle and idempotency migration review.
+
 ## Presence Migration (`0005_player_presence.sql`)
 
 Migration `0005` adds an additive `player_presence` table (`player_name`
@@ -67,12 +80,12 @@ primary key referencing `players(name)` with `ON DELETE CASCADE`,
 `marked_active_at`, `expires_at`) plus an index on `expires_at`, giving hosted
 Neon deployments durable "who's currently present" state with an 8-hour
 expiry (`PRESENCE_TTL_SECONDS` in `app/services/phone_write_store.py`). It
-does not touch any existing table or column, needs no backfill, and rolls back
-by simply not applying it (nothing else depends on the table existing; the
-phone API falls back to whatever presence rows exist and treats an empty
-table as "nobody present"). Local shelve mode is unaffected: presence there
-remains an in-process, per-server-lifetime set, matching pre-refactor
-behavior.
+does not touch any existing table or column and needs no backfill. A hosted
+runtime using this branch expects the migration to exist; do not drop the
+table as an application rollback. Roll back the deployment/database
+environment together or restore an isolated known-good state. Local shelve
+mode is unaffected: presence there remains an in-process,
+per-server-lifetime set.
 
 Before void or restore, the persistence adapter compares every materialized
 rating component with deterministic replay from `rating_baselines` and active
@@ -188,7 +201,7 @@ or recovery-tool changes. A drill is complete only when the isolated restore
 passes checksums and replay, the app can read it, and temporary credentials are
 revoked.
 
-## Hosted Cutover Gates
+## Hosted Rollout Gates
 
 Do not enable a persistence migration or match-correction feature in production
 unless all of these gates pass:
@@ -206,21 +219,78 @@ Intentional API or authorization changes must be documented before cutover.
 Any failed gate blocks deployment rather than being accepted as a known
 difference.
 
-## Restore Procedure (Rollback)
+## External Rollout Evidence
+
+For each Preview or Production rollout, retain a redacted operational record:
+
+- Vercel deployment URL/ID and commit SHA;
+- Neon project/branch identity and intended environment mapping;
+- migration list/output and integrity report with timestamps;
+- encrypted export result and storage location identifier;
+- isolated restore-drill result, including checksum/replay success and
+  temporary credential revocation;
+- `/api/health` result and controlled application read;
+- Clerk role and negative authorization checks;
+- operator/admin write evidence against the intended environment.
+
+Do not claim deployment or recovery readiness from automated repository tests
+alone. Do not include full URLs, passwords, keys, session tokens, or decrypted
+backup data in evidence.
+
+## Local Shelve Safety
+
+Local shelve state is still operationally important. Before changing local
+persistence logic, migrations, dependency versions that may affect shelve, or
+data-shape assumptions:
+
+1. Stop every process using the selected data directory.
+2. Confirm whether the runtime targets `app/`, `sandbox/dev-data`, or
+   `FUSBALL_PHONE_API_DB_DIR`.
+3. Run:
+
+   ```powershell
+   python scripts\backup_state.py
+   ```
+
+   This script copies the repo's `app/playerdb*`, `app/recentplayers*`,
+   `app/match_history*`, and `app/logfile.log` into
+   `backups/<timestamp>/`.
+4. The script does not currently copy `match_events*` or
+   `rating_baselines*`. If those lifecycle shelves exist, copy them from the
+   active data directory into protected storage as well.
+5. If the active directory is not `app/`, copy all equivalent artifacts from
+   that directory to protected storage.
+6. Verify the copied files exist before changing state.
+
+Historical kiosk-only files may remain in old backups. Keep them as archives;
+they are not part of the current runtime contract.
+
+Shelve backend formats are platform-dependent. Files created on one OS or
+Python build may not be readable on another. Prefer a controlled export/import
+path for cross-platform migration rather than opening the only copy in a new
+environment.
+
+`app/dbmigration.py` upgrades legacy player records from a single rating to the
+offense/defense tuple format. Run it from `app/` only after backing up the
+actual target data.
+
+## Local Shelve Restore (Rollback)
 
 Use this when data corruption or a failed migration is suspected.
 
-1. Stop phone API processes.
+1. Stop every phone API process using the target data.
 2. Identify the target backup folder under `backups/<timestamp>/`.
-3. Copy backup artifacts back into `app/` for each relevant store:
-	- `playerdb*`
-	- `recentplayers*`
-	- `match_history*` (if present)
-	- `logfile.log` (optional legacy audit restore)
-4. Start app from `app/` and run smoke validation:
-	- `python scripts/smoke_check.py`
+3. Copy backup artifacts back into the original selected data directory:
+   - `playerdb*`
+   - `recentplayers*`
+   - `match_history*` (if present)
+   - `match_events*` (if present)
+   - `rating_baselines*` (if present)
+   - `logfile.log` (optional legacy audit restore)
+4. Start the local app and run smoke validation:
+   - `python scripts/smoke_check.py`
 5. Run targeted API/unit checks if phone write path was involved:
-	- `python -m unittest test_phone_api.py`
+   - `python -m unittest test_phone_api.py`
 6. Manually verify leaderboard and one match flow before reopening normal use.
 
 Rollback decision note:

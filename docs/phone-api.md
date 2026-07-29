@@ -1,168 +1,283 @@
 # Phone API Reference
 
-This document is the endpoint-level reference for the Fusball phone API in `app/phone_api.py`.
+The Fusball Flask application serves the browser UI and JSON API from the same
+runtime. `app/phone_api.py:create_app()` is the composition root;
+`api/index.py` exports the app for Vercel. Route implementations live under
+`app/blueprints/`, while page templates and assets live under
+`app/templates/` and `app/static/`.
 
-The phone API is the repository's primary runtime. It serves both the browser-based operator UI and the JSON endpoints used by phone clients and hosted deployments.
+## Deployment Profiles
 
-`create_app()` in `app/phone_api.py` remains the composition root, but the UI
-markup/CSS/JS live in `app/templates/` and `app/static/` (cache-versioned),
-and routes are grouped into focused blueprints under `app/blueprints/`
-(`health`, `auth`, `read`, `write`, `admin`). See `docs/architecture.md` for
-the full breakdown.
+- **Production:** Vercel + authoritative Neon + strict Clerk
+  (`FUSBALL_AUTH_MODE=clerk`).
+- **Preview:** Vercel Preview + isolated Neon preview data + matching Clerk
+  configuration.
+- **Local development:** shelve under `app/` or
+  `FUSBALL_PHONE_API_DB_DIR`, normally with legacy PIN/token compatibility.
+  Local development can instead use Neon and Clerk when explicitly configured.
 
-## Base Path
+The code defaults to `legacy` auth mode for compatibility. Production must set
+`FUSBALL_AUTH_MODE=clerk`; it must not rely on the default.
 
-- Default host/port: `http://<host>:8080`
-- Mobile page: `GET /phone`
-- Managed sign-in page: `GET /login` (strict `clerk` mode only)
+## Browser Routes
 
-## Phone Page Status UX
+- `GET /` redirects to `/phone`.
+- `GET /phone` renders the operator UI.
+- `GET /login` renders the Clerk sign-in page only in strict `clerk` mode. In
+  other modes it redirects to `/phone`.
+- `GET /static/*` serves versioned CSS and JavaScript assets.
 
-The `/phone` page exposes request/freshness state directly in the UI so operators can tell the difference between live data, active fetches, and cached fallback.
-
-- Header status card:
-  - `Live` means the API is reachable and the page is showing current data.
-  - `Fetching ...` means a request is in progress; the card shows the elapsed fetch time.
-  - `Snapshot mode` means the API is offline and the page is showing a cached leaderboard snapshot.
-- Leaderboard freshness:
-  - The leaderboard section shows when standings were last updated.
-  - While offline, it shows cached snapshot age instead of implying the data is still live.
-- Inline fetch cues:
-  - Presence status shows when active players are refreshing and when they were last updated.
-  - Odds status shows when matchup odds are being calculated and when the current odds were last updated.
-
-Notes:
-- Leaderboard cache is stored in browser `localStorage` with a timestamp.
-- Presence remains session-scoped server state and is still lost on API restart.
-- Current behavior remains intentionally conservative: the leaderboard refreshes after successful submit and filter changes rather than polling continuously.
+In strict mode `/phone` initially renders a Clerk bootstrap state. Browser
+JavaScript resolves the session and redirects an anonymous visitor to
+`/login?next=/phone`. The `/login` route accepts only a local `next` path and
+falls back to `/phone` for unsafe values. This browser flow is not an
+authorization boundary; API routes enforce access server-side.
 
 ## Authentication
 
-Hosted deployments support Clerk-managed individual identity with
-application-owned roles in Neon. See `docs/authentication.md`.
+### Production Clerk Contract
 
-- `Authorization: Bearer <session-token>` authenticates a Clerk session.
-- `GET /api/auth/me` returns the active user's subject, display name, and role.
-- `reader` can access reads, `operator` can also perform existing writes, and
-  `admin` is reserved for destructive administration such as match correction.
-- `FUSBALL_AUTH_MODE` controls rollout: `legacy`, `hybrid`, or `clerk`.
+Hosted production uses a Clerk session token:
 
-Phone-page auth navigation:
-- Strict `clerk` mode resolves Clerk before initializing operational UI. An
-  anonymous `/phone` visit redirects to `/login?next=/phone`; successful
-  sign-in redirects back to `/phone`, and sign-out returns to `/login`.
-- `/login` validates `next` as a local path and defaults unsafe destinations to
-  `/phone`.
-- Outside strict `clerk` mode, `/login` redirects to `/phone`.
-- `hybrid` mode shows managed login prominently while retaining the PIN
-  fallback and existing read-PIN behavior.
-- Navigation is presentation-only. Every `/api/*` route still enforces
-  authorization server-side regardless of what the client has rendered.
+```http
+Authorization: Bearer <Clerk session token>
+```
 
-The auth split introduces two headers for the API path:
+The backend verifies the Clerk session and authorized party, then resolves the
+immutable Clerk subject against an active row in Neon's `app_users` table.
+Unknown or disabled users are not authorized.
 
-- Read header: `X-Read-Pin`
-- Writer header: `X-Write-Pin`
+| Role | API access |
+| --- | --- |
+| `reader` | Read endpoints |
+| `operator` | Reads plus presence, lineup, player, and match writes |
+| `admin` | Operator access plus match listing and void/restore |
 
-Access model:
+`GET /api/auth/me` returns the resolved `subject`, `display_name`, and `role`.
+Admin routes require a managed `admin` actor even in `legacy` or `hybrid`
+deployments; a PIN or shared token cannot authorize corrections.
 
-- `GET /api/health` is public (no auth).
-- Read endpoints require a valid read PIN or writer PIN.
-- Write endpoints require a valid writer PIN.
+### Compatibility Modes
 
-Legacy compatibility:
+`FUSBALL_AUTH_MODE` accepts:
 
-- If `WRITE_PIN_HASH` is not configured, write endpoints still accept legacy operator token mode.
-- Legacy header: `X-Operator-Token`
-- Legacy env var: `FUSBALL_PHONE_API_TOKEN`
-- Legacy mode is intended for local compatibility during rollout.
+- `legacy`: managed authentication is disabled. Reads may use `X-Read-Pin` or
+  `X-Write-Pin`; writes use `X-Write-Pin`, or `X-Operator-Token` when no writer
+  PIN hash is configured.
+- `hybrid`: a managed actor is used when present; otherwise the configured
+  legacy PIN/token checks remain available.
+- `clerk`: managed identity only. `X-Read-Pin`, `X-Write-Pin`, and
+  `X-Operator-Token` are ignored for authorization.
+
+In non-strict modes, reads are open when neither read nor writer PIN hashes are
+configured. If `WRITE_PIN_HASH` is configured, write requests require
+`X-Write-Pin`. If it is absent, writes fall back to `X-Operator-Token` matched
+against `FUSBALL_PHONE_API_TOKEN`; without either write configuration, writes
+return `503`.
 
 ## Environment Configuration
 
-- `FUSBALL_PHONE_API_TOKEN`: operator token for write requests.
-- `FUSBALL_PHONE_API_DB_DIR`: data directory override (`playerdb`, `recentplayers`, `match_history`, `logfile.log`).
-- `READ_PIN_HASH`: hashed read PIN (`X-Read-Pin`).
-- `WRITE_PIN_HASH`: hashed writer PIN (`X-Write-Pin`).
+### Hosted Production And Preview
 
-## Endpoint Summary
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Selects authoritative Neon storage |
+| `FUSBALL_AUTH_MODE` | Set to `clerk` for production |
+| `CLERK_SECRET_KEY` | Backend session verification |
+| `CLERK_PUBLISHABLE_KEY` | Browser Clerk integration; also used to derive the frontend origin |
+| `CLERK_AUTHORIZED_PARTIES` | Comma-separated exact allowed frontend origins |
+| `CLERK_FRONTEND_API_URL` | Optional frontend-origin compatibility fallback |
 
-### Health
+Preview must use preview-specific Neon and Clerk values and must never point at
+production ranking data.
 
-- `GET /api/health`
-- Returns: `{ "ok": true }`
+### Local And Rollback Compatibility
 
-### Leaderboard
+| Variable | Purpose |
+| --- | --- |
+| `FUSBALL_PHONE_API_DB_DIR` | Shelve/log data-directory override |
+| `READ_PIN_HASH` | Werkzeug-compatible hash for `X-Read-Pin` |
+| `WRITE_PIN_HASH` | Werkzeug-compatible hash for `X-Write-Pin` |
+| `FUSBALL_PHONE_API_TOKEN` | Shared `X-Operator-Token` value when no writer PIN is configured |
+| `FUSBALL_AUTH_MODE` | `legacy`, `hybrid`, or `clerk` |
 
-- `GET /api/leaderboard?limit=50&scope=all`
-- Query params:
-  - `limit` (1-200)
-  - `scope`: `all`, `this_quarter`, `this_month`, `this_week`
-- Returns:
-  - `count`
-  - `items[]` with `position`, `name`, `rank`, `level`, offense/defense stats
-  - `level` is the average of the offense and defense exposed TrueSkill levels
+Operational backup/restore tooling additionally uses `FUSBALL_BACKUP_KEY` and
+`RESTORE_DATABASE_URL`; those variables are not consumed by API request
+handling.
 
-### Players
+## Readiness
 
-- `GET /api/players`
-  - Returns display names (`Alice`, `Bob`, ...)
-- `POST /api/players`
-  - Auth required
-  - Body: `{ "name": "Rutger" }`
-  - Creates player with default offense/defense ratings
+### `GET /api/health`
 
-### Presence
+Public readiness endpoint.
 
-- `GET /api/presence`
-  - Returns active/present players.
-  - Local/shelve mode: process-local, lost on API restart (unchanged
-    behavior).
-  - Hosted Neon mode: durable, backed by a `player_presence` table with an
-    8-hour expiry; expired rows are filtered out of every read
-    (`WHERE expires_at > NOW()`), so a crashed/redeployed ephemeral Vercel
-    instance cannot leave stale players marked present indefinitely.
-- `POST /api/presence`
-  - Body: `{ "name": "alice", "active": true }`
-  - Marking a player active upserts (refreshes the expiry on hosted Neon);
-    marking inactive deletes the row/set entry.
-- `POST /api/presence/clear`
-  - Clears the active list/table for the resolved store.
+- `200`: `{"ok": true}` when the selected store is ready.
+- `503`: store resolution failed or readiness failed.
 
-Notes:
-- `/api/lineup/random` uses the current presence set at request time, so it
-  reflects the durable Neon table on hosted deployments and the in-process set
-  locally.
+Shelve readiness checks the configured data directory and reads the current
+player store when present. Neon readiness checks connectivity, all required
+tables, and an exact match between the applied `schema_migrations` rows and the
+ordered migration manifest. Failure responses expose a reason such as
+`store_unavailable`, `database_unavailable`, or `schema_incompatible`, without
+including connection details.
 
-### Lineup Helpers
+## Identity
 
-- `POST /api/lineup/random`
-  - Body: `{ "mode": "singles" | "doubles" }`
-  - Uses active players only
-- `POST /api/lineup/auto`
-  - Body:
-    - `mode` must be `doubles`
-    - `selected` must include all 4 slots (`red_defense`, `red_offense`, `blue_offense`, `blue_defense`)
-  - Returns balanced slot arrangement using existing match-quality logic
+### `GET /api/auth/me`
 
-### Match Insights
+Requires a valid managed Clerk identity.
 
-- `GET /api/odds`
-  - Inputs: `red_off`, `blue_off`, optional defenders in doubles
-  - Returns probability + ratio text
-- `GET /api/h2h?p1=alice&p2=bob`
-- `GET /api/team-h2h?team1=alice,bob&team2=carol,dave`
-  - Ordered team-vs-team H2H for the current lineup.
-  - Team member order is significant for doubles because internal phone-runtime records preserve the gameplay order used by ratings and odds.
-  - The phone UI should still render doubles as `Defense + Offense` even though internal arrays remain offense-first.
-- `GET /api/stats?scope=all|this_quarter|this_month|this_week`
-- `GET /api/player/<name>/profile?scope=all|this_quarter|this_month|this_week&recent_limit=5`
-- `GET /api/player/<name>/history?n=10`
+```json
+{
+  "subject": "user_...",
+  "display_name": "Operator Name",
+  "role": "operator"
+}
+```
 
-### Match Submit
+Returns `401` when no active managed actor resolves. Legacy credentials do not
+make this endpoint return an identity.
 
-- `POST /api/matches`
-- Writer PIN required (`X-Write-Pin`) unless running legacy fallback mode
-- Body example:
+## Read Endpoints
+
+These routes require `reader`, `operator`, or `admin` in strict Clerk mode.
+Compatibility access follows the mode rules above.
+
+### `GET /api/leaderboard`
+
+Query parameters:
+
+- `limit`: clamped to `1`-`200`; default `50`
+- `scope`: `all`, `this_quarter`, `this_month`, or `this_week`
+
+Returns `count` and `items`. Each item includes position, display name, rank,
+level, and offense/defense values. Level is the average of exposed offense and
+defense TrueSkill levels. Invalid scope returns `400`.
+
+### `GET /api/players`
+
+Returns display-cased player names:
+
+```json
+{"count": 2, "items": ["Alice", "Bob"]}
+```
+
+### `GET /api/presence`
+
+Returns players currently marked active.
+
+- Neon: durable `player_presence` rows whose `expires_at` is later than
+  `NOW()`. Rows expire after eight hours.
+- Shelve: an in-process set for the lifetime of the server/store instance.
+
+### `GET /api/odds`
+
+Query parameters:
+
+- required: `red_off`, `blue_off`
+- doubles: `mode=doubles`, with optional `red_def` and `blue_def` query values
+
+Returns a rounded win `probability` and ratio text. The phone UI supplies both
+defenders for doubles. Unknown players return `400`; an empty rating store
+returns `503`.
+
+### `GET /api/h2h`
+
+Query parameters: two distinct names in `p1` and `p2`. Invalid input returns
+`400`.
+
+### `GET /api/team-h2h`
+
+Query parameters: comma-separated `team1` and `team2`. Both teams must have the
+same size, either one or two. Doubles order is significant and remains
+offense-first internally.
+
+### `GET /api/stats`
+
+Optional `scope`: `all`, `this_quarter`, `this_month`, or `this_week`.
+Invalid scope returns `400`.
+
+### `GET /api/player/<name>/profile`
+
+Query parameters:
+
+- `scope`: `all`, `this_quarter`, `this_month`, or `this_week`
+- `recent_limit`: clamped to `1`-`10`; default `5`
+
+### `GET /api/player/<name>/history`
+
+Query parameter `n` is clamped to `1`-`50`; default `10`. Returns rating
+snapshots for the normalized player name.
+
+Normal history-derived reads exclude voided matches.
+
+## Operator Endpoints
+
+These routes require `operator` or `admin` in strict Clerk mode.
+
+### `POST /api/presence`
+
+Body:
+
+```json
+{"name": "alice", "active": true}
+```
+
+The player must exist and `active` must be Boolean. In Neon, activation
+upserts and refreshes the eight-hour expiry; deactivation deletes the row.
+Locally it updates the process-local set. Success returns `200`.
+
+### `POST /api/presence/clear`
+
+Clears all active presence for the selected store and returns `200`.
+
+### `POST /api/lineup/random`
+
+Body:
+
+```json
+{"mode": "singles"}
+```
+
+`mode` is `singles` or `doubles`. The route selects from active known players
+and returns `400` when too few are present. This is a computation endpoint and
+does not persist a match.
+
+### `POST /api/lineup/auto`
+
+Body:
+
+```json
+{
+  "mode": "doubles",
+  "selected": {
+    "red_defense": "alice",
+    "red_offense": "bob",
+    "blue_defense": "carol",
+    "blue_offense": "dave"
+  }
+}
+```
+
+Requires four unique existing players and returns a balanced slot assignment.
+
+### `POST /api/players`
+
+Body:
+
+```json
+{"name": "Rutger"}
+```
+
+Names are normalized to lowercase and pass a 2-30 length check. The current
+character rule is `[a-z][a-z\- ]+[a-z]`: letters, spaces, and hyphens, with a
+letter at both ends and a practical minimum of three characters. Success
+creates default offense and defense ratings and returns `201`. An existing
+player returns `409`.
+
+### `POST /api/matches`
+
+Body:
 
 ```json
 {
@@ -174,75 +289,139 @@ Notes:
 ```
 
 Rules:
-- Only finished scores accepted.
-- Singles/doubles only; team sizes must be balanced.
-- Players must exist already.
-- Duplicate submit detection applies in a short time window.
 
-Ordering note:
-- Internal gameplay math uses offense-first team arrays for doubles: `[offense, defense]`.
-- Phone UI presentation should display doubles as `Defense + Offense`.
-- Historical match records written by the phone runtime may therefore be stored offense-first even when shown defense-first in the UI.
+- balanced singles or doubles only
+- every player must already exist
+- no player may appear twice
+- integer, non-negative scores
+- exactly one side must reach `5`
 
-### Admin Match Corrections
+`Idempotency-Key` is optional at the API boundary and is limited to 128
+characters. The phone UI always sends a generated key. Hosted clients should
+do the same: Neon persists the key uniquely, returns the original result for
+the same payload, and rejects reuse for another payload. Without a key, the
+runtime has only a 60-second process-local duplicate-signature fallback, which
+is not a durable hosted guarantee.
 
-Match Corrections is a single dedicated admin-only nav entry on `/phone`,
-hidden until `GET /api/auth/me` resolves an `admin` role, rather than being
-repeated under every Mode/Players/Score/Confirm step.
+Neon performs rating updates, match history insertion, and submit-event
+insertion in one transaction serialized by a PostgreSQL advisory transaction
+lock. Local shelve uses `phone_api_write.lock`.
 
-- `GET /api/admin/matches?limit=30`
-  - Requires an active `admin` managed identity.
-  - Returns active and voided matches with lifecycle version and audit events.
-  - On Neon, audit events for the returned page are loaded in a single
-    batched query rather than one query per match.
-- `POST /api/admin/matches/<match-id>/void`
-- `POST /api/admin/matches/<match-id>/restore`
-  - Require an active `admin` managed identity.
-  - Require `Idempotency-Key`.
-  - Body: `{ "reason": "Incorrect score", "expected_version": 1 }`
-  - Return `409 Conflict` for stale versions, repeated state changes, request-key
-    reuse, writer contention, or replay-parity failure.
+Success returns `201`, including `match_id`, teams, scores, and winner.
+Managed submissions persist the Clerk subject; compatibility submissions use
+`legacy:shared-credential`.
 
-Corrections never delete history. They append an audit event and rebuild
-rankings from active history.
+#### Doubles Ordering
 
-## Common Status Codes
+Submitted and stored doubles arrays are offense-first:
 
-- `200 OK`: read success
-- `201 Created`: write success
-- `400 Bad Request`: validation failure
-- `401 Unauthorized`: missing/invalid read credentials on read endpoints
-- `403 Forbidden`: missing/invalid writer credentials on write endpoints
-- `409 Conflict`: lock contention or duplicate submit
-- `500 Internal Server Error`: persistence failure
-- `503 Service Unavailable`: write path disabled (legacy mode with no token configured)
-
-## Operational Notes
-
-- Preferred production operation (manual, double-click):
-  - `start_phone_api_service.bat`
-  - `stop_phone_api_service.bat`
-  - `status_phone_api_service.bat`
-- Development launcher:
-  - `run_phone_api_dev.bat`
-- Dev launcher writes to `sandbox/dev-data`.
-- Production service start writes to `app/` data, performs startup backup, and runs a watchdog that restarts the API after repeated health failures.
-- Production service stop closes the phone API and watchdog processes.
-
-Deployment smoke check:
-
-```bash
-python scripts/smoke_phone_api_auth.py --base-url https://<deployment-host> --expect-auth --read-pin <read-pin> --write-pin <write-pin>
+```text
+[offense, defense]
 ```
 
-Recommended deployment model:
-- Vercel Production should use production Neon.
-- Vercel Preview should use preview Neon.
-- Preview deployments should never write into production ranking data.
+The phone UI displays them as:
+
+```text
+Defense + Offense
+```
+
+Clients must not reverse arrays before calling odds, team H2H, or match submit.
+
+## Admin Match Corrections
+
+These routes always require a managed actor with the `admin` role.
+
+### `GET /api/admin/matches`
+
+Query parameter `limit` is clamped to `1`-`100`; default `30`. Returns active
+and voided matches with lifecycle `status`, `version`, `submitted_by`, and
+ordered audit `events`.
+
+### `POST /api/admin/matches/<match-id>/void`
+
+### `POST /api/admin/matches/<match-id>/restore`
+
+Required header:
+
+```http
+Idempotency-Key: <unique request ID>
+```
+
+Body:
+
+```json
+{
+  "reason": "Incorrect score",
+  "expected_version": 1
+}
+```
+
+The reason must be 3-500 characters. `expected_version` must be an integer,
+and the idempotency key must be non-empty and at most 128 characters.
+
+Corrections never delete the original match. They:
+
+1. verify current replay parity,
+2. enforce the expected version and target lifecycle state,
+3. update the match to `active` or `voided`,
+4. append an actor-attributed `void` or `restore` event, and
+5. rebuild materialized ratings from active history.
+
+Neon performs those steps atomically under the same rating-replay advisory
+transaction lock used by match submit. The local adapter uses
+`phone_api_write.lock`.
+
+Responses:
+
+- `200`: correction applied, or an identical request key replayed
+- `400`: malformed body, reason, version, or idempotency key
+- `404`: match not found
+- `409`: stale version, already-in-target-state request, request-key conflict,
+  replay-parity failure, or local lock contention
+
+## Common Status Behavior
+
+| Status | Meaning |
+| --- | --- |
+| `200` | Successful read, presence/lineup operation, or admin correction |
+| `201` | Player created or match submitted/idempotently replayed |
+| `400` | Request validation failure; match-key reuse with another payload is also surfaced here |
+| `401` | Authentication missing/invalid for reads, strict Clerk writes, admin routes, or legacy token mode |
+| `403` | Authenticated managed role lacks permission, or writer PIN authorization fails |
+| `404` | Admin lifecycle match ID not found |
+| `409` | Duplicate player/submit, local writer contention, or lifecycle conflict |
+| `500` | Persistence operation failed |
+| `503` | Store/readiness unavailable, empty odds store, or legacy write auth is not configured |
+
+## Phone Page Freshness
+
+The browser UI distinguishes:
+
+- `Live`: current API data
+- `Fetching ...`: an active request with elapsed time
+- `Snapshot mode`: cached leaderboard from browser `localStorage`
+
+Offline snapshot mode disables match entry. The leaderboard refreshes after
+successful submit and filter changes rather than continuously polling.
+Presence durability follows the selected store: durable/expiring in Neon and
+process-local in shelve.
+
+## Operations
+
+Vercel Production should use production Neon and strict Clerk. Vercel Preview
+should use isolated preview Neon and Clerk configuration. `vercel.json` sends
+all routes to `api/index.py`.
+
+`run_phone_api_dev.bat` is the local shelve development launcher. The Windows
+`start_phone_api_service.bat`, `stop_phone_api_service.bat`, and
+`status_phone_api_service.bat` files are historical local wrappers whose
+watchdog still probes `/health` instead of `/api/health`; do not use them as
+the hosted production lifecycle or as a current readiness-managed launcher.
 
 ## See Also
 
-- `docs/phone-write-policy.md`
-- `docs/development.md`
-- `docs/data-safety.md`
-- `docs/backlog.md`
+- [Architecture](architecture.md)
+- [Authentication](authentication.md)
+- [Data safety](data-safety.md)
+- [Development](development.md)
+- [Phone write policy](phone-write-policy.md)

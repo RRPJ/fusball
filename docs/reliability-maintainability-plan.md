@@ -1,308 +1,269 @@
-# Reliability And Maintainability Plan
+# Reliability And Maintainability Implementation Record
 
-## Problem And Approach
+## Status And Scope
 
-The hosted Vercel/Neon runtime can submit matches transactionally, but it has no
-safe match lifecycle, durable operator identity, or hosted backup/restore
-workflow. Ratings are path-dependent: voiding an old match changes every later
-rating calculation, so undo cannot safely copy that match's `before` values
-back into `players`.
+The reliability modernization described here is implemented on the current
+branch. This document records why the work was necessary, the resulting
+architecture, the safety constraints that must remain true, and the repository
+evidence for completed milestones.
 
-The proposed approach makes Neon authoritative for hosted environments, keeps
-shelve as a local-development adapter, introduces managed user identity and
-application-owned roles, and models match correction as an audited soft-delete
-followed by deterministic replay of all active matches from a trusted baseline.
-Refactoring is staged behind characterization tests so `/phone`, `/api/*`,
-offense-first rating semantics, and current ranking behavior remain stable.
+Implemented capability is not evidence that an external environment has been
+configured or exercised. Provider configuration, production cutover, backup
+cadence, and recorded restore drills are therefore listed separately under
+**Remaining External Rollout And Operational Actions**.
 
-This document is the durable roadmap alongside `docs/backlog.md`. Material
-implementation decisions and completed milestones should update both documents
-rather than allowing the roadmap to become stale.
+Future product ideas that are not part of this reliability program live in
+`docs/backlog.md`.
 
-## Current-State Findings
+## Architectural Rationale
 
-- `app/phone_api.py` combines Flask setup, auth, handlers, and roughly 2,500
-  lines of embedded HTML/CSS/JavaScript in one large module.
-- `app/services/phone_write_store.py` combines repository contracts, shelve
-  persistence, Neon SQL, history queries, analytics, and match transactions.
-- Neon match submission correctly locks affected players and commits rating and
-  history changes together, but match history is immutable and there is no
-  void/restore operation, actor identity, reason, or audit-event table.
-- Current ratings are materialized in `players`; historical rankings are
-  recomputed in Python. Any historical correction therefore requires replay,
-  not a one-row reversal.
-- Existing records contain before/after snapshots, but there is no explicit,
-  verified rating baseline for data that predates structured history. A safe
-  replay cutover must first prove the retained history can reproduce current
-  ratings or store a trusted baseline/checkpoint.
-- Shared read/write PINs identify a capability, not a person. The UI stores
-  them in `sessionStorage`; authorization cannot attribute a correction to an
-  individual or revoke one user independently.
-- Clerk is the recommended managed-auth target for this small hosted app:
-  managed sessions and identity with lower operational overhead than Auth0,
-  while application roles remain in Neon. Confirm the official Python/JWT
-  integration in a short spike before committing to the SDK.
-- In-memory duplicate detection and presence are process-local, so behavior can
-  vary across Vercel instances and cold starts.
-- Analytics repeatedly load all `record_payload` rows and duplicate history
-  behavior between shelve and Neon, increasing drift and scaling risk.
-- Local backup tooling copies shelve files only. There is no versioned Neon
-  schema migration runner, logical export/restore command, restore drill, or
-  hosted data-integrity report.
-- The Neon parity check compares identities/counts but not rating values,
-  complete match payloads, lifecycle state, or replayed leaderboard results.
-- CI runs lint, formatting, and the smoke script, but not the substantial
-  `test_phone_api.py`, `test_match_flow.py`, and `test_integration.py` suites.
-- The analyzed local virtual environment could not run the full suite because
-  Flask and Werkzeug were missing; dependency setup should be normalized
-  rather than treating this as a product regression.
+The modernization addressed four coupled risks:
 
-## Implementation Todos
+- Ratings are path-dependent. Voiding or restoring a historical match changes
+  every later rating calculation, so a correction cannot safely copy one
+  match's `before` values back into the current player table.
+- Shared PINs identify a capability rather than a person. Hosted
+  administration requires individual identity, independently revocable roles,
+  and durable actor attribution.
+- Process-local duplicate and presence state is unsuitable for an ephemeral,
+  multi-instance hosted runtime.
+- A monolithic runtime and unversioned persistence made behavior-preserving
+  changes, recovery, and hosted operations unnecessarily difficult.
 
-### 0. Publish And Maintain The Durable Roadmap
+The implemented design therefore makes Neon authoritative for hosted
+environments, keeps shelve as a local-development compatibility adapter, uses
+Clerk for hosted identity with application roles in Neon, and models match
+correction as an audited lifecycle change followed by deterministic replay
+from a trusted rating baseline.
 
-- [Done] Publish this complete plan, retaining its rationale, findings, delivery order,
-  and safety constraints.
-- [Done] Link the roadmap from `README.md` and `docs/backlog.md`; keep the backlog
-  concise and use this roadmap for implementation-level detail.
-- [Ongoing] Update roadmap status and decision records in the same pull requests that
-  materially change the approach or complete a milestone.
+## Completed Implementation
 
-### 1. Establish Characterization And Safety Gates
+### 1. Characterization And Safety Gates
 
-- [Done] Add regression fixtures for singles/doubles ordering, score-to-rating
-  behavior, scoped leaderboards, history/profile analytics, duplicate submits,
-  and Neon transaction rollback.
-- [Done] Add replay-parity tests that compare current player ratings with ratings
-  rebuilt from retained active history, using tolerances for TrueSkill floats.
-- [Done] Run all existing unit suites in CI on the supported Python matrix, with a
-  separate optional Neon integration job against an isolated database.
-- [Done] Define acceptance gates: no API response regressions outside intentional auth
-  and administration changes, no production cutover when replay parity fails,
-  and no migration without a verified restore artifact.
+- Regression coverage protects singles and doubles ordering, rating updates,
+  scoped leaderboards, history and profile analytics, duplicate submission,
+  authorization, lifecycle correction, and transaction rollback.
+- Replay tests compare materialized ratings with ratings rebuilt from retained
+  active history, allowing only the documented TrueSkill float tolerance.
+- CI runs smoke and regression suites across the supported Python matrix and
+  runs PostgreSQL-backed Neon integration coverage against an isolated service
+  database.
+- Cutover gates are documented in `docs/data-safety.md`: no migration or
+  correction rollout without passing replay/parity checks and a restorable
+  recovery artifact.
 
-The safety gates are established. The regression suite passes locally; the
-PostgreSQL rollback test runs in CI, where an isolated service database is
-available. The pre-existing global Ruff/Black gate remains intentionally
-visible and currently blocks a fully green pipeline until its baseline debt is
-normalized.
+Primary evidence: `.github/workflows/ci.yml`, `test_phone_api.py`,
+`test_match_flow.py`, `test_integration.py`, `test_neon_store.py`,
+`test_neon_migrations.py`, `test_neon_data_safety.py`, and `test_auth.py`.
 
-### 2. Introduce Versioned Persistence And Domain Boundaries
+### 2. Versioned Persistence And Domain Boundaries
 
-- [Done] Split `BaseWriteStore` into focused player, match, history, and transaction
-  interfaces; move shared record parsing, scope filtering, and analytics out of
-  the Neon and shelve adapters.
-- [Done for current records] Define typed match and rating models so current
-  JSON payload shapes have one shared contract. Actor and lifecycle types will
-  be added with their corresponding authentication and correction milestones.
-- [Done] Add an ordered, idempotent SQL migration mechanism rather than relying on one
-  `CREATE TABLE IF NOT EXISTS` script.
-- [Done] Keep shelve as a local-development adapter with the same public service
-  contract, but document Neon as the only authoritative hosted store.
+- Focused player, history, match, transaction, and presence contracts are
+  shared by the shelve and Neon adapters.
+- Shared domain models and history helpers provide one contract for current
+  match payloads, replay, scope filtering, and analytics.
+- Ordered, idempotent, checksum-verified Neon migrations replace ad hoc schema
+  creation. Applied migration files are immutable.
+- Neon is the hosted authority. Shelve remains supported for local development
+  and compatibility, not as hosted failover.
 
-The persistence boundary milestone is complete: focused repository contracts
-and shared domain types now sit outside the concrete adapters, scoped filtering
-and replay are shared, and all schema creation/import paths use ordered,
-checksum-verified migrations.
+Primary evidence: `app/services/store_contracts.py`,
+`app/services/domain_models.py`, `app/services/match_history.py`,
+`app/services/phone_write_store.py`, `app/services/neon_migrations.py`, and
+`scripts/sql/migrations/0001_initial.sql` through
+`0005_player_presence.sql`.
 
-### 3. Replace Shared Secrets With Individual Identity
+### 3. Managed Identity And Authorization
 
-- [Done] Validate Clerk's hosted sign-in/session and Python token-verification path in
-  a small spike; record Auth0 and Neon Auth as rejected alternatives with
-  decision criteria covering Flask support, revocation, auditability, cost,
-  and operational burden.
-- [Done] Add an `app_users` table keyed by immutable provider subject, with display
-  name, status, and application-owned roles: `reader`, `operator`, and `admin`.
-- [Done] Add a focused auth module that verifies issuer, audience, signature, expiry,
-  and session state, then exposes a typed current actor to handlers.
-- [Done for current endpoints] Require `operator` for match/player/presence
-  writes. Admin enforcement and persisted actor attribution are implemented
-  with the audited match lifecycle because those operations do not yet exist.
-- [Done] Replace PIN entry/sessionStorage handling with managed login/logout UI.
-  Retain split PIN auth only behind an explicit, logged transition flag and
-  remove it after deployment rollback criteria are met.
-- [Done for identity] Add authorization-matrix, disabled-user, and mandatory
-  authorized-party coverage. Clerk owns expired/revoked session verification;
-  audit-attribution tests follow with persisted match events.
+- Clerk verifies hosted sessions; active rows in Neon's `app_users` table
+  resolve the application-owned `reader`, `operator`, and `admin` roles.
+- The auth layer verifies managed requests and exposes a typed actor to route
+  handlers. Disabled or unprovisioned users receive no application access.
+- Operators can perform normal writes. Only managed admins can list lifecycle
+  details or void and restore matches.
+- The phone runtime supports `legacy`, `hybrid`, and `clerk` modes. Strict
+  hosted production uses `clerk`; legacy PIN/token handling remains a local or
+  explicit rollback compatibility path.
+- The phone UI has dedicated login/logout handling and server-side
+  authorization remains authoritative regardless of client rendering.
 
-Managed identity is available in explicit `hybrid` and `clerk` modes, with
-legacy behavior remaining the local default. The phone UI loads pinned Clerk
-browser bundles from the configured instance, mounts sign-in/user controls,
-and attaches a fresh bearer token to API requests.
+Primary evidence: `app/services/auth.py`, `app/blueprints/auth.py`,
+`app/blueprints/admin.py`, `app/templates/login.html`,
+`app/static/js/login.js`, migration `0002_app_users.sql`, and `test_auth.py`.
 
-### 4. Add Auditable Match Lifecycle And Deterministic Ranking Replay
+### 4. Audited Match Lifecycle And Deterministic Replay
 
-- [Done] Extend matches additively with lifecycle state (`active` or `voided`) and
-  lifecycle metadata without overwriting the original submitted payload.
-- [Done] Add an append-only `match_events` audit table for submit, void, and restore,
-  including match ID, actor, timestamp, reason, request correlation ID, and
-  immutable before/after lifecycle state.
-- [Done] Establish a trusted rating baseline/checkpoint at cutover. Refuse correction
-  enablement if current Neon ratings cannot be reproduced from that baseline
-  plus active matches in stable chronological/ID order.
-- [Done] Implement one pure replay engine used by scoped leaderboards, integrity
-  checks, void, and restore. It must preserve offense-first doubles semantics
-  and exclude voided matches from every leaderboard, profile, H2H, streak, and
-  history aggregate.
-- [Done] In one serialized Neon transaction, lock correction/replay state, append the
-  lifecycle event, rebuild affected materialized player ratings from the
-  trusted baseline through all active matches, verify invariants, and commit.
-  Any failure rolls back both lifecycle and ratings.
-- [Done] Implement equivalent local shelve behavior using the existing write lock and
-  backup-first policy, solely for development parity.
-- [Done] Add idempotency keys for match submission and administration operations in
-  Neon, replacing process-local duplicate protection for hosted writes.
+- Matches have additive lifecycle state and immutable original submission
+  payloads. Match records are never hard-deleted.
+- Append-only `match_events` record submit, void, and restore actions with
+  actor, reason, request correlation, timestamp, and before/after state.
+- Trusted `rating_baselines` provide the replay starting point. Corrections
+  refuse missing baselines or drift between replayed and materialized ratings.
+- One replay path excludes voided matches from rankings, profiles, H2H,
+  history, streaks, and other aggregates.
+- Hosted rating-changing writes serialize with a PostgreSQL advisory
+  transaction lock and atomically commit lifecycle, audit, and rebuilt rating
+  state. Failures roll back the complete operation.
+- Match submission uses payload-bound idempotency in Neon. Administration
+  requires a request key and replays it only for the same match and target
+  state. The shelve adapter provides equivalent lifecycle/replay behavior for
+  development, guarded by the local file lock.
 
-The lifecycle foundation is complete. Corrections refuse baseline or
-materialized-rating drift, use optimistic versions and payload-bound request
-IDs, serialize hosted writes with an advisory transaction lock, append the
-event, replay active history, and update materialized ratings atomically.
-Shelve provides equivalent replay semantics with explicit rollback restoration;
-the admin endpoint will acquire its existing file write lock.
+Primary evidence: migrations `0003_match_lifecycle.sql` and
+`0004_backfill_legacy_lifecycle.sql`, `app/services/match_history.py`,
+`app/services/phone_write_store.py`, `app/blueprints/write.py`,
+`app/blueprints/admin.py`, `test_match_flow.py`, and `test_neon_store.py`.
 
-### 5. Expose Safe Void And Restore Workflows
+### 5. Safe Administration Workflow
 
-- [Done] Add admin-only match-history endpoints to list lifecycle state and audit
-  events, void an active match with a mandatory reason, and restore a voided
-  match with a mandatory reason.
-- [Done] Return explicit conflicts for already-voided/restored records, concurrent
-  corrections, stale versions, and reused idempotency keys.
-- [Done] Add an admin section to `/phone` showing match ID, players, score, timestamp,
-  state, actor, and reason; require a confirmation step before void or restore.
-- [Done] Refresh leaderboard, profiles, H2H, stats, and match history after correction
-  and visibly distinguish voided matches rather than deleting them.
-- [Done] Test latest and historical corrections, restore symmetry, doubles ordering,
-  scoped rankings, concurrent requests, transaction failures, unauthorized
-  access, and full audit attribution.
+- Admin endpoints list lifecycle state and audit events and perform reasoned,
+  version-checked void or restore operations.
+- Conflicts are explicit for stale versions, repeated lifecycle transitions,
+  concurrent corrections, replay drift, and incompatible idempotency reuse.
+- `/phone` contains a dedicated admin-only Match Corrections view with
+  confirmation before recalculation.
+- Successful corrections refresh ranking-dependent views while retaining
+  voided records and their audit history.
 
-The correction workflow is complete. Only managed admins can list lifecycle
-and audit details or submit reasoned void/restore requests. The phone panel
-uses reviewed versions and unique request IDs, confirms recalculation, and
-refreshes ranking-dependent views after success.
+Primary evidence: `app/blueprints/admin.py`,
+`app/templates/phone.html`, `app/static/js/phone.js`, and the admin,
+authorization, replay, and correction cases in `test_phone_api.py`,
+`test_match_flow.py`, and `test_neon_store.py`.
 
-### 6. Add Hosted Data-Safety Operations
+### 6. Hosted Data Safety And Readiness
 
-- [Done] Add a Neon logical export command covering schema version, players, rating
-  baseline/checkpoints, matches, match events, users/roles, and integrity
-  metadata; encrypt and retain artifacts outside the deployment database.
-- [Done] Add a guarded restore command that targets a new/isolated database by default,
-  validates checksums and schema compatibility, and runs replay/parity checks
-  before any environment switch.
-- [Done] Expand parity tooling to compare exact rating components, lifecycle state,
-  audit-event counts, active match payloads, and replayed leaderboard output.
-- [Done] Document backup cadence, Neon provider recovery/PITR usage, preview-versus-
-  production isolation, restore drills, rollback criteria, and emergency
-  credential revocation in `docs/data-safety.md`.
-- [Done] Add health/readiness diagnostics for database connectivity and schema
-  compatibility without exposing secrets or returning healthy when the store
-  is unavailable.
+- Ordered migration, integrity, strict parity, encrypted logical export, and
+  guarded isolated-restore commands are implemented under `scripts/`.
+- Exports cover schema identity, players and exact ratings, baselines, matches,
+  lifecycle events, recent players, hosted presence, and application users.
+- Restore refuses a production target label, requires an empty explicitly
+  isolated database, validates encryption and checksums, applies the ordered
+  schema, and verifies deterministic replay before commit.
+- `/api/health` reports store and schema readiness and returns `503` for an
+  unavailable or incompatible store without exposing connection details.
+- The PostgreSQL integration suite exercises rollback and export/restore
+  behavior against an isolated database.
 
-Hosted data-safety operations are implemented. Exports are authenticated and
-encrypted, restores require an empty explicitly isolated target and verify
-checksums plus replay before commit, and health now reflects store/schema
-availability. The PostgreSQL integration job performs the restore path against
-its isolated service database; operational teams must still run and record the
-first preview Neon drill before production cutover.
+Primary evidence: `scripts/migrate_neon_schema.py`,
+`scripts/check_neon_integrity.py`, `scripts/smoke_neon_parity.py`,
+`scripts/export_neon_backup.py`, `scripts/restore_neon_backup.py`,
+`app/services/neon_data_safety.py`, `app/blueprints/health.py`,
+`test_neon_data_safety.py`, and `test_neon_store.py`.
 
-Preview validation found that an existing Neon database can already contain
-history when lifecycle tables are introduced. Migration `0004` therefore
-backfills trusted earliest-history baselines and legacy submit events without
-using the incomplete local shelve history as an authority.
+### 7. Runtime Decomposition And Hosted Presence
 
-### 7. Decompose The Runtime Without Changing Behavior
+- `app/phone_api.py` is the composition root used by local execution and
+  `api/index.py`; route groups live in focused blueprints under
+  `app/blueprints/`.
+- Phone and login markup, CSS, and JavaScript live in `app/templates/` and
+  `app/static/`. Content-derived asset versions provide cache-safe updates.
+- `PhoneApiContext` carries auth, store, and lock dependencies into blueprint
+  factories without circular imports or route-level global state.
+- Hosted presence is durable in Neon's `player_presence` table and expires
+  after eight hours. Local shelve presence remains in-process for the store
+  lifetime.
+- Match lifecycle listing batch-loads audit events rather than issuing one
+  query per match. Superseded CWD-relative shelve helpers were removed while
+  the separate local format upgrader `app/dbmigration.py` remains supported.
 
-- [Done] Move embedded UI into Flask templates and static assets with
-  cache-safe versioning (`app/templates/phone.html`,
-  `app/static/css/phone.css`, `app/static/js/phone.js`; SHA-256-derived
-  `?v=` query string computed once per app instance); preserve the current
-  phone presentation and offense/defense display order. Existing tests that
-  inspect rendered HTML were split to check the template response for markup
-  and the static asset responses for JS/CSS logic; no presentation or JS
-  behavior changed otherwise.
-- [Done] Move Match Corrections into a dedicated admin-only area: a single
-  nav entry/view hidden until `GET /api/auth/me` resolves an `admin` role,
-  instead of rendering beneath every Mode/Players/Score/Confirm step.
-- [Done] Make managed auth visible at page entry: strict `clerk` mode hides
-  operational app content (`#appContent`/`#stickyBar`) behind `display:none`
-  until Clerk resolves; `hybrid` mode surfaces managed login prominently
-  while retaining the PIN fallback and read-PIN behavior. Static assets and
-  `GET /api/health` remain reachable regardless of auth state; every
-  `/api/*` route still enforces authorization server-side.
-- [Done] Split route groups into small blueprints for reads (`read.py`),
-  match/write operations (`write.py`), administration (`admin.py`),
-  authentication (`auth.py`), and health (`health.py`); `create_app` in
-  `app/phone_api.py` remains the composition root used by both local mode and
-  `api/index.py`. Shared auth/store/lock dependencies are carried in a typed
-  `PhoneApiContext` (`app/services/phone_request_context.py`) passed into each
-  blueprint factory, avoiding circular imports and global state.
-- [Done] Move process-local presence to Neon with expiry: `NeonWriteStore`
-  now persists presence in an additive `player_presence` table (migration
-  `0005_player_presence.sql`) with an 8-hour TTL, filtering expired rows on
-  every read. `ShelveWriteStore` keeps the previous in-process, per-server-
-  lifetime set semantics unchanged. Both are implemented behind a shared
-  `PresenceRepository` contract. Covered by `test_phone_api.py` (shelve path)
-  and a gated `test_neon_store.py` integration test (Neon path, skipped
-  without `TEST_DATABASE_URL` in this environment).
-- [Done] Push Neon filtering/aggregation into a focused SQL query where an
-  N+1 was found: `NeonWriteStore.list_match_lifecycle()` previously called
-  `list_match_events()` once per returned match; it now batch-loads events
-  for the whole page in one `WHERE match_id = ANY(%s)` query, reusing the
-  existing `ix_match_events_match_created` index from
-  `0003_match_lifecycle.sql` (no new index needed). Other analytics reads
-  were left unchanged, since a broader rewrite could not be proven safe
-  without additional characterization tests.
-- [Done] Remove superseded helpers: the unused, CWD-relative direct-shelve
-  helpers in `app/services/player_store.py` (`player_names`, `player_exists`,
-  `add_player_if_missing`, `ensure_recent_players_initialized`,
-  `recent_player_names`, `add_recent_player`) were deleted as dead code,
-  superseded by the `db_dir`-scoped stores in `phone_write_store.py`.
-  `app/dbmigration.py` was intentionally left in place: it is a distinct,
-  still-documented local shelve data-format upgrade tool (see
-  `docs/data-safety.md`), not superseded by the Neon SQL migration runner.
+Primary evidence: `app/phone_api.py`, `api/index.py`, `app/blueprints/`,
+`app/services/phone_request_context.py`, `app/templates/`, `app/static/`,
+migration `0005_player_presence.sql`, and presence coverage in
+`test_phone_api.py` and `test_neon_store.py`.
 
-## Dependencies And Delivery Order
+## Preserved Safety Constraints
 
-1. Publish the durable roadmap before implementation begins.
-2. Characterization and replay-parity gates precede persistence changes.
-3. Persistence/domain boundaries precede both identity and match lifecycle.
-4. Individual identity precedes enabling admin void/restore in production.
-5. Match lifecycle and replay precede the admin API/UI.
-6. Hosted export/restore must be operational before production correction is
-   enabled.
-7. Large UI/runtime decomposition follows correctness-sensitive work, except
-   for the minimal auth/admin extraction needed by earlier slices.
+These constraints are part of the implemented contract and must not be relaxed
+by future refactors:
 
-Each slice should be independently deployable with additive schema changes,
-feature flags for auth/correction rollout, preview Neon validation, and an
-explicit rollback path.
+- Internal doubles and rating calculations use offense-first ordering
+  `[offense, defense]`; the phone UI presents doubles as Defense + Offense.
+- Historical correction is deterministic replay in stable timestamp/ID order,
+  never a one-row inverse or direct edit of materialized ratings.
+- Match records are not hard-deleted, and lifecycle audit events are
+  append-only.
+- Hosted writes rely on Neon transactions, advisory serialization, baseline
+  checks, and idempotency. Local writes rely on `phone_api_write.lock` and the
+  process-local 60-second duplicate fallback when no idempotency key is used.
+- Provider identity proves who signed in; Neon-owned roles decide what the
+  actor may do.
+- Hosted production uses Neon and strict Clerk. Shelve and legacy credentials
+  are development or deliberate rollback compatibility mechanisms.
+- Preview deployments must use an isolated Neon preview branch/project and
+  matching Clerk configuration, never production database credentials.
+- Secrets, database URLs, backup keys, and export artifacts must remain out of
+  source control and API error payloads.
+- A failed migration, replay, integrity, checksum, restore, or regression gate
+  blocks rollout rather than becoming an accepted inconsistency.
 
-## Key Files And Components
+## Delivery Decisions Retained
 
-- `app/phone_api.py`: app composition, routes, and embedded UI decomposition
-- `app/services/phone_write_store.py`: repository split and Neon transactions
-- `app/services/match_history.py`: shared lifecycle-aware queries and replay
-- `app/services/match_service.py`: preserved TrueSkill domain behavior
-- `api/index.py`: hosted configuration and auth wiring
-- `scripts/sql/`: ordered schema migrations and indexes
-- `scripts/migrate_shelve_to_neon.py`: one-way import and baseline cutover
-- `scripts/smoke_neon_parity.py`: full rating/history/lifecycle parity
-- new backup/export/restore scripts under `scripts/`
-- `test_phone_api.py`, `test_match_flow.py`, `test_integration.py`: regression,
-  authorization, replay, and correction coverage
-- `.github/workflows/ci.yml`: full unit and optional Neon integration gates
-- `docs/phone-api.md`, `docs/phone-write-policy.md`,
-  `docs/data-safety.md`, `docs/architecture.md`, and `.env.example`
-- `docs/reliability-maintainability-plan.md`: this durable roadmap
+The completed work followed this dependency order:
 
-## Important Considerations
+1. Characterization and replay-parity gates preceded persistence changes.
+2. Persistence/domain boundaries preceded managed identity and lifecycle work.
+3. Individual identity preceded enabling admin correction.
+4. Lifecycle state and deterministic replay preceded the admin API and UI.
+5. Hosted export/restore capability preceded production correction readiness.
+6. Broader runtime decomposition followed correctness-sensitive work.
 
-- Never hard-delete match records; lifecycle events are append-only.
-- A historical void or restore is a ranking rebuild, not a local inverse.
-- Replay order must be deterministic when timestamps collide.
-- Legacy data may require a cutover baseline because structured history may not
-  reproduce ratings from the beginning of time.
-- Provider identity proves who signed in; Neon-owned roles determine what they
-  may do.
-- Secrets, provider keys, database URLs, and export artifacts must remain out
-  of source control and API error payloads.
-- Local shelve support is for development compatibility, not hosted failover.
+This sequence remains useful for future changes: additive schema updates,
+isolated preview verification, explicit rollback paths, and independently
+deployable slices are preferred over broad rewrites.
+
+## Remaining External Rollout And Operational Actions
+
+The repository cannot prove completion of the following provider and
+operational work. Verify or perform these actions outside the codebase and
+retain evidence in the organization's operational system.
+
+### Environment And Cutover Verification
+
+1. Confirm Vercel Production uses the production Neon database and strict
+   `FUSBALL_AUTH_MODE=clerk`.
+2. Confirm every Vercel Preview uses an isolated Neon preview branch/project
+   and matching Clerk instance/configuration; never expose production
+   `DATABASE_URL` to Preview.
+3. Configure the required Clerk, Neon, and backup secrets in the correct
+   environment scopes and verify `CLERK_AUTHORIZED_PARTIES` contains only the
+   intended origins.
+4. Apply ordered migrations, provision active `app_users` with least-privilege
+   roles, and verify disabled/unprovisioned subjects cannot access the app.
+5. Run the full regression suite and Neon integrity report against the rollout
+   target. For a shelve import, also run strict parity. Confirm `/api/health`
+   is ready.
+6. Create an encrypted pre-cutover export, restore it into an isolated Preview
+   or restore-drill database, and record checksum, replay, application-read,
+   and credential-revocation evidence.
+7. Exercise managed login/logout, operator writes, admin void/restore, audit
+   attribution, presence expiry, and rollback behavior in Preview before
+   promoting the deployment.
+8. If `hybrid` mode is temporarily used as a rollback bridge, set an owner and
+   removal date; production's steady state is strict `clerk`.
+
+### Recurring Operations
+
+- Run encrypted hosted exports at the documented cadence and immediately
+  before high-risk schema or correction changes.
+- Perform and record an isolated restore drill at least quarterly and after
+  material migration or recovery-tool changes.
+- Monitor `/api/health`, migration compatibility, failed writes, correction
+  conflicts, and provider availability.
+- Review `app_users` regularly; disable departed users and keep admin
+  membership minimal.
+- Rotate exposed or scheduled Neon, Clerk, and backup credentials and verify
+  revocation as part of incident response.
+- Rehearse Neon provider recovery/PITR and preserve the application export as
+  an independent recovery path.
+
+Operational rollout is complete only when the environment mapping, strict
+auth, user provisioning, integrity/parity results, encrypted backup, isolated
+restore evidence, and rollback path have all been verified for the target
+production deployment.
+
+## Maintenance Rule
+
+Update this record in the same change that materially alters these
+architectural decisions, safety constraints, or completed capabilities. Add
+unimplemented product ideas to `docs/backlog.md`; do not turn this record back
+into a proposal or use repository implementation as proof of external rollout.

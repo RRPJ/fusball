@@ -1,137 +1,256 @@
-# Phone Match Submit Policy
+# Phone Write And Correction Policy
 
-This document defines the implemented auth and write-conflict baseline for phone write operations.
+This document defines the current authorization, validation, concurrency,
+idempotency, and audit policy for the phone API's mutating and
+write-authorized endpoints.
 
-Scope:
-- This policy applies to the current remote operator baseline on the phone path.
-- It intentionally covers only two write operations: adding a player and submitting a finished match result.
-- It does not attempt to define full remote administration, match editing/deletion, or live score entry.
+## Deployment Policy
 
-## Implemented Baseline
+- Hosted production runs on Vercel with Neon as the authoritative store and
+  `FUSBALL_AUTH_MODE=clerk`.
+- Preview uses an isolated Vercel Preview deployment, Neon preview
+  branch/project, and matching Clerk configuration.
+- Local development may use the shelve adapter and legacy PIN/token
+  compatibility, or an explicitly configured Neon/Clerk setup.
 
-The current phone write path supports minimal operator writes without turning the phone UI into a second full control surface.
+Shelve and shared credentials are compatibility paths. They are not hosted
+production failover mechanisms.
 
-The implemented write scope is intentionally narrow:
-- Add a new player (token-authenticated).
-- Submit a finished match only.
-- Match submit uses existing players only.
-- Apply the same score validity rules as the current Fusball match model.
-- Persist the result, update rankings, and refresh read views.
-- Keep additional remote-admin workflows out of scope for now.
+## Authorization Policy
 
-## Auth Policy
+Clerk authenticates hosted users. Fusball authorizes them from active Neon
+`app_users` rows keyed by immutable provider subject.
 
-Hosted target policy:
-- Use Clerk-managed individual sessions.
-- Resolve application authorization from active Neon `app_users` rows.
-- Require `operator` or `admin` for existing writes.
-- Require `admin` for future match void/restore operations.
-- Persist the immutable provider subject on audited operations.
+| Role | Permission |
+| --- | --- |
+| `reader` | Read-only API access |
+| `operator` | Reader access plus operational writes |
+| `admin` | Operator access plus match lifecycle corrections |
 
-See `docs/authentication.md` for roles and rollout configuration.
+Auth modes:
 
-Implemented policy:
-- No anonymous write access.
-- Require an explicit operator credential on every write request.
-- For the first rollout, a shared operator secret is acceptable.
-- VPN or local-network reachability is not sufficient by itself; transport access and write authorization are separate concerns.
+- `legacy`: configured read/write PINs, with shared operator-token fallback
+  when no writer PIN hash is configured.
+- `hybrid`: managed identity first; configured legacy credentials remain a
+  fallback when no managed actor resolves.
+- `clerk`: managed identity only; legacy headers are ignored.
 
-Transition implementation:
-- `legacy` retains shared PIN/token behavior for local development.
-- `hybrid` accepts managed identity with PIN/token rollback.
-- `clerk` accepts managed identity only and ignores legacy credentials.
+All operational write routes require `operator` or `admin` in strict Clerk
+mode. Admin match routes always require a managed `admin`; no legacy PIN or
+token grants correction access.
 
-Out of scope for the first slice:
-- Per-user accounts.
-- Role-based permissions.
-- Social login.
-- Delegated player-specific write access.
+## Implemented Write Surface
 
-## Write Scope Rules
+| Endpoint | Required permission | Behavior |
+| --- | --- | --- |
+| `POST /api/presence` | write | Mark one existing player active/inactive |
+| `POST /api/presence/clear` | write | Clear active presence |
+| `POST /api/lineup/random` | write | Compute a lineup from active players |
+| `POST /api/lineup/auto` | write | Compute a balanced four-player lineup |
+| `POST /api/players` | write | Create a player with default ratings/baseline |
+| `POST /api/matches` | write | Submit one finished singles/doubles match |
+| `GET /api/admin/matches` | admin | Read match lifecycle and audit events |
+| `POST /api/admin/matches/<id>/void` | admin | Void a match and replay ratings |
+| `POST /api/admin/matches/<id>/restore` | admin | Restore a match and replay ratings |
 
-The current phone write endpoints allow only these operations:
-- Add one player name with default ratings.
-- Submit one finished singles or doubles result using existing player identities.
+Lineup helpers use POST because they are operator workflow actions, but they do
+not persist a match. There is no API for live score entry, arbitrary match
+editing, or deleting match history.
 
-Admin-only correction endpoints additionally allow:
-- Void an active match with a mandatory reason.
-- Restore a voided match with a mandatory reason.
-- Recalculate rankings and analytics from active history.
-- Preserve all original records and append actor-attributed audit events.
+## Managed Actor Attribution
 
-The endpoints reject:
-- Partial or in-progress matches.
-- Match edits or deletes.
-- Freeform player names that do not match existing stored players.
-- Unsupported score shapes that do not match current result rules.
+Managed match submissions persist the immutable Clerk subject in
+`match_history.submitted_by` and in the submit event. Legacy submissions use
+the explicit marker `legacy:shared-credential`.
 
-## Conflict Policy
+Void and restore events always persist the managed admin subject, reason,
+request ID, prior state, target state, and timestamp. Current presence and
+player-creation records do not carry a separate actor audit field; the API
+still enforces the caller's write permission.
 
-The write path assumes a single active writer at a time.
+## Validation Policy
 
-Rules:
-- If another write-sensitive operation is already in progress, remote submit should be rejected.
-- If a phone submit is already being processed, a second concurrent submit should be rejected.
-- Conflict responses should be explicit and non-destructive.
+### Presence
 
-Current implementation:
-- Introduce a short-lived write lock owned by the active writer.
-- Acquire the lock before mutating shelve state.
-- Release it immediately after persistence and ranking update complete.
-- Return `409 Conflict` when the lock is already held.
-- Use duplicate-submit detection for a short time window to reject accidental retries.
+- The body must be a JSON object.
+- `name` must normalize to a non-empty string.
+- `active` must be Boolean.
+- The player must already exist.
 
-Implementation notes from `app/phone_api.py`:
-- Lock file name: `phone_api_write.lock`
-- Auth header name: `X-Operator-Token`
-- Duplicate-submit window: 60 seconds (`MATCH_DUPLICATE_WINDOW_SECONDS`)
+### Lineup Helpers
 
-## Validation Rules
+- Random lineup mode must be `singles` or `doubles`.
+- Random selection uses only players who are both known and currently active.
+- Auto lineup is doubles-only.
+- Auto lineup requires all four named slots and four unique existing players.
 
-Before accepting a phone-submitted result:
-- Confirm all referenced players exist.
-- Confirm the same player is not selected twice.
-- Confirm team sizes are valid for supported match types.
-- Confirm the submitted score is a valid finished result under the current rules.
+### Player Creation
 
-Before creating a player from phone:
-- Confirm the name is non-empty and normalized consistently.
-- Confirm the name does not already exist.
-- Confirm basic format constraints (allowed characters and length).
+- The body must contain a string `name`.
+- Names are normalized to lowercase.
+- The length check is 2-30 characters.
+- The current character rule is `[a-z][a-z\- ]+[a-z]`: lowercase letters,
+  spaces, and hyphens, with a letter at both ends and a practical minimum of
+  three characters.
+- Existing names are rejected.
 
-On success:
-- Persist the rating update.
-- Append the existing audit log entry.
-- Make the updated leaderboard visible through the read API.
+### Match Submission
+
+- `team1` and `team2` must be arrays.
+- Teams must be balanced singles or doubles.
+- Every referenced player must already exist.
+- A player may appear only once.
+- Scores must be non-negative integers.
+- Exactly one team must have a score of `5`.
+- Only finished results are accepted.
+- An optional `Idempotency-Key` must be at most 128 characters.
+
+### Match Correction
+
+- The match ID must resolve.
+- `reason` is required and must contain 3-500 characters after trimming.
+- `expected_version` is required and must be an integer.
+- `Idempotency-Key` is required, non-empty, and at most 128 characters.
+- The caller must be a managed `admin`.
+
+## Hosted Neon Consistency
+
+Neon operations use database transactions:
+
+- Player creation inserts the player and rating baseline and updates recent
+  player ordering in one transaction.
+- Presence set/clear commits as a database transaction.
+- Match submit acquires
+  `pg_advisory_xact_lock(hashtext('fusball-rating-replay'))`, locks
+  participating player rows with `FOR UPDATE`, updates ratings, inserts the
+  history record, and appends the submit event before commit.
+- Void/restore acquires the same advisory transaction lock, verifies
+  materialized-rating replay parity, locks the match row, enforces the expected
+  version, updates lifecycle state, appends an event, recomputes ratings from
+  active history, and commits atomically.
+
+The shared advisory lock serializes operations that can change materialized
+ratings or replay history. It replaces the local lock file for Neon-backed
+deployments.
+
+## Idempotency And Duplicate Handling
+
+### Hosted Match Submit
+
+`Idempotency-Key` is optional at the route boundary, but the phone UI sends a
+new generated key for every submit and hosted clients should do the same.
+
+With a key:
+
+- Neon stores it on the match and submit event.
+- The unique index prevents two matches from owning the same key.
+- Repeating the same key and payload returns the original successful result.
+- Reusing the key for another payload is rejected.
+
+Without a key, the route uses a 60-second process-local signature tracker.
+That tracker may reduce immediate accidental repeats, but it does not span
+Vercel instances or cold starts and is not a hosted idempotency guarantee.
+
+### Admin Correction
+
+Every void/restore request requires an idempotency key. Repeating the same key
+for the same match and target state returns the current lifecycle result with
+`idempotent: true`. Reusing it for any other match submit or lifecycle
+operation returns `409`.
+`expected_version` prevents a stale screen from overwriting a newer correction.
+
+## Local Shelve Concurrency
+
+The shelve adapter sets `uses_local_lock = True`. The API acquires
+`phone_api_write.lock` before:
+
+- player creation,
+- match submission, and
+- void/restore.
+
+If the file already exists, the request returns `409` without starting the
+mutation. The lock is released in `finally` after the operation. Presence is
+only an in-process set and lineup helpers are calculations, so they do not use
+the lock file.
+
+For match submissions without a key, local mode also relies on the 60-second
+process-local duplicate signature check. When a key is supplied, the shelve
+adapter scans stored history and returns the original result for the same key
+and payload. These mechanisms protect the supported single-process local
+workflow; they are not distributed locks.
+
+## Presence Durability
+
+- **Neon:** presence is stored in `player_presence`. Activating a player
+  upserts `marked_active_at` and an expiry eight hours in the future.
+  Deactivation deletes the row, clearing deletes all rows, and reads filter
+  `expires_at > NOW()`.
+- **Shelve:** presence is a set owned by the running store instance and is lost
+  on restart.
+
+Random lineup always reads the current presence repository, so hosted requests
+see shared durable rows while local requests see only their process state.
+
+## Match Lifecycle And Audit Guarantees
+
+Corrections do not edit scores, teams, or the original match payload and do not
+delete history. A correction changes only lifecycle state/version, appends a
+`void` or `restore` event, and rematerializes ratings from active history.
+Normal ranking, stats, profile, H2H, and history-derived calculations exclude
+voided records.
+
+Before a lifecycle change, replay parity must match the current materialized
+ratings. A mismatch aborts the correction with `409` rather than building on
+untrusted state. `rating_baselines` provide the trusted replay starting point.
+
+## Ordering Policy
+
+Internal doubles arrays are offense-first:
+
+```text
+[offense, defense]
+```
+
+The phone UI displays teams defense-first:
+
+```text
+Defense + Offense
+```
+
+Stored history, rating math, odds, team H2H, idempotency comparison, and replay
+must retain offense-first order. Only presentation reverses a doubles team.
 
 ## Failure Behavior
 
-Failures should favor safety over convenience.
+| Status | Policy |
+| --- | --- |
+| `400 Bad Request` | Invalid payload or match idempotency-key reuse with another payload |
+| `401 Unauthorized` | Missing/invalid identity for strict access, admin access, reads, or legacy token mode |
+| `403 Forbidden` | Managed role lacks permission or writer PIN authorization fails |
+| `404 Not Found` | Correction match does not exist |
+| `409 Conflict` | Duplicate player/submit, local lock contention, stale lifecycle version/state, request-key conflict, or replay-parity failure |
+| `500 Internal Server Error` | Persistence operation failed |
+| `503 Service Unavailable` | Store unavailable/not ready or legacy write credential is not configured |
 
-If validation fails:
-- Reject the request with `400 Bad Request`.
+Neon transaction failures roll back uncommitted database changes. The local
+match adapter restores player ratings if subsequent history/log persistence
+raises, but local files and the legacy text log do not provide distributed
+transaction semantics.
 
-If auth fails:
-- Reject the request with `401 Unauthorized`.
+## Readiness Gate
 
-If another writer is active:
-- Reject the request with `409 Conflict`.
+`GET /api/health` is public and reports selected-store readiness:
 
-If persistence fails partway through:
-- Return `500 Internal Server Error` and avoid leaving partially applied state behind.
+- Neon must be reachable and have the complete, checksummed migration state.
+- Shelve must have an accessible data directory and must be able to read the
+  current player store when present.
 
-## Verification Expectations
-
-The first phone write slice ships with a small validation surface:
-- One automated test for authorized successful submit.
-- One automated test for rejected unauthorized submit.
-- One automated test for rejected conflicting submit.
-- One automated test for player creation success and duplicate rejection.
-- One manual end-to-end check from phone to leaderboard refresh.
-
-Priority remains on history/model hardening before expanding write scope. See `docs/backlog.md` for next slices.
+An unavailable or incompatible store returns `503`; operators should not treat
+a running process with failed readiness as safe for writes.
 
 ## See Also
 
-- API endpoint reference: `docs/phone-api.md`
-- Execution status and sequencing: `docs/backlog.md`
+- [Architecture](architecture.md)
+- [Authentication](authentication.md)
+- [Data safety](data-safety.md)
+- [Phone API](phone-api.md)

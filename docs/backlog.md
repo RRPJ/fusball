@@ -1,40 +1,51 @@
 # Improvement Backlog
 
-Use this file to prioritize changes in small, safe slices.
-See `docs/reliability-maintainability-plan.md` for the detailed modernization,
-authentication, match-correction, and hosted data-safety roadmap.
+This file contains genuine future product work only. Completed reliability and
+maintainability milestones are recorded in
+`docs/reliability-maintainability-plan.md`.
 
-## Quarterly Leaderboard
+## Operator UI Simplification
 
-- [x] Add a quarterly (calendar quarter: Jan-Mar, Apr-Jun, etc.) leaderboard view.
-- [x] Display alongside existing time-window leaderboards (This Week, This Month).
-
-## UI Revamp
-
-- [ ] Simplify the operator UI by clearly separating leaderboard and match submission flows.
-- [ ] Remove menu items (Players, Score, Submit) and reorganize for clearer navigation.
-- [ ] Improve usability and reduce cognitive load for phone-based match entry.
-- [ ] (Implementation details to be fleshed out during execution.)
+- [ ] Separate leaderboard browsing from the match-entry task so standings do
+  not compete with lineup and score entry on the first step.
+- [ ] Replace the current Mode/Players/Score/Confirm step menu with a
+  lower-friction phone workflow while preserving validation, offline
+  read-only behavior, authorization, and the dedicated admin view.
+- [ ] Validate the revised flow with operators and measure time, taps, and
+  correction frequency for singles and doubles entry.
 
 ## Tournament Exploration
 
-- [ ] Explore tournament support requirements: bracket types, group stages, and ranking impact.
-- [ ] Decide whether tournaments should be isolated events, season-scoped events, or both.
-- [ ] Define the minimal tournament slice worth prototyping without disrupting normal match flow.
+- [ ] Define supported bracket and group-stage formats and how tournament
+  results affect normal ratings.
+- [ ] Decide whether tournaments are isolated events, season-scoped events, or
+  both.
+- [ ] Prototype the smallest tournament slice without disrupting normal match
+  submission and replay semantics.
 
-## Player Profiles and Rivalries
+## Rivalries
 
-- [x] Build player detail page: recent matches, offense vs defense trend, current streak, best partner, toughest opponent.
-- [ ] Create rivalries hub: most-played rivalries, closest rivalry, one-sided matchups, revenge tracking.
+- [ ] Create a rivalries hub using the existing player profile and H2H data,
+  covering most-played, closest, and one-sided matchups.
+- [ ] Define revenge tracking precisely, including the time window, eligible
+  rematches, and treatment of voided matches.
 
-## Queue and Match Suggestions
+## Rotation And Next-Match Suggestions
 
-- [ ] Add next-match suggestion UI based on active presence and lineup balance.
-- [ ] Detect and warn when a player has been sitting out or playing too many consecutive matches.
-- [ ] Suggest auto-balanced lineups when multiple players are active (pair with existing lineup balancing logic).
+- [ ] Suggest the next participants from active presence and recent match
+  history while keeping operator choice authoritative.
+- [ ] Detect and surface players who have sat out unusually long or played too
+  many consecutive matches.
+- [ ] Connect rotation suggestions to the existing random and auto-balance
+  lineup helpers so a suggested group can be assigned and balanced with one
+  action.
 
-## Session Recap and Result Cards
+## Post-Match Recap And Sessions
 
-- [ ] After each match submit, show a brief result card: upset/not upset, rating gain, streak impact, prediction accuracy.
-- [ ] Add session grouping to identify who played together, when the table was hottest, and who earned the night's title.
-- [ ] Layer in existing odds and quip logic to make match feedback more engaging and narrative-driven.
+- [ ] After a successful submit, retain a result card showing upset
+  classification, rating deltas, streak changes, and prediction accuracy,
+  reusing the existing odds and quip logic.
+- [ ] Define session boundaries and group matches into table sessions without
+  changing rating or lifecycle semantics.
+- [ ] Add a session recap for participation, notable matchups, activity peaks,
+  and a clearly defined session title or award.
