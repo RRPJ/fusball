@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from datetime import datetime, timedelta, timezone
 import re
 import shelve
@@ -909,19 +910,24 @@ class PhoneApiTests(unittest.TestCase):
                 def authenticate(self, request):
                     return None
 
+            frontend_domain = "correct.clerk.accounts.dev"
+            encoded_domain = base64.urlsafe_b64encode(
+                f"{frontend_domain}$".encode("ascii")
+            ).decode("ascii").rstrip("=")
             app = create_app(
                 db_dir=tmp_path,
                 auth_mode="clerk",
                 authenticator=AnonymousAuthenticator(),
-                clerk_publishable_key="pk_test_example",
-                clerk_frontend_api_url="https://example.clerk.accounts.dev",
+                clerk_publishable_key=f"pk_test_{encoded_domain}",
+                clerk_frontend_api_url="https://incorrect.clerk.accounts.dev",
             )
             html = app.test_client().get("/phone").get_data(as_text=True)
 
             self.assertIn("const AUTH_MODE = 'clerk';", html)
+            self.assertIn(f"https://{frontend_domain}/npm/@clerk/ui@1", html)
             self.assertIn("@clerk/clerk-js@6/dist/clerk.browser.js", html)
-            self.assertNotIn("@clerk/ui", html)
-            self.assertIn("await Clerk.load();", html)
+            self.assertNotIn("incorrect.clerk.accounts.dev", html)
+            self.assertIn("window.__internal_ClerkUICtor", html)
             self.assertIn("headers.set('Authorization', `Bearer ${managedToken}`);", html)
             self.assertIn("AUTH_MODE === 'hybrid' ? '' : 'none'", html)
             self.assertIn("id='adminMatchesSection'", html)

@@ -48,8 +48,8 @@ Required hosted configuration:
 
 - `CLERK_SECRET_KEY`
 - `CLERK_PUBLISHABLE_KEY` for the browser login integration
-- `CLERK_FRONTEND_API_URL`, the instance origin used to load pinned ClerkJS 6
-  and Clerk UI 1 browser bundles
+- `CLERK_FRONTEND_API_URL`, an optional compatibility fallback; the instance
+  origin is normally derived from `CLERK_PUBLISHABLE_KEY` as Clerk recommends
 - `CLERK_AUTHORIZED_PARTIES`, a comma-separated allowlist of exact frontend
   origins
 - `DATABASE_URL`

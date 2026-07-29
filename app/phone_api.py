@@ -10,6 +10,7 @@ player database and exposes:
 from __future__ import annotations
 
 import argparse
+import base64
 import html as html_module
 import os
 import random
@@ -38,6 +39,26 @@ WRITE_PIN_HEADER = "X-Write-Pin"
 AUTH_MODES = {"legacy", "hybrid", "clerk"}
 MATCH_DUPLICATE_WINDOW_SECONDS = 60.0
 _RECENT_MATCH_SIGNATURES: dict[str, float] = {}
+
+
+def _clerk_frontend_api_origin(
+  publishable_key: str | None,
+  configured_url: str | None,
+) -> str | None:
+  if publishable_key:
+    try:
+      encoded_domain = publishable_key.split("_", 2)[2]
+      padding = "=" * (-len(encoded_domain) % 4)
+      decoded_domain = base64.urlsafe_b64decode(
+        encoded_domain + padding
+      ).decode("ascii").removesuffix("$")
+      if decoded_domain and "/" not in decoded_domain:
+        return f"https://{decoded_domain}"
+    except (IndexError, UnicodeDecodeError, ValueError):
+      pass
+  if configured_url:
+    return configured_url.rstrip("/")
+  return None
 
 
 def _load_leaderboard(store: BaseWriteStore, limit: int = 50, scope: str = "all") -> list[dict[str, object]]:
@@ -249,10 +270,16 @@ def _render_phone_html(
 
     managed_auth = auth_mode in {"hybrid", "clerk"}
     clerk_scripts = ""
-    if managed_auth and clerk_publishable_key and clerk_frontend_api_url:
+    resolved_frontend_api_url = _clerk_frontend_api_origin(
+      clerk_publishable_key,
+      clerk_frontend_api_url,
+    )
+    if managed_auth and clerk_publishable_key and resolved_frontend_api_url:
       publishable_key = html_module.escape(clerk_publishable_key, quote=True)
-      frontend_api_url = html_module.escape(clerk_frontend_api_url.rstrip("/"), quote=True)
+      frontend_api_url = html_module.escape(resolved_frontend_api_url, quote=True)
       clerk_scripts = f"""
+  <script defer crossorigin="anonymous"
+    src="{frontend_api_url}/npm/@clerk/ui@1/dist/ui.browser.js"></script>
   <script defer crossorigin="anonymous"
     data-clerk-publishable-key="{publishable_key}"
     src="{frontend_api_url}/npm/@clerk/clerk-js@6/dist/clerk.browser.js"></script>"""
@@ -2746,7 +2773,7 @@ def _render_phone_html(
       if (!window.Clerk) {
         throw new Error('Managed sign-in failed to load.');
       }
-      await Clerk.load();
+      await Clerk.load({ ui: { ClerkUI: window.__internal_ClerkUICtor } });
       const status = document.getElementById('managedAuthStatus');
       if (Clerk.isSignedIn) {
         Clerk.mountUserButton(document.getElementById('clerkUserButton'));
@@ -2848,9 +2875,12 @@ def create_app(
 
   active_authenticator = authenticator
   if auth_mode in {"hybrid", "clerk"} and active_authenticator is None:
-    if not clerk_publishable_key or not clerk_frontend_api_url:
+    if not clerk_publishable_key or not _clerk_frontend_api_origin(
+      clerk_publishable_key,
+      clerk_frontend_api_url,
+    ):
       raise ValueError(
-        "managed auth requires CLERK_PUBLISHABLE_KEY and CLERK_FRONTEND_API_URL"
+        "managed auth requires a valid CLERK_PUBLISHABLE_KEY"
       )
     active_authenticator = build_clerk_authenticator(
       secret_key=clerk_secret_key,
