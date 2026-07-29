@@ -114,5 +114,29 @@ class MatchWriter(ABC):
         raise NotImplementedError
 
 
-class BaseWriteStore(PlayerRepository, HistoryRepository, MatchWriter):
+class PresenceRepository(ABC):
+    """Tracks which players are currently marked present for lineup assignment.
+
+    Implementations decide durability: the local shelve-backed store keeps
+    presence in an in-process set for the lifetime of the running server
+    (matching pre-existing behavior), while the Neon-backed store persists
+    presence with an expiry so state survives across the ephemeral function
+    instances used in hosted deployments.
+    """
+
+    @abstractmethod
+    def list_active_presence(self) -> list[str]:
+        """Return currently active (non-expired) player names."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def set_presence(self, name: str, active: bool) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def clear_presence(self) -> None:
+        raise NotImplementedError
+
+
+class BaseWriteStore(PlayerRepository, HistoryRepository, MatchWriter, PresenceRepository):
     """Composite contract retained for the existing phone API composition root."""

@@ -211,24 +211,54 @@ using the incomplete local shelve history as an authority.
 
 ### 7. Decompose The Runtime Without Changing Behavior
 
-- Move embedded UI into Flask templates and static assets with cache-safe
-  versioning; preserve the current phone presentation and offense/defense
-  display order.
-- Move Match Corrections into a dedicated admin-only area. It currently renders
-  beneath every Mode, Players, Score, and Confirm step, which is functional but
-  visually repetitive and confusing.
-- Split route groups into small blueprints for reads, match operations,
-  administration, and authentication; keep `create_app` as the composition
-  root used by both local mode and `api/index.py`.
-- Move process-local presence to Neon with expiry if it must work reliably
-  across Vercel instances; otherwise explicitly label it local/session-only and
-  disable misleading hosted behavior.
-- Push Neon filtering/aggregation into focused SQL queries where safe, add
-  indexes for active match chronology and player-history access, and avoid
-  loading every JSON record for each request.
-- Remove superseded helpers such as direct working-directory `player_store`
-  access and replace the unsafe one-off `dbmigration.py` with versioned,
-  backup-aware migrations.
+- [Done] Move embedded UI into Flask templates and static assets with
+  cache-safe versioning (`app/templates/phone.html`,
+  `app/static/css/phone.css`, `app/static/js/phone.js`; SHA-256-derived
+  `?v=` query string computed once per app instance); preserve the current
+  phone presentation and offense/defense display order. Existing tests that
+  inspect rendered HTML were split to check the template response for markup
+  and the static asset responses for JS/CSS logic; no presentation or JS
+  behavior changed otherwise.
+- [Done] Move Match Corrections into a dedicated admin-only area: a single
+  nav entry/view hidden until `GET /api/auth/me` resolves an `admin` role,
+  instead of rendering beneath every Mode/Players/Score/Confirm step.
+- [Done] Make managed auth visible at page entry: strict `clerk` mode hides
+  operational app content (`#appContent`/`#stickyBar`) behind `display:none`
+  until Clerk resolves; `hybrid` mode surfaces managed login prominently
+  while retaining the PIN fallback and read-PIN behavior. Static assets and
+  `GET /api/health` remain reachable regardless of auth state; every
+  `/api/*` route still enforces authorization server-side.
+- [Done] Split route groups into small blueprints for reads (`read.py`),
+  match/write operations (`write.py`), administration (`admin.py`),
+  authentication (`auth.py`), and health (`health.py`); `create_app` in
+  `app/phone_api.py` remains the composition root used by both local mode and
+  `api/index.py`. Shared auth/store/lock dependencies are carried in a typed
+  `PhoneApiContext` (`app/services/phone_request_context.py`) passed into each
+  blueprint factory, avoiding circular imports and global state.
+- [Done] Move process-local presence to Neon with expiry: `NeonWriteStore`
+  now persists presence in an additive `player_presence` table (migration
+  `0005_player_presence.sql`) with an 8-hour TTL, filtering expired rows on
+  every read. `ShelveWriteStore` keeps the previous in-process, per-server-
+  lifetime set semantics unchanged. Both are implemented behind a shared
+  `PresenceRepository` contract. Covered by `test_phone_api.py` (shelve path)
+  and a gated `test_neon_store.py` integration test (Neon path, skipped
+  without `TEST_DATABASE_URL` in this environment).
+- [Done] Push Neon filtering/aggregation into a focused SQL query where an
+  N+1 was found: `NeonWriteStore.list_match_lifecycle()` previously called
+  `list_match_events()` once per returned match; it now batch-loads events
+  for the whole page in one `WHERE match_id = ANY(%s)` query, reusing the
+  existing `ix_match_events_match_created` index from
+  `0003_match_lifecycle.sql` (no new index needed). Other analytics reads
+  were left unchanged, since a broader rewrite could not be proven safe
+  without additional characterization tests.
+- [Done] Remove superseded helpers: the unused, CWD-relative direct-shelve
+  helpers in `app/services/player_store.py` (`player_names`, `player_exists`,
+  `add_player_if_missing`, `ensure_recent_players_initialized`,
+  `recent_player_names`, `add_recent_player`) were deleted as dead code,
+  superseded by the `db_dir`-scoped stores in `phone_write_store.py`.
+  `app/dbmigration.py` was intentionally left in place: it is a distinct,
+  still-documented local shelve data-format upgrade tool (see
+  `docs/data-safety.md`), not superseded by the Neon SQL migration runner.
 
 ## Dependencies And Delivery Order
 

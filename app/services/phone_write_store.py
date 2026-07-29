@@ -43,6 +43,11 @@ from services.store_contracts import (
 )
 
 RATING_TOLERANCE = 1e-9
+# How long a player stays "checked in" for lineup assignment on the durable
+# (Neon) presence store before it expires automatically. This bounds
+# staleness if someone forgets to check out, without requiring a background
+# sweeper: every read filters `expires_at > NOW()`.
+PRESENCE_TTL_SECONDS = 8 * 60 * 60
 
 
 def _ratings_match(left: PlayerRating, right: PlayerRating) -> bool:
@@ -58,6 +63,11 @@ class ShelveWriteStore(BaseWriteStore):
 
     def __init__(self, db_dir: Path):
         self.db_dir = db_dir
+        # Presence has no shelve-backed persistence: it mirrors the
+        # long-standing in-process behavior of the phone API, where a
+        # single long-running server process tracks who is "checked in"
+        # for the lifetime of that process.
+        self._active_presence: set[str] = set()
 
     def _playerdb_exists(self) -> bool:
         return any(self.db_dir.glob("playerdb*"))
@@ -149,6 +159,18 @@ class ShelveWriteStore(BaseWriteStore):
             if len(result) >= limit:
                 break
         return result
+
+    def list_active_presence(self) -> list[str]:
+        return sorted(self._active_presence)
+
+    def set_presence(self, name: str, active: bool) -> None:
+        if active:
+            self._active_presence.add(name)
+        else:
+            self._active_presence.discard(name)
+
+    def clear_presence(self) -> None:
+        self._active_presence.clear()
 
     def add_player(self, player_name: str) -> dict[str, object]:
         db_path = self.db_dir / "playerdb"
@@ -709,6 +731,9 @@ class NeonWriteStore(BaseWriteStore):
                 )
                 records = self._decode_history_rows(cur.fetchall())
 
+            match_ids = [record["id"] for record in records]
+            events_by_match = self._list_match_events_for_ids(conn, match_ids)
+
         return [
             {
                 "id": record["id"],
@@ -720,10 +745,100 @@ class NeonWriteStore(BaseWriteStore):
                 "status": record.get("status", "active"),
                 "version": int(record.get("version", 1)),
                 "submitted_by": record.get("submitted_by"),
-                "events": self.list_match_events(record["id"]),
+                "events": events_by_match.get(record["id"], []),
             }
             for record in records
         ]
+
+    @staticmethod
+    def _list_match_events_for_ids(
+        conn, match_ids: list[str]
+    ) -> dict[str, list[dict[str, object]]]:
+        """Batch-load lifecycle events for many matches in a single query.
+
+        `list_match_lifecycle` previously called `list_match_events` once per
+        match (each opening its own connection), an N+1 query pattern that
+        scales linearly with the requested page size. Loading every match's
+        events in one round trip keeps the admin match list query count
+        constant regardless of `limit`.
+        """
+        grouped: dict[str, list[dict[str, object]]] = {match_id: [] for match_id in match_ids}
+        if not match_ids:
+            return grouped
+
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT match_id, id, event_type, actor_subject, reason, request_id,
+                       from_status, to_status, created_at
+                FROM match_events
+                WHERE match_id = ANY(%s)
+                ORDER BY match_id, created_at ASC, id ASC
+                """,
+                (match_ids,),
+            )
+            rows = cur.fetchall()
+
+        for (
+            match_id,
+            event_id,
+            event_type,
+            actor_subject,
+            reason,
+            request_id,
+            from_status,
+            to_status,
+            created_at,
+        ) in rows:
+            grouped.setdefault(str(match_id), []).append(
+                {
+                    "id": str(event_id),
+                    "event_type": str(event_type),
+                    "actor_subject": str(actor_subject),
+                    "reason": reason,
+                    "request_id": request_id,
+                    "from_status": from_status,
+                    "to_status": str(to_status),
+                    "created_at": created_at.isoformat(),
+                }
+            )
+        return grouped
+
+    def list_active_presence(self) -> list[str]:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT player_name FROM player_presence WHERE expires_at > NOW() "
+                    "ORDER BY player_name"
+                )
+                return [row[0] for row in cur.fetchall()]
+
+    def set_presence(self, name: str, active: bool) -> None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                if active:
+                    cur.execute(
+                        """
+                        INSERT INTO player_presence (player_name, marked_active_at, expires_at)
+                        VALUES (%s, NOW(), NOW() + %s * INTERVAL '1 second')
+                        ON CONFLICT (player_name) DO UPDATE
+                        SET marked_active_at = NOW(),
+                            expires_at = NOW() + %s * INTERVAL '1 second'
+                        """,
+                        (name, PRESENCE_TTL_SECONDS, PRESENCE_TTL_SECONDS),
+                    )
+                else:
+                    cur.execute(
+                        "DELETE FROM player_presence WHERE player_name = %s",
+                        (name,),
+                    )
+            conn.commit()
+
+    def clear_presence(self) -> None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM player_presence")
+            conn.commit()
 
     def add_player(self, player_name: str) -> dict[str, object]:
         with self._connect() as conn:

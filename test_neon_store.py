@@ -32,6 +32,7 @@ class NeonWriteStoreIntegrationTests(unittest.TestCase):
         self.database_url = DATABASE_URL
         with psycopg.connect(self.database_url, autocommit=True) as conn:
             with conn.cursor() as cur:
+                cur.execute("DROP TABLE IF EXISTS player_presence")
                 cur.execute("DROP TABLE IF EXISTS match_events")
                 cur.execute("DROP TABLE IF EXISTS recent_players")
                 cur.execute("DROP TABLE IF EXISTS match_history")
@@ -307,6 +308,77 @@ class NeonWriteStoreIntegrationTests(unittest.TestCase):
         with psycopg.connect(self.database_url, autocommit=True) as conn:
             artifact = build_export_artifact(conn)
         self.assertTrue(artifact["integrity"]["ok"])
+
+    def test_presence_set_get_clear_and_expiry_filters_stale_rows(self) -> None:
+        store = NeonWriteStore(self.database_url)
+
+        self.assertEqual(store.list_active_presence(), [])
+
+        store.set_presence("alice", True)
+        store.set_presence("bob", True)
+        self.assertEqual(store.list_active_presence(), ["alice", "bob"])
+
+        # Re-marking active should refresh the expiry (upsert), not duplicate the row.
+        store.set_presence("alice", True)
+        with psycopg.connect(self.database_url, autocommit=True) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM player_presence")
+                self.assertEqual(cur.fetchone()[0], 2)
+
+        store.set_presence("bob", False)
+        self.assertEqual(store.list_active_presence(), ["alice"])
+
+        # GET-time filtering: an expired row is excluded even before any
+        # active cleanup/sweep runs.
+        with psycopg.connect(self.database_url, autocommit=True) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE player_presence SET expires_at = NOW() - INTERVAL '1 second' "
+                    "WHERE player_name = 'alice'"
+                )
+        self.assertEqual(store.list_active_presence(), [])
+
+        store.set_presence("alice", True)
+        store.clear_presence()
+        self.assertEqual(store.list_active_presence(), [])
+
+    def test_list_match_lifecycle_batches_events_for_multiple_matches(self) -> None:
+        store = NeonWriteStore(self.database_url)
+        first = store.submit_match(
+            ["alice"],
+            ["bob"],
+            5,
+            3,
+            source="test",
+            actor_subject="user_operator",
+            idempotency_key="lifecycle-batch-1",
+        )
+        second = store.submit_match(
+            ["bob"],
+            ["alice"],
+            5,
+            1,
+            source="test",
+            actor_subject="user_operator",
+            idempotency_key="lifecycle-batch-2",
+        )
+        store.change_match_status(
+            first["match_id"],
+            "voided",
+            "user_admin",
+            "Incorrect result",
+            "lifecycle-batch-void-1",
+            expected_version=1,
+        )
+
+        items = {item["id"]: item for item in store.list_match_lifecycle(limit=10)}
+        self.assertEqual(len(items), 2)
+
+        first_events = items[first["match_id"]]["events"]
+        self.assertEqual([event["event_type"] for event in first_events], ["submit", "void"])
+
+        second_events = items[second["match_id"]]["events"]
+        self.assertEqual([event["event_type"] for event in second_events], ["submit"])
 
 
 if __name__ == "__main__":

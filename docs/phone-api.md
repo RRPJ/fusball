@@ -4,6 +4,12 @@ This document is the endpoint-level reference for the Fusball phone API in `app/
 
 The phone API is the repository's primary runtime. It serves both the browser-based operator UI and the JSON endpoints used by phone clients and hosted deployments.
 
+`create_app()` in `app/phone_api.py` remains the composition root, but the UI
+markup/CSS/JS live in `app/templates/` and `app/static/` (cache-versioned),
+and routes are grouped into focused blueprints under `app/blueprints/`
+(`health`, `auth`, `read`, `write`, `admin`). See `docs/architecture.md` for
+the full breakdown.
+
 ## Base Path
 
 - Default host/port: `http://<host>:8080`
@@ -39,6 +45,16 @@ application-owned roles in Neon. See `docs/authentication.md`.
 - `reader` can access reads, `operator` can also perform existing writes, and
   `admin` is reserved for destructive administration such as match correction.
 - `FUSBALL_AUTH_MODE` controls rollout: `legacy`, `hybrid`, or `clerk`.
+
+Phone-page auth visibility:
+- Strict `clerk` mode hides the operational app UI behind `display:none` at
+  page load and shows the managed sign-in prominently, instead of only
+  surfacing auth at the Confirm step; the page still renders and static
+  assets/`GET /api/health` still load without a session.
+- `hybrid` mode shows managed login prominently while retaining the PIN
+  fallback and existing read-PIN behavior.
+- This is presentation-only. Every `/api/*` route still enforces
+  authorization server-side regardless of what the client has rendered.
 
 The auth split introduces two headers for the API path:
 
@@ -92,17 +108,27 @@ Legacy compatibility:
   - Body: `{ "name": "Rutger" }`
   - Creates player with default offense/defense ratings
 
-### Presence (session-scoped)
+### Presence
 
 - `GET /api/presence`
-  - Returns active/present players for current API process
+  - Returns active/present players.
+  - Local/shelve mode: process-local, lost on API restart (unchanged
+    behavior).
+  - Hosted Neon mode: durable, backed by a `player_presence` table with an
+    8-hour expiry; expired rows are filtered out of every read
+    (`WHERE expires_at > NOW()`), so a crashed/redeployed ephemeral Vercel
+    instance cannot leave stale players marked present indefinitely.
 - `POST /api/presence`
   - Body: `{ "name": "alice", "active": true }`
+  - Marking a player active upserts (refreshes the expiry on hosted Neon);
+    marking inactive deletes the row/set entry.
 - `POST /api/presence/clear`
-  - Clears active list
+  - Clears the active list/table for the resolved store.
 
 Notes:
-- Presence is not persisted across API restarts.
+- `/api/lineup/random` uses the current presence set at request time, so it
+  reflects the durable Neon table on hosted deployments and the in-process set
+  locally.
 
 ### Lineup Helpers
 
@@ -157,9 +183,15 @@ Ordering note:
 
 ### Admin Match Corrections
 
+Match Corrections is a single dedicated admin-only nav entry on `/phone`,
+hidden until `GET /api/auth/me` resolves an `admin` role, rather than being
+repeated under every Mode/Players/Score/Confirm step.
+
 - `GET /api/admin/matches?limit=30`
   - Requires an active `admin` managed identity.
   - Returns active and voided matches with lifecycle version and audit events.
+  - On Neon, audit events for the returned page are loaded in a single
+    batched query rather than one query per match.
 - `POST /api/admin/matches/<match-id>/void`
 - `POST /api/admin/matches/<match-id>/restore`
   - Require an active `admin` managed identity.

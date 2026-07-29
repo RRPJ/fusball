@@ -77,6 +77,10 @@ TABLE_SPECS: dict[str, tuple[tuple[str, ...], str]] = {
         ),
         "player_name",
     ),
+    "player_presence": (
+        ("player_name", "marked_active_at", "expires_at"),
+        "player_name",
+    ),
     "match_events": (
         (
             "id",
@@ -99,6 +103,7 @@ RESTORE_ORDER = (
     "match_history",
     "recent_players",
     "rating_baselines",
+    "player_presence",
     "match_events",
 )
 

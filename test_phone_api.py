@@ -138,18 +138,34 @@ class PhoneApiTests(unittest.TestCase):
             self.assertNotIn("3 Score", html)
             self.assertNotIn("4 Confirm", html)
             self.assertIn("id='leaderboardSection' class='section active'>", html)
-            self.assertIn("const leaderboardSection = document.getElementById('leaderboardSection');", html)
-            self.assertIn("leaderboardSection.classList.toggle('active', state.step === 1);", html)
-            self.assertIn("const LEADERBOARD_CACHE_STORAGE_KEY = 'fusball_leaderboard_snapshot';", html)
-            self.assertIn("function renderLiveStatus()", html)
-            self.assertIn("function renderLeaderboardFreshness()", html)
-            self.assertIn("function startFreshnessTicker()", html)
-            self.assertIn("trackKey: 'leaderboard'", html)
             self.assertLess(html.index(">All</button>"), html.index(">This quarter</button>"))
             self.assertLess(html.index(">This quarter</button>"), html.index(">This month</button>"))
             self.assertLess(html.index(">This month</button>"), html.index(">This week</button>"))
-            self.assertIn("document.getElementById('filterThisQuarterBtn').classList.toggle('active', f === 'this_quarter');", html)
-            self.assertIn("document.getElementById('filterThisQuarterBtn').addEventListener('click', () => setLeaderboardFilter('this_quarter'));", html)
+
+            # The phone UI's JS logic now lives in a versioned static asset
+            # rather than being embedded in the /phone HTML response.
+            js = client.get("/static/js/phone.js").get_data(as_text=True)
+            self.assertIn(
+                "const leaderboardSection = document.getElementById('leaderboardSection');", js
+            )
+            self.assertIn("leaderboardSection.classList.toggle('active', state.step === 1);", js)
+            self.assertIn(
+                "const LEADERBOARD_CACHE_STORAGE_KEY = 'fusball_leaderboard_snapshot';", js
+            )
+            self.assertIn("function renderLiveStatus()", js)
+            self.assertIn("function renderLeaderboardFreshness()", js)
+            self.assertIn("function startFreshnessTicker()", js)
+            self.assertIn("trackKey: 'leaderboard'", js)
+            self.assertIn(
+                "document.getElementById('filterThisQuarterBtn').classList.toggle("
+                "'active', f === 'this_quarter');",
+                js,
+            )
+            self.assertIn(
+                "document.getElementById('filterThisQuarterBtn').addEventListener("
+                "'click', () => setLeaderboardFilter('this_quarter'));",
+                js,
+            )
 
     def test_phone_page_uses_compact_always_visible_player_lists(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -168,14 +184,31 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("id='presentPlayersPanel' class='players'", html)
             self.assertIn("id='awayPlayersHeading'>Away Players (tap to mark present)</h3>", html)
             self.assertIn("id='awayPlayersPanel' class='players'", html)
-            self.assertIn("grid-template-columns: repeat(2, minmax(0, 1fr));", html)
-            self.assertIn("@media (min-width: 560px)", html)
-            self.assertIn("grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));", html)
-            self.assertIn("presentHeading.textContent = `Present Players (${presentNames.length}) - tap to assign`", html)
-            self.assertIn("awayHeading.textContent = `Away Players (${awayNames.length}) - tap to mark present`", html)
-            self.assertIn("state.players = (payload.items || []).slice().sort((left, right) => left.localeCompare(right));", html)
-            self.assertNotIn("awayToggleBtn", html)
-            self.assertNotIn("presence-collapsed", html)
+
+            css = client.get("/static/css/phone.css").get_data(as_text=True)
+            self.assertIn("grid-template-columns: repeat(2, minmax(0, 1fr));", css)
+            self.assertIn("@media (min-width: 560px)", css)
+            self.assertIn("grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));", css)
+            self.assertNotIn("presence-collapsed", css)
+
+            js = client.get("/static/js/phone.js").get_data(as_text=True)
+            self.assertIn(
+                "presentHeading.textContent = "
+                "`Present Players (${presentNames.length}) - tap to assign`",
+                js,
+            )
+            self.assertIn(
+                "awayHeading.textContent = "
+                "`Away Players (${awayNames.length}) - tap to mark present`",
+                js,
+            )
+            self.assertIn(
+                "state.players = (payload.items || []).slice().sort("
+                "(left, right) => left.localeCompare(right));",
+                js,
+            )
+            self.assertNotIn("awayToggleBtn", js)
+            self.assertNotIn("presence-collapsed", js)
 
     def test_phone_page_formats_doubles_display_as_defense_then_offense(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -189,13 +222,21 @@ class PhoneApiTests(unittest.TestCase):
             response = client.get("/phone")
             self.assertEqual(response.status_code, 200)
 
-            html = response.get_data(as_text=True)
-            self.assertIn("state.selected.red_defense || placeholder, state.selected.red_offense || placeholder", html)
-            self.assertIn("state.selected.blue_defense || placeholder, state.selected.blue_offense || placeholder", html)
-            self.assertIn("const red = formatTeamDisplay('red');", html)
-            self.assertIn("const blue = formatTeamDisplay('blue');", html)
-            self.assertIn("const redDisplay = formatTeamDisplay('red', ' + ');", html)
-            self.assertIn("const blueDisplay = formatTeamDisplay('blue', ' + ');", html)
+            js = client.get("/static/js/phone.js").get_data(as_text=True)
+            self.assertIn(
+                "state.selected.red_defense || placeholder, "
+                "state.selected.red_offense || placeholder",
+                js,
+            )
+            self.assertIn(
+                "state.selected.blue_defense || placeholder, "
+                "state.selected.blue_offense || placeholder",
+                js,
+            )
+            self.assertIn("const red = formatTeamDisplay('red');", js)
+            self.assertIn("const blue = formatTeamDisplay('blue');", js)
+            self.assertIn("const redDisplay = formatTeamDisplay('red', ' + ');", js)
+            self.assertIn("const blueDisplay = formatTeamDisplay('blue', ' + ');", js)
 
     def test_phone_page_includes_profile_panel_and_pairwise_h2h_hooks(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -209,13 +250,17 @@ class PhoneApiTests(unittest.TestCase):
             response = client.get("/phone")
             self.assertEqual(response.status_code, 200)
 
-            html = response.get_data(as_text=True)
-            self.assertIn("Loading player profile...", html)
-            self.assertIn("/api/player/${encodeURIComponent(playerKey)}/profile?scope=${encodeURIComponent(state.leaderboardFilter)}&recent_limit=5", html)
-            self.assertIn("Current teams H2H", html)
-            self.assertIn("/api/team-h2h?team1=${team1}&team2=${team2}", html)
-            self.assertIn("function openPlayerH2H(playerKey, otherPlayerKey)", html)
-            self.assertIn("setMode('singles');", html)
+            js = client.get("/static/js/phone.js").get_data(as_text=True)
+            self.assertIn("Loading player profile...", js)
+            self.assertIn(
+                "/api/player/${encodeURIComponent(playerKey)}/profile?"
+                "scope=${encodeURIComponent(state.leaderboardFilter)}&recent_limit=5",
+                js,
+            )
+            self.assertIn("Current teams H2H", js)
+            self.assertIn("/api/team-h2h?team1=${team1}&team2=${team2}", js)
+            self.assertIn("function openPlayerH2H(playerKey, otherPlayerKey)", js)
+            self.assertIn("setMode('singles');", js)
 
     def test_root_redirects_to_phone(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -238,7 +283,7 @@ class PhoneApiTests(unittest.TestCase):
             response = client.get("/phone")
             self.assertEqual(response.status_code, 200)
 
-            html = response.get_data(as_text=True)
+            js = client.get("/static/js/phone.js").get_data(as_text=True)
             categories = [
                 "expected_blowout",
                 "expected_close_win",
@@ -249,7 +294,7 @@ class PhoneApiTests(unittest.TestCase):
             ]
             for category in categories:
                 pattern = rf"{category}: \[(.*?)\]"
-                match = re.search(pattern, html, re.DOTALL)
+                match = re.search(pattern, js, re.DOTALL)
                 self.assertIsNotNone(match)
                 assert match is not None
                 lines = re.findall(r"'[^']+'", match.group(1))
@@ -905,6 +950,11 @@ class PhoneApiTests(unittest.TestCase):
     def test_phone_page_wires_managed_session_and_hides_pins_in_strict_mode(self) -> None:
         with TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
+            with shelve.open(str(tmp_path / "playerdb")) as players:
+                players["private-player"] = (
+                    trueskill.Rating(),
+                    trueskill.Rating(),
+                )
 
             class AnonymousAuthenticator:
                 def authenticate(self, request):
@@ -921,21 +971,33 @@ class PhoneApiTests(unittest.TestCase):
                 clerk_publishable_key=f"pk_test_{encoded_domain}",
                 clerk_frontend_api_url="https://incorrect.clerk.accounts.dev",
             )
-            html = app.test_client().get("/phone").get_data(as_text=True)
+            client = app.test_client()
+            html = client.get("/phone").get_data(as_text=True)
 
             self.assertIn("const AUTH_MODE = 'clerk';", html)
             self.assertIn(f"https://{frontend_domain}/npm/@clerk/ui@1", html)
             self.assertIn("@clerk/clerk-js@6/dist/clerk.browser.js", html)
             self.assertNotIn("incorrect.clerk.accounts.dev", html)
-            self.assertIn("window.__internal_ClerkUICtor", html)
-            self.assertIn("headers.set('Authorization', `Bearer ${managedToken}`);", html)
-            self.assertIn("AUTH_MODE === 'hybrid' ? '' : 'none'", html)
             self.assertIn("id='adminMatchesSection'", html)
-            self.assertIn("/api/admin/matches?limit=30", html)
-            self.assertIn("expected_version: match.version", html)
+            # Strict clerk mode hides operational content until Clerk signs in,
+            # and Match Corrections is a dedicated admin-only nav entry that
+            # stays hidden until /api/auth/me resolves an admin role.
+            self.assertIn("id='appContent' style='display:none;'", html)
+            self.assertIn("id='stickyBar' class='sticky' style='display:none;'", html)
+            self.assertNotIn("Private-Player", html)
+            self.assertIn(
+                "id='adminNavBtn' class='btn small' type='button' style='display:none;", html
+            )
+
+            js = client.get("/static/js/phone.js").get_data(as_text=True)
+            self.assertIn("window.__internal_ClerkUICtor", js)
+            self.assertIn("headers.set('Authorization', `Bearer ${managedToken}`);", js)
+            self.assertIn("AUTH_MODE === 'hybrid' ? '' : 'none'", js)
+            self.assertIn("/api/admin/matches?limit=30", js)
+            self.assertIn("expected_version: match.version", js)
             self.assertIn(
                 "names.length === 2 ? [names[1], names[0]] : names",
-                html,
+                js,
             )
 
     def test_admin_can_list_void_and_restore_match(self) -> None:

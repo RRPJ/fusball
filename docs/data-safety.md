@@ -60,6 +60,20 @@ before corrections are enabled.
 Imported matches receive an append-only `submit` event attributed to
 `migration:shelve`; original match payloads are not rewritten.
 
+## Presence Migration (`0005_player_presence.sql`)
+
+Migration `0005` adds an additive `player_presence` table (`player_name`
+primary key referencing `players(name)` with `ON DELETE CASCADE`,
+`marked_active_at`, `expires_at`) plus an index on `expires_at`, giving hosted
+Neon deployments durable "who's currently present" state with an 8-hour
+expiry (`PRESENCE_TTL_SECONDS` in `app/services/phone_write_store.py`). It
+does not touch any existing table or column, needs no backfill, and rolls back
+by simply not applying it (nothing else depends on the table existing; the
+phone API falls back to whatever presence rows exist and treats an empty
+table as "nobody present"). Local shelve mode is unaffected: presence there
+remains an in-process, per-server-lifetime set, matching pre-refactor
+behavior.
+
 Before void or restore, the persistence adapter compares every materialized
 rating component with deterministic replay from `rating_baselines` and active
 history. Missing baselines or any mismatch abort the correction. Neon then
@@ -95,7 +109,7 @@ The export contains:
 - applied migration versions and checksums;
 - players and exact offense/defense rating components;
 - rating baselines, matches, lifecycle state, and append-only match events;
-- recent-player ordering and application users/roles;
+- recent-player ordering, expiring hosted presence, and application users/roles;
 - per-table SHA-256 checksums and replay/audit integrity results.
 
 `FUSBALL_BACKUP_KEY` must be a Fernet key held in the deployment secret manager.
