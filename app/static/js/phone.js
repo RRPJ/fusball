@@ -2076,11 +2076,53 @@
       persistWritePin(writePinInput.value);
     });
 
+    function setAdminVisibility(isAdmin) {
+      state.isAdmin = isAdmin;
+      adminNavBtn.style.display = isAdmin ? 'inline-block' : 'none';
+      if (!isAdmin && adminMatchesSection.classList.contains('active')) {
+        setStep(1);
+      }
+    }
+
+    async function refreshManagedIdentity(refreshAdminMatches = false) {
+      const identityResponse = await apiFetch('/api/auth/me', {
+        allowOffline: true,
+      });
+      if (!identityResponse.ok) {
+        setAdminVisibility(false);
+        return;
+      }
+      const identity = await identityResponse.json();
+      const isAdmin = identity.role === 'admin';
+      const becameAdmin = isAdmin && !state.isAdmin;
+      setAdminVisibility(isAdmin);
+      if ((refreshAdminMatches || becameAdmin) && isAdmin) {
+        await loadAdminMatches();
+      }
+    }
+
     async function initializeManagedAuth() {
       if (AUTH_MODE === 'legacy') {
         return { proceed: true };
       }
       const managedAuthPanel = document.getElementById('managedAuthPanel');
+      const status = document.getElementById('managedAuthStatus');
+      const clerkSignInNode = document.getElementById('clerkSignIn');
+      const mountSignedInUi = () => {
+        if (clerkSignInNode) {
+          clerkSignInNode.replaceChildren();
+        }
+        Clerk.mountUserButton(document.getElementById('clerkUserButton'), {
+          afterSignOutUrl: '/login',
+        });
+        status.textContent = 'Signed in with managed identity.';
+      };
+      const mountHybridSignedOutUi = () => {
+        if (clerkSignInNode) {
+          Clerk.mountSignIn(clerkSignInNode);
+        }
+        status.textContent = 'Sign in, or use transition PINs below.';
+      };
       managedAuthPanel.style.display = '';
       document.getElementById('legacyAuthPanel').style.display =
         AUTH_MODE === 'hybrid' ? '' : 'none';
@@ -2088,42 +2130,44 @@
         throw new Error('Managed sign-in failed to load.');
       }
       await Clerk.load({ ui: { ClerkUI: window.__internal_ClerkUICtor } });
-      const status = document.getElementById('managedAuthStatus');
       if (AUTH_MODE === 'clerk' && !Clerk.isSignedIn) {
         const returnPath = `${window.location.pathname}${window.location.search}`;
         window.location.replace(`/login?next=${encodeURIComponent(returnPath)}`);
         return { proceed: false };
       }
       if (Clerk.isSignedIn) {
-        Clerk.mountUserButton(document.getElementById('clerkUserButton'), {
-          afterSignOutUrl: '/login',
-        });
-        status.textContent = 'Signed in with managed identity.';
+        mountSignedInUi();
         if (AUTH_MODE === 'clerk') {
           appContent.style.display = '';
           stickyBar.style.display = '';
           document.body.classList.remove('strict-auth-pending');
-          Clerk.addListener(({ session }) => {
-            if (!session) {
-              window.location.replace('/login?next=/phone');
-            }
-          });
         }
-        const identityResponse = await apiFetch('/api/auth/me', {
-          allowOffline: true,
-        });
-        if (identityResponse.ok) {
-          const identity = await identityResponse.json();
-          if (identity.role === 'admin') {
-            state.isAdmin = true;
-            adminNavBtn.style.display = 'inline-block';
-            await loadAdminMatches();
+        await refreshManagedIdentity(true);
+      } else {
+        mountHybridSignedOutUi();
+      }
+
+      if (AUTH_MODE === 'clerk' || AUTH_MODE === 'hybrid') {
+        Clerk.addListener(async ({ session }) => {
+          if (!session && AUTH_MODE === 'clerk') {
+            window.location.replace('/login?next=/phone');
+            return;
           }
-        }
+          if (AUTH_MODE === 'hybrid') {
+            if (session) {
+              mountSignedInUi();
+              await refreshManagedIdentity(true);
+            } else {
+              setAdminVisibility(false);
+              mountHybridSignedOutUi();
+            }
+          }
+        });
+      }
+
+      if (AUTH_MODE === 'hybrid' && !Clerk.isSignedIn) {
         return { proceed: true };
       }
-      Clerk.mountSignIn(document.getElementById('clerkSignIn'));
-      status.textContent = 'Sign in, or use transition PINs below.';
       return { proceed: true };
     }
 

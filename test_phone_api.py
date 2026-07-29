@@ -947,6 +947,37 @@ class PhoneApiTests(unittest.TestCase):
             )
             self.assertEqual(response.status_code, 200)
 
+    def test_hybrid_phone_bootstrap_syncs_admin_visibility_on_session_changes(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+
+            class AnonymousAuthenticator:
+                def authenticate(self, request):
+                    return None
+
+            frontend_domain = "correct.clerk.accounts.dev"
+            encoded_domain = base64.urlsafe_b64encode(
+                f"{frontend_domain}$".encode("ascii")
+            ).decode("ascii").rstrip("=")
+            app = create_app(
+                db_dir=tmp_path,
+                auth_mode="hybrid",
+                authenticator=AnonymousAuthenticator(),
+                clerk_publishable_key=f"pk_test_{encoded_domain}",
+                clerk_frontend_api_url="https://incorrect.clerk.accounts.dev",
+            )
+            client = app.test_client()
+
+            html = client.get("/phone").get_data(as_text=True)
+            self.assertIn("const AUTH_MODE = 'hybrid';", html)
+            self.assertIn("id='clerkSignIn'", html)
+
+            js = client.get("/static/js/phone.js").get_data(as_text=True)
+            self.assertIn("async function refreshManagedIdentity", js)
+            self.assertIn("if (AUTH_MODE === 'clerk' || AUTH_MODE === 'hybrid')", js)
+            self.assertIn("Clerk.addListener(async ({ session }) => {", js)
+            self.assertIn("setAdminVisibility(false);", js)
+
     def test_strict_clerk_mode_wires_dedicated_login_flow(self) -> None:
         with TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
