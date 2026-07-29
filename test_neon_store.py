@@ -18,7 +18,7 @@ from services.neon_data_safety import (  # noqa: E402
     build_export_artifact,
     restore_export_artifact,
 )
-from services.neon_migrations import apply_migrations  # noqa: E402
+from services.neon_migrations import apply_migrations, discover_migrations  # noqa: E402
 from services.phone_write_store import NeonWriteStore  # noqa: E402
 from services.store_contracts import ReplayParityError  # noqa: E402
 
@@ -268,6 +268,45 @@ class NeonWriteStoreIntegrationTests(unittest.TestCase):
             restored["table_sha256"],
             artifact["integrity"]["table_sha256"],
         )
+
+    def test_legacy_lifecycle_backfill_is_idempotent_and_replay_safe(self) -> None:
+        store = NeonWriteStore(self.database_url)
+        store.submit_match(
+            ["alice"],
+            ["bob"],
+            5,
+            3,
+            source="legacy-backfill",
+            idempotency_key="legacy-backfill-submit",
+        )
+        backfill = next(
+            migration for migration in discover_migrations() if migration.version == "0004"
+        )
+
+        with psycopg.connect(self.database_url, autocommit=True) as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM match_events")
+                cur.execute("DELETE FROM rating_baselines")
+                cur.execute("UPDATE match_history SET submitted_by = NULL")
+                cur.execute(backfill.sql)
+                cur.execute(backfill.sql)
+                cur.execute("SELECT COUNT(*) FROM rating_baselines")
+                self.assertEqual(cur.fetchone()[0], 2)
+                cur.execute("SELECT event_type, actor_subject, reason FROM match_events")
+                self.assertEqual(
+                    cur.fetchall(),
+                    [
+                        (
+                            "submit",
+                            "migration:neon-legacy",
+                            "Backfilled existing Neon history",
+                        )
+                    ],
+                )
+
+        with psycopg.connect(self.database_url, autocommit=True) as conn:
+            artifact = build_export_artifact(conn)
+        self.assertTrue(artifact["integrity"]["ok"])
 
 
 if __name__ == "__main__":

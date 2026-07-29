@@ -204,6 +204,11 @@ availability. The PostgreSQL integration job performs the restore path against
 its isolated service database; operational teams must still run and record the
 first preview Neon drill before production cutover.
 
+Preview validation found that an existing Neon database can already contain
+history when lifecycle tables are introduced. Migration `0004` therefore
+backfills trusted earliest-history baselines and legacy submit events without
+using the incomplete local shelve history as an authority.
+
 ### 7. Decompose The Runtime Without Changing Behavior
 
 - Move embedded UI into Flask templates and static assets with cache-safe

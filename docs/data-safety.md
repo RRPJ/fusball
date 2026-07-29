@@ -48,6 +48,13 @@ player without retained history uses their imported current rating and is
 tagged `shelve_current_no_history`. Correction features must remain disabled
 until replay from these baselines matches materialized player ratings.
 
+For an existing Neon database upgraded in place, migration `0004` derives the
+same baseline from each player's earliest retained Neon history snapshot and
+adds an attributed legacy `submit` event for every pre-lifecycle match. Players
+without retained history are tagged `neon_current_no_history`. Applying the
+migration does not prove parity by itself; `check_neon_integrity.py` must pass
+before corrections are enabled.
+
 Imported matches receive an append-only `submit` event attributed to
 `migration:shelve`; original match payloads are not rewritten.
 
