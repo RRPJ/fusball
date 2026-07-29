@@ -19,11 +19,38 @@ if str(APP_DIR) not in sys.path:
 
 from odds import playerLevel  # noqa: E402
 from phone_api import WRITE_LOCK_NAME, create_app  # noqa: E402
+from services.auth import AuthActor  # noqa: E402
 from services.match_service import best_balanced_lineup, calculate_rating_update  # noqa: E402
+from services.phone_write_store import ShelveWriteStore  # noqa: E402
 
 
 class PhoneApiTests(unittest.TestCase):
     operator_token = "secret-token"
+
+    def test_health_returns_unavailable_when_store_is_not_ready(self) -> None:
+        class UnavailableStore:
+            uses_local_lock = False
+
+            @staticmethod
+            def readiness() -> dict[str, object]:
+                return {
+                    "ok": False,
+                    "store": "neon",
+                    "reason": "database_unavailable",
+                }
+
+        app = create_app(operator_token=self.operator_token, write_store=UnavailableStore())
+        response = app.test_client().get("/api/health")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(
+            response.get_json(),
+            {
+                "ok": False,
+                "store": "neon",
+                "reason": "database_unavailable",
+            },
+        )
 
     def test_leaderboard_api_returns_sorted_items(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -316,6 +343,27 @@ class PhoneApiTests(unittest.TestCase):
             )
             self.assertEqual(duplicate.status_code, 409)
 
+            idempotent_headers = {
+                "X-Operator-Token": self.operator_token,
+                "Idempotency-Key": "phone-request-1",
+            }
+            first_idempotent = client.post(
+                "/api/matches",
+                json={"team1": ["alice"], "team2": ["bob"], "score1": 5, "score2": 2},
+                headers=idempotent_headers,
+            )
+            second_idempotent = client.post(
+                "/api/matches",
+                json={"team1": ["alice"], "team2": ["bob"], "score1": 5, "score2": 2},
+                headers=idempotent_headers,
+            )
+            self.assertEqual(first_idempotent.status_code, 201)
+            self.assertEqual(second_idempotent.status_code, 201)
+            self.assertEqual(
+                first_idempotent.get_json()["match_id"],
+                second_idempotent.get_json()["match_id"],
+            )
+
     def test_players_api_returns_names(self) -> None:
         with TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
@@ -534,7 +582,7 @@ class PhoneApiTests(unittest.TestCase):
                 def add_player(self, player_name: str):
                     raise NotImplementedError
 
-                def submit_match(self, team1: list[str], team2: list[str], score1: int, score2: int, source: str):
+                def submit_match(self, team1: list[str], team2: list[str], score1: int, score2: int, source: str, **kwargs):
                     raise NotImplementedError
 
             app = create_app(db_dir=tmp_path, operator_token=self.operator_token, write_store=StubStore())
@@ -586,7 +634,7 @@ class PhoneApiTests(unittest.TestCase):
                 def add_player(self, player_name: str):
                     raise NotImplementedError
 
-                def submit_match(self, team1: list[str], team2: list[str], score1: int, score2: int, source: str):
+                def submit_match(self, team1: list[str], team2: list[str], score1: int, score2: int, source: str, **kwargs):
                     raise NotImplementedError
 
                 def query_h2h(self, p1: str, p2: str):
@@ -765,6 +813,201 @@ class PhoneApiTests(unittest.TestCase):
                 headers={"X-Write-Pin": "write-5678"},
             )
             self.assertEqual(write_with_writer_pin.status_code, 201)
+
+    def test_managed_auth_role_matrix_and_strict_legacy_rejection(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            db_path = str(tmp_path / "playerdb")
+            with shelve.open(db_path) as players:
+                players["alice"] = (trueskill.Rating(), trueskill.Rating())
+                players["bob"] = (trueskill.Rating(), trueskill.Rating())
+
+            class StubAuthenticator:
+                def authenticate(self, request):
+                    role = request.headers.get("X-Test-Role")
+                    if role not in {"reader", "operator", "admin"}:
+                        return None
+                    return AuthActor(f"user_{role}", role.title(), role)
+
+            app = create_app(
+                db_dir=tmp_path,
+                operator_token=self.operator_token,
+                auth_mode="clerk",
+                authenticator=StubAuthenticator(),
+            )
+            client = app.test_client()
+
+            self.assertEqual(client.get("/api/leaderboard").status_code, 401)
+            legacy_read = client.get(
+                "/api/leaderboard",
+                headers={"X-Read-Pin": "legacy-read"},
+            )
+            self.assertEqual(legacy_read.status_code, 401)
+            reader_read = client.get(
+                "/api/leaderboard",
+                headers={"X-Test-Role": "reader"},
+            )
+            self.assertEqual(reader_read.status_code, 200)
+            identity = client.get(
+                "/api/auth/me",
+                headers={"X-Test-Role": "reader"},
+            )
+            self.assertEqual(
+                identity.get_json(),
+                {
+                    "subject": "user_reader",
+                    "display_name": "Reader",
+                    "role": "reader",
+                },
+            )
+
+            reader_write = client.post(
+                "/api/matches",
+                json={"team1": ["alice"], "team2": ["bob"], "score1": 5, "score2": 3},
+                headers={"X-Test-Role": "reader"},
+            )
+            self.assertEqual(reader_write.status_code, 403)
+            self.assertEqual(
+                reader_write.get_json(),
+                {"error": "operator authorization required"},
+            )
+
+            operator_write = client.post(
+                "/api/matches",
+                json={"team1": ["alice"], "team2": ["bob"], "score1": 5, "score2": 3},
+                headers={"X-Test-Role": "operator"},
+            )
+            self.assertEqual(operator_write.status_code, 201)
+
+    def test_hybrid_auth_accepts_legacy_pin(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+
+            class AnonymousAuthenticator:
+                def authenticate(self, request):
+                    return None
+
+            app = create_app(
+                db_dir=tmp_path,
+                read_pin_hash=generate_password_hash("read-1234"),
+                write_pin_hash=generate_password_hash("write-5678"),
+                auth_mode="hybrid",
+                authenticator=AnonymousAuthenticator(),
+            )
+            client = app.test_client()
+            response = client.get(
+                "/api/leaderboard",
+                headers={"X-Read-Pin": "read-1234"},
+            )
+            self.assertEqual(response.status_code, 200)
+
+    def test_phone_page_wires_managed_session_and_hides_pins_in_strict_mode(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+
+            class AnonymousAuthenticator:
+                def authenticate(self, request):
+                    return None
+
+            app = create_app(
+                db_dir=tmp_path,
+                auth_mode="clerk",
+                authenticator=AnonymousAuthenticator(),
+                clerk_publishable_key="pk_test_example",
+                clerk_frontend_api_url="https://example.clerk.accounts.dev",
+            )
+            html = app.test_client().get("/phone").get_data(as_text=True)
+
+            self.assertIn("const AUTH_MODE = 'clerk';", html)
+            self.assertIn("@clerk/clerk-js@6/dist/clerk.browser.js", html)
+            self.assertIn("headers.set('Authorization', `Bearer ${managedToken}`);", html)
+            self.assertIn("AUTH_MODE === 'hybrid' ? '' : 'none'", html)
+            self.assertIn("id='adminMatchesSection'", html)
+            self.assertIn("/api/admin/matches?limit=30", html)
+            self.assertIn("expected_version: match.version", html)
+
+    def test_admin_can_list_void_and_restore_match(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            with shelve.open(str(tmp_path / "playerdb")) as players:
+                players["alice"] = (trueskill.Rating(), trueskill.Rating())
+                players["bob"] = (trueskill.Rating(), trueskill.Rating())
+            store = ShelveWriteStore(tmp_path)
+            submitted = store.submit_match(["alice"], ["bob"], 5, 3, source="test")
+
+            class StubAuthenticator:
+                def authenticate(self, request):
+                    role = request.headers.get("X-Test-Role")
+                    if role not in {"reader", "admin"}:
+                        return None
+                    return AuthActor(f"user_{role}", role.title(), role)
+
+            app = create_app(
+                db_dir=tmp_path,
+                auth_mode="clerk",
+                authenticator=StubAuthenticator(),
+                write_store=store,
+            )
+            client = app.test_client()
+
+            reader_list = client.get(
+                "/api/admin/matches",
+                headers={"X-Test-Role": "reader"},
+            )
+            self.assertEqual(reader_list.status_code, 403)
+
+            admin_headers = {"X-Test-Role": "admin"}
+            matches = client.get("/api/admin/matches", headers=admin_headers)
+            self.assertEqual(matches.status_code, 200)
+            item = matches.get_json()["items"][0]
+            self.assertEqual(item["status"], "active")
+            self.assertEqual(item["version"], 1)
+
+            void_headers = {
+                **admin_headers,
+                "Idempotency-Key": "void-api-1",
+            }
+            (tmp_path / WRITE_LOCK_NAME).write_text("another-writer", encoding="utf-8")
+            locked = client.post(
+                f"/api/admin/matches/{submitted['match_id']}/void",
+                headers=void_headers,
+                json={"reason": "Incorrect score", "expected_version": 1},
+            )
+            self.assertEqual(locked.status_code, 409)
+            (tmp_path / WRITE_LOCK_NAME).unlink()
+
+            voided = client.post(
+                f"/api/admin/matches/{submitted['match_id']}/void",
+                headers=void_headers,
+                json={"reason": "Incorrect score", "expected_version": 1},
+            )
+            self.assertEqual(voided.status_code, 200)
+            self.assertEqual(voided.get_json()["status"], "voided")
+
+            stale_restore = client.post(
+                f"/api/admin/matches/{submitted['match_id']}/restore",
+                headers={**admin_headers, "Idempotency-Key": "restore-stale"},
+                json={"reason": "Restore result", "expected_version": 1},
+            )
+            self.assertEqual(stale_restore.status_code, 409)
+
+            restored = client.post(
+                f"/api/admin/matches/{submitted['match_id']}/restore",
+                headers={**admin_headers, "Idempotency-Key": "restore-api-1"},
+                json={"reason": "Restore result", "expected_version": 2},
+            )
+            self.assertEqual(restored.status_code, 200)
+            self.assertEqual(restored.get_json()["status"], "active")
+
+            audited = client.get("/api/admin/matches", headers=admin_headers).get_json()
+            self.assertEqual(
+                [event["event_type"] for event in audited["items"][0]["events"]],
+                ["submit", "void", "restore"],
+            )
+            self.assertEqual(
+                audited["items"][0]["events"][-1]["actor_subject"],
+                "user_admin",
+            )
 
 
 class C3AnalyticsApiTests(unittest.TestCase):

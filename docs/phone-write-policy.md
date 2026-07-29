@@ -21,16 +21,25 @@ The implemented write scope is intentionally narrow:
 
 ## Auth Policy
 
+Hosted target policy:
+- Use Clerk-managed individual sessions.
+- Resolve application authorization from active Neon `app_users` rows.
+- Require `operator` or `admin` for existing writes.
+- Require `admin` for future match void/restore operations.
+- Persist the immutable provider subject on audited operations.
+
+See `docs/authentication.md` for roles and rollout configuration.
+
 Implemented policy:
 - No anonymous write access.
 - Require an explicit operator credential on every write request.
 - For the first rollout, a shared operator secret is acceptable.
 - VPN or local-network reachability is not sufficient by itself; transport access and write authorization are separate concerns.
 
-Current implementation:
-- Use a single shared operator token configured locally on the host.
-- Send it with the request in a dedicated auth header.
-- Reject missing or invalid credentials with `401 Unauthorized`.
+Transition implementation:
+- `legacy` retains shared PIN/token behavior for local development.
+- `hybrid` accepts managed identity with PIN/token rollback.
+- `clerk` accepts managed identity only and ignores legacy credentials.
 
 Out of scope for the first slice:
 - Per-user accounts.
@@ -43,6 +52,12 @@ Out of scope for the first slice:
 The current phone write endpoints allow only these operations:
 - Add one player name with default ratings.
 - Submit one finished singles or doubles result using existing player identities.
+
+Admin-only correction endpoints additionally allow:
+- Void an active match with a mandatory reason.
+- Restore a voided match with a mandatory reason.
+- Recalculate rankings and analytics from active history.
+- Preserve all original records and append actor-attributed audit events.
 
 The endpoints reject:
 - Partial or in-progress matches.

@@ -50,6 +50,10 @@ python scripts/backup_state.py
 
 Historical kiosk-only artifacts have been retired from the active workflow. Keep `backups/` as the archive for old state snapshots.
 
+Hosted Neon deployments use encrypted logical exports and isolated restore
+drills. See `docs/data-safety.md`; never store backup artifacts or encryption
+keys in the repository.
+
 ## Primary URLs
 
 - Phone UI: `http://<host>:8080/phone`
@@ -63,7 +67,9 @@ Historical kiosk-only artifacts have been retired from the active workflow. Keep
 - Data safety and migration notes: `docs/data-safety.md`
 - Phone API endpoint reference: `docs/phone-api.md`
 - Phone write auth/conflict policy: `docs/phone-write-policy.md`
+- Authentication and authorization: `docs/authentication.md`
 - Prioritized improvement backlog: `docs/backlog.md`
+- Reliability and maintainability roadmap: `docs/reliability-maintainability-plan.md`
 - Contribution workflow: `CONTRIBUTING.md`
 
 ## Direction

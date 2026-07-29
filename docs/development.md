@@ -107,6 +107,39 @@ python scripts/smoke_neon_parity.py --db-dir app --database-url <database-url> -
 ```
 
 Use `--mode counts` when you only want fast count-level verification.
+Strict mode also compares exact rating components, match payloads, lifecycle
+state, and Neon replay/audit integrity.
+
+List ordered Neon schema migrations without applying them:
+
+```bash
+python scripts/migrate_neon_schema.py
+```
+
+Apply pending migrations:
+
+```bash
+python scripts/migrate_neon_schema.py --database-url <database-url> --apply
+```
+
+Applied migration versions and checksums are stored in `schema_migrations`.
+Never edit an applied migration; add the next numbered SQL file instead.
+
+Hosted integrity check:
+
+```bash
+python scripts/check_neon_integrity.py --database-url <database-url>
+```
+
+Encrypted export and isolated restore drill:
+
+```bash
+python scripts/export_neon_backup.py --database-url <source-url> --output <outside-repo-path>.fusball-backup
+python scripts/restore_neon_backup.py <backup-path> --database-url <isolated-url> --target-environment restore-drill --confirm-isolated-target
+```
+
+Both commands require `FUSBALL_BACKUP_KEY`; restore defaults to
+`RESTORE_DATABASE_URL`, not the live `DATABASE_URL`.
 
 Recommended environment model:
 - Vercel Production -> Neon Production
@@ -151,4 +184,3 @@ Function documentation tip:
 - If the phone API cannot write, verify `READ_PIN_HASH` / `WRITE_PIN_HASH` or the legacy token fallback configuration.
 - If the service starts but the phone page is empty, verify the selected data directory contains `playerdb*` and related state.
 - If shelve files fail to open across OS boundaries, restore from backup and re-seed/migrate data before use.
-

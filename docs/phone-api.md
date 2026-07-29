@@ -31,6 +31,15 @@ Notes:
 
 ## Authentication
 
+Hosted deployments support Clerk-managed individual identity with
+application-owned roles in Neon. See `docs/authentication.md`.
+
+- `Authorization: Bearer <session-token>` authenticates a Clerk session.
+- `GET /api/auth/me` returns the active user's subject, display name, and role.
+- `reader` can access reads, `operator` can also perform existing writes, and
+  `admin` is reserved for destructive administration such as match correction.
+- `FUSBALL_AUTH_MODE` controls rollout: `legacy`, `hybrid`, or `clerk`.
+
 The auth split introduces two headers for the API path:
 
 - Read header: `X-Read-Pin`
@@ -145,6 +154,22 @@ Ordering note:
 - Internal gameplay math uses offense-first team arrays for doubles: `[offense, defense]`.
 - Phone UI presentation should display doubles as `Defense + Offense`.
 - Historical match records written by the phone runtime may therefore be stored offense-first even when shown defense-first in the UI.
+
+### Admin Match Corrections
+
+- `GET /api/admin/matches?limit=30`
+  - Requires an active `admin` managed identity.
+  - Returns active and voided matches with lifecycle version and audit events.
+- `POST /api/admin/matches/<match-id>/void`
+- `POST /api/admin/matches/<match-id>/restore`
+  - Require an active `admin` managed identity.
+  - Require `Idempotency-Key`.
+  - Body: `{ "reason": "Incorrect score", "expected_version": 1 }`
+  - Return `409 Conflict` for stale versions, repeated state changes, request-key
+    reuse, writer contention, or replay-parity failure.
+
+Corrections never delete history. They append an audit event and rebuild
+rankings from active history.
 
 ## Common Status Codes
 

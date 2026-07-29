@@ -1,6 +1,8 @@
 # Improvement Backlog
 
 Use this file to prioritize changes in small, safe slices.
+See `docs/reliability-maintainability-plan.md` for the detailed modernization,
+authentication, match-correction, and hosted data-safety roadmap.
 
 ## Quarterly Leaderboard
 

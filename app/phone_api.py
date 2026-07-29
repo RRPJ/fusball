@@ -10,6 +10,7 @@ player database and exposes:
 from __future__ import annotations
 
 import argparse
+import html as html_module
 import os
 import random
 import re
@@ -17,14 +18,16 @@ import time
 from pathlib import Path
 from string import capwords
 
-from flask import Flask, jsonify, redirect, request
+from flask import Flask, g, jsonify, redirect, request
 from werkzeug.security import check_password_hash
 
 from odds import playerLevel
 import trueskill as _trueskill
+from services.auth import AuthenticationError, RequestAuthenticator, build_clerk_authenticator
 from services.match_service import best_balanced_lineup, odds_ratio_for_teams
 from services.phone_write_store import BaseWriteStore, WriteStoreConfig, create_write_store
 from services.player_store import rank_labels_by_name, ranked_players
+from services.store_contracts import LifecycleConflict, ReplayParityError
 
 
 ROOT_DIR = Path(__file__).resolve().parent
@@ -32,6 +35,7 @@ WRITE_LOCK_NAME = "phone_api_write.lock"
 OPERATOR_TOKEN_HEADER = "X-Operator-Token"
 READ_PIN_HEADER = "X-Read-Pin"
 WRITE_PIN_HEADER = "X-Write-Pin"
+AUTH_MODES = {"legacy", "hybrid", "clerk"}
 MATCH_DUPLICATE_WINDOW_SECONDS = 60.0
 _RECENT_MATCH_SIGNATURES: dict[str, float] = {}
 
@@ -222,7 +226,13 @@ def _verify_secret(secret_hash: str | None, provided_secret: str | None) -> bool
     return False
 
 
-def _render_phone_html(rows: list[dict[str, object]]) -> str:
+def _render_phone_html(
+  rows: list[dict[str, object]],
+  *,
+  auth_mode: str = "legacy",
+  clerk_publishable_key: str | None = None,
+  clerk_frontend_api_url: str | None = None,
+) -> str:
     table_rows = "\n".join(
         (
             "<tr>"
@@ -236,6 +246,18 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
 
     if not table_rows:
         table_rows = "<tr><td colspan='3'>No players found.</td></tr>"
+
+    managed_auth = auth_mode in {"hybrid", "clerk"}
+    clerk_scripts = ""
+    if managed_auth and clerk_publishable_key and clerk_frontend_api_url:
+      publishable_key = html_module.escape(clerk_publishable_key, quote=True)
+      frontend_api_url = html_module.escape(clerk_frontend_api_url.rstrip("/"), quote=True)
+      clerk_scripts = f"""
+  <script defer crossorigin="anonymous"
+    src="{frontend_api_url}/npm/@clerk/ui@1/dist/ui.browser.js"></script>
+  <script defer crossorigin="anonymous"
+    data-clerk-publishable-key="{publishable_key}"
+    src="{frontend_api_url}/npm/@clerk/clerk-js@6/dist/clerk.browser.js"></script>"""
 
     html = """<!doctype html>
 <html lang='en'>
@@ -600,13 +622,19 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     <section id='step4' class='section'>
       <h2>Step 4: Confirm And Submit</h2>
       <div class='review-card' id='reviewText'>Complete setup to review match.</div>
-      <div style='margin-top:10px;'>
+      <div id='managedAuthPanel' style='margin-top:10px; display:none;'>
+        <div id='clerkSignIn'></div>
+        <div id='clerkUserButton'></div>
+        <div id='managedAuthStatus' class='muted'></div>
+      </div>
+      <div id='legacyAuthPanel' style='margin-top:10px;'>
         <input id='readPin' class='token' type='password' placeholder='Read PIN (optional if using writer PIN only)' />
+        <div style='margin-top:8px;'>
+          <input id='writePin' class='token' type='password' placeholder='Writer PIN (required for writes)' />
+        </div>
+        <div class='muted' style='margin-top:8px;'>PINs are remembered for this tab session.</div>
       </div>
-      <div style='margin-top:8px;'>
-        <input id='writePin' class='token' type='password' placeholder='Writer PIN (required for writes)' />
-      </div>
-      <div class='muted' style='margin-top:8px;'>PINs are remembered for this tab session. Submit is enabled only when lineup and score are valid.</div>
+      <div class='muted' style='margin-top:8px;'>Submit is enabled only when lineup and score are valid.</div>
     </section>
 
     <section id='leaderboardSection' class='section active'>
@@ -642,6 +670,13 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         <div id='addPlayerStatus' class='status'></div>
       </div>
     </section>
+
+    <section id='adminMatchesSection' class='section' style='display:none;'>
+      <h2>Match Corrections</h2>
+      <div class='muted'>Admin only. Voiding or restoring a match recalculates rankings.</div>
+      <div id='adminMatchesStatus' class='status'></div>
+      <div id='adminMatchesList' style='display:grid; gap:8px; margin-top:10px;'></div>
+    </section>
   </main>
 
   <div class='sticky'>
@@ -655,7 +690,9 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     </div>
   </div>
 
+  __CLERK_SCRIPTS__
   <script>
+    const AUTH_MODE = '__AUTH_MODE__';
     const slots = ['red_offense', 'red_defense', 'blue_offense', 'blue_defense'];
     const stepButtons = [null, document.getElementById('stepBtn1'), document.getElementById('stepBtn2'), document.getElementById('stepBtn3'), document.getElementById('stepBtn4')];
     const stepSections = [null, document.getElementById('step1'), document.getElementById('step2'), document.getElementById('step3'), document.getElementById('step4')];
@@ -701,6 +738,7 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       offlineReason: '',
       players: [],
       activePlayers: [],
+      adminMatches: [],
       latestOdds: null,
       currentQuipKey: null,
       currentQuipText: null,
@@ -1282,6 +1320,12 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       }
 
       const headers = new Headers(options.headers || {});
+      const managedToken = window.Clerk && Clerk.session
+        ? await Clerk.session.getToken()
+        : '';
+      if (managedToken) {
+        headers.set('Authorization', `Bearer ${managedToken}`);
+      }
       const readPin = getStoredReadPin();
       const writePin = getStoredWritePin();
       const suppliedReadPin = !!readPin;
@@ -1313,14 +1357,14 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
           cache: method === 'GET' ? 'no-store' : options.cache,
         });
         const authRetry = !!options.__authRetry;
-        if (!authRetry && response.status === 401 && method === 'GET' && !options.allowOffline) {
+        if (AUTH_MODE !== 'clerk' && !managedToken && !authRetry && response.status === 401 && method === 'GET' && !options.allowOffline) {
           const retried = await retryReadAuth(url, options, suppliedReadPin, suppliedWritePin);
           if (retried) {
             trackOutcome = 'success';
             return retried;
           }
         }
-        if (!authRetry && (response.status === 401 || response.status === 403) && method !== 'GET') {
+        if (AUTH_MODE !== 'clerk' && !managedToken && !authRetry && (response.status === 401 || response.status === 403) && method !== 'GET') {
           const retried = retryWriteAuth(url, options, suppliedWritePin);
           if (retried) {
             trackOutcome = 'success';
@@ -2452,7 +2496,9 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
         return;
       }
 
-      const writePin = ensureWritePin();
+      const writePin = AUTH_MODE === 'clerk' || (window.Clerk && Clerk.session)
+        ? 'managed-session'
+        : ensureWritePin();
       if (!writePin) {
         setStatus('Enter writer PIN first.', 'bad');
         return;
@@ -2474,12 +2520,16 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       setStatus('Submitting result...');
 
       try {
+        const idempotencyKey = window.crypto && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
         const response = await apiFetch('/api/matches', {
           method: 'POST',
           trackKey: 'submit',
           trackLabel: 'match submit',
           headers: {
             'Content-Type': 'application/json',
+            'Idempotency-Key': idempotencyKey,
           },
           body: JSON.stringify(payload),
         });
@@ -2501,7 +2551,9 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     }
 
     async function addPlayer() {
-      const writePin = ensureWritePin();
+      const writePin = AUTH_MODE === 'clerk' || (window.Clerk && Clerk.session)
+        ? 'managed-session'
+        : ensureWritePin();
       if (!writePin) {
         setAddPlayerStatus('Writer PIN is required to add players.', 'bad');
         return;
@@ -2536,6 +2588,99 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
       await loadPlayers();
       await refreshPresence();
       await refreshLeaderboard();
+    }
+
+    function renderAdminMatches() {
+      const container = document.getElementById('adminMatchesList');
+      container.replaceChildren();
+      for (const match of state.adminMatches) {
+        const card = document.createElement('div');
+        card.className = 'review-card';
+        const title = document.createElement('strong');
+        title.textContent = `${match.team1.join(' + ')} ${match.score1}-${match.score2} ${match.team2.join(' + ')}`;
+        const details = document.createElement('div');
+        details.className = 'muted';
+        details.textContent = `${match.status} · version ${match.version} · ${match.timestamp} · by ${match.submitted_by || 'unknown'}`;
+        const latestEvent = (match.events || []).slice(-1)[0];
+        const audit = document.createElement('div');
+        audit.className = 'muted';
+        audit.textContent = latestEvent && latestEvent.reason
+          ? `Latest reason: ${latestEvent.reason}`
+          : 'No correction reason recorded.';
+        const button = document.createElement('button');
+        button.className = 'btn small';
+        button.type = 'button';
+        button.textContent = match.status === 'active' ? 'Void match' : 'Restore match';
+        button.addEventListener('click', () => {
+          changeAdminMatchStatus(match).catch((error) => {
+            setAdminMatchesStatus(error.message, 'bad');
+          });
+        });
+        card.append(title, details, audit, button);
+        container.appendChild(card);
+      }
+    }
+
+    function setAdminMatchesStatus(message, kind = '') {
+      const element = document.getElementById('adminMatchesStatus');
+      element.textContent = message;
+      element.className = `status ${kind}`.trim();
+    }
+
+    async function loadAdminMatches() {
+      const response = await apiFetch('/api/admin/matches?limit=30', {
+        trackKey: 'admin-matches',
+        trackLabel: 'admin matches',
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Could not load match corrections.');
+      }
+      state.adminMatches = payload.items || [];
+      renderAdminMatches();
+      setAdminMatchesStatus(`${state.adminMatches.length} matches loaded.`, 'ok');
+    }
+
+    async function changeAdminMatchStatus(match) {
+      const action = match.status === 'active' ? 'void' : 'restore';
+      const reason = window.prompt(`Reason to ${action} this match:`, '');
+      if (!reason || reason.trim().length < 3) {
+        setAdminMatchesStatus('A reason of at least 3 characters is required.', 'bad');
+        return;
+      }
+      if (!window.confirm(`${action === 'void' ? 'Void' : 'Restore'} this match and recalculate rankings?`)) {
+        return;
+      }
+      const requestId = window.crypto && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const response = await apiFetch(`/api/admin/matches/${encodeURIComponent(match.id)}/${action}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': requestId,
+        },
+        body: JSON.stringify({
+          reason: reason.trim(),
+          expected_version: match.version,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || `Could not ${action} match.`);
+      }
+      setAdminMatchesStatus(`Match ${action === 'void' ? 'voided' : 'restored'}.`, 'ok');
+      state.playerStats = null;
+      state.playerStatsScope = null;
+      state.expandedPlayer = null;
+      await Promise.all([
+        loadAdminMatches(),
+        refreshLeaderboard(),
+        fetchLeaderboardStats(),
+        loadPlayers(),
+      ]);
+      refreshH2H();
+      refreshOdds();
     }
 
     document.getElementById('modeSingles').addEventListener('click', () => setMode('singles'));
@@ -2576,21 +2721,6 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     stepButtons[3].addEventListener('click', () => setStep(3));
     stepButtons[4].addEventListener('click', () => setStep(4));
 
-    setMode('singles');
-    setActiveSlot('red_offense');
-    seedInitialFreshness();
-    startFreshnessTicker();
-    renderScoreButtons();
-    renderSlots();
-    updateSummary();
-    updateReview();
-    updateScoreHint();
-    setLeaderboardFilter('all');
-    loadPlayers()
-      .then(() => refreshPresence())
-      .catch((e) => setStatus(e.message, 'bad'));
-    startHealthMonitor();
-
     const readPinInput = document.getElementById('readPin');
     const writePinInput = document.getElementById('writePin');
     const savedReadPin = getStoredReadPin();
@@ -2607,10 +2737,72 @@ def _render_phone_html(rows: list[dict[str, object]]) -> str:
     writePinInput.addEventListener('input', () => {
       persistWritePin(writePinInput.value);
     });
+
+    async function initializeManagedAuth() {
+      if (AUTH_MODE === 'legacy') {
+        return;
+      }
+      document.getElementById('managedAuthPanel').style.display = '';
+      document.getElementById('legacyAuthPanel').style.display =
+        AUTH_MODE === 'hybrid' ? '' : 'none';
+      if (!window.Clerk) {
+        throw new Error('Managed sign-in failed to load.');
+      }
+      await Clerk.load({ ui: { ClerkUI: window.__internal_ClerkUICtor } });
+      const status = document.getElementById('managedAuthStatus');
+      if (Clerk.isSignedIn) {
+        Clerk.mountUserButton(document.getElementById('clerkUserButton'));
+        status.textContent = 'Signed in with managed identity.';
+        const identityResponse = await apiFetch('/api/auth/me', {
+          allowOffline: true,
+        });
+        if (identityResponse.ok) {
+          const identity = await identityResponse.json();
+          if (identity.role === 'admin') {
+            document.getElementById('adminMatchesSection').style.display = 'block';
+            await loadAdminMatches();
+          }
+        }
+      } else {
+        Clerk.mountSignIn(document.getElementById('clerkSignIn'));
+        status.textContent = AUTH_MODE === 'hybrid'
+          ? 'Sign in, or use transition PINs below.'
+          : 'Sign in to use Fusball.';
+      }
+    }
+
+    window.addEventListener('load', async () => {
+      try {
+        await initializeManagedAuth();
+      } catch (error) {
+        setStatus(error.message, 'bad');
+        if (AUTH_MODE === 'clerk') {
+          return;
+        }
+      }
+      setMode('singles');
+      setActiveSlot('red_offense');
+      seedInitialFreshness();
+      startFreshnessTicker();
+      renderScoreButtons();
+      renderSlots();
+      updateSummary();
+      updateReview();
+      updateScoreHint();
+      setLeaderboardFilter('all');
+      loadPlayers()
+        .then(() => refreshPresence())
+        .catch((e) => setStatus(e.message, 'bad'));
+      startHealthMonitor();
+    });
   </script>
 </body>
 </html>"""
-    return html.replace("__TABLE_ROWS__", table_rows)
+    return (
+      html.replace("__TABLE_ROWS__", table_rows)
+      .replace("__AUTH_MODE__", auth_mode)
+      .replace("__CLERK_SCRIPTS__", clerk_scripts)
+    )
 
 
 def create_app(
@@ -2620,6 +2812,12 @@ def create_app(
   write_pin_hash: str | None = None,
   database_url: str | None = None,
   write_store: BaseWriteStore | None = None,
+  auth_mode: str = "legacy",
+  authenticator: RequestAuthenticator | None = None,
+  clerk_secret_key: str | None = None,
+  clerk_authorized_parties: str | None = None,
+  clerk_publishable_key: str | None = None,
+  clerk_frontend_api_url: str | None = None,
 ) -> Flask:
   """Create the phone API app.
 
@@ -2630,15 +2828,37 @@ def create_app(
     write_pin_hash: Optional password hash for write access.
     database_url: Optional Postgres URL enabling Neon write-store mode.
     write_store: Optional explicit write-store override (primarily for tests).
+    auth_mode: Authentication rollout mode: legacy, hybrid, or clerk.
+    authenticator: Optional managed-identity authenticator override for tests.
+    clerk_secret_key: Clerk backend secret used to verify sessions.
+    clerk_authorized_parties: Comma-separated allowed frontend origins.
+    clerk_publishable_key: Clerk browser publishable key.
+    clerk_frontend_api_url: Clerk Frontend API origin for pinned browser SDKs.
   """
+  if auth_mode not in AUTH_MODES:
+    raise ValueError(f"unsupported auth mode: {auth_mode}")
+
   app = Flask(__name__)
   data_dir = db_dir or ROOT_DIR
   app.config["OPERATOR_TOKEN"] = operator_token
   app.config["READ_PIN_HASH"] = read_pin_hash
   app.config["WRITE_PIN_HASH"] = write_pin_hash
   app.config["DATABASE_URL"] = database_url or os.environ.get("DATABASE_URL")
+  app.config["AUTH_MODE"] = auth_mode
   _RECENT_MATCH_SIGNATURES.clear()
   active_players: set[str] = set()
+
+  active_authenticator = authenticator
+  if auth_mode in {"hybrid", "clerk"} and active_authenticator is None:
+    if not clerk_publishable_key or not clerk_frontend_api_url:
+      raise ValueError(
+        "managed auth requires CLERK_PUBLISHABLE_KEY and CLERK_FRONTEND_API_URL"
+      )
+    active_authenticator = build_clerk_authenticator(
+      secret_key=clerk_secret_key,
+      authorized_parties=clerk_authorized_parties,
+      database_url=app.config["DATABASE_URL"],
+    )
 
   write_store_error: str | None = None
   active_write_store = write_store
@@ -2661,6 +2881,8 @@ def create_app(
     return None, (jsonify({"error": "write store unavailable"}), 503)
 
   def _read_auth_enabled() -> bool:
+    if app.config["AUTH_MODE"] == "clerk":
+      return True
     return bool(app.config.get("READ_PIN_HASH") or app.config.get("WRITE_PIN_HASH"))
 
   def _write_pin_enabled() -> bool:
@@ -2669,7 +2891,23 @@ def create_app(
   def _request_supplied_read_credentials() -> bool:
     return bool(request.headers.get(READ_PIN_HEADER) or request.headers.get(WRITE_PIN_HEADER))
 
+  def _managed_actor():
+    if active_authenticator is None:
+      return None
+    if hasattr(g, "current_actor"):
+      return g.current_actor
+    try:
+      g.current_actor = active_authenticator.authenticate(request)
+    except AuthenticationError:
+      g.current_actor = None
+    return g.current_actor
+
   def _has_read_access() -> bool:
+    actor = _managed_actor()
+    if actor is not None:
+      return actor.can("read")
+    if app.config["AUTH_MODE"] == "clerk":
+      return False
     if not _read_auth_enabled():
       return True
 
@@ -2680,6 +2918,14 @@ def create_app(
     return read_ok or write_ok
 
   def _check_write_access() -> tuple[bool, int, str]:
+    actor = _managed_actor()
+    if actor is not None:
+      if actor.can("write"):
+        return True, 200, ""
+      return False, 403, "operator authorization required"
+    if app.config["AUTH_MODE"] == "clerk":
+      return False, 401, "authentication required"
+
     if _write_pin_enabled():
       write_pin = request.headers.get(WRITE_PIN_HEADER)
       if _verify_secret(app.config.get("WRITE_PIN_HASH"), write_pin):
@@ -2702,7 +2948,10 @@ def create_app(
   def require_read_access() -> object | None:
     if _has_read_access():
       return None
-    message = "incorrect reader or writer PIN" if _request_supplied_read_credentials() else "authentication required"
+    if app.config["AUTH_MODE"] == "clerk":
+      message = "authentication required"
+    else:
+      message = "incorrect reader or writer PIN" if _request_supplied_read_credentials() else "authentication required"
     return jsonify({"error": message}), 401
 
   def require_write_access() -> object | None:
@@ -2711,9 +2960,43 @@ def create_app(
       return None
     return jsonify({"error": message}), status
 
+  def require_admin_access() -> object | None:
+    actor = _managed_actor()
+    if actor is None:
+      return jsonify({"error": "authentication required"}), 401
+    if not actor.can("admin"):
+      return jsonify({"error": "admin authorization required"}), 403
+    return None
+
   @app.get("/api/health")
   def health() -> object:
-    return jsonify({"ok": True})
+    store, error_response = _resolve_write_store()
+    if error_response is not None or store is None:
+      return jsonify({"ok": False, "reason": "store_unavailable"}), 503
+
+    readiness = getattr(store, "readiness", None)
+    if readiness is None:
+      return jsonify({"ok": True, "store": "injected"})
+    try:
+      result = readiness()
+    except Exception:
+      return jsonify({"ok": False, "reason": "store_unavailable"}), 503
+    if result.get("ok"):
+      return jsonify({"ok": True})
+    return jsonify(result), 503
+
+  @app.get("/api/auth/me")
+  def auth_me() -> object:
+    actor = _managed_actor()
+    if actor is None:
+      return jsonify({"error": "authentication required"}), 401
+    return jsonify(
+      {
+        "subject": actor.subject,
+        "display_name": actor.display_name,
+        "role": actor.role,
+      }
+    )
 
   @app.get("/api/leaderboard")
   def leaderboard() -> object:
@@ -3055,8 +3338,11 @@ def create_app(
       return jsonify({"error": str(exc)}), 400
 
     signature = _match_signature(team1, team2, score1, score2)
+    idempotency_key = request.headers.get("Idempotency-Key", "").strip() or None
+    if idempotency_key and len(idempotency_key) > 128:
+      return jsonify({"error": "idempotency key is too long"}), 400
     now_monotonic = time.monotonic()
-    if _is_recent_duplicate(signature, now_monotonic):
+    if not idempotency_key and _is_recent_duplicate(signature, now_monotonic):
       return jsonify({"error": "duplicate match submission detected"}), 409
 
     uses_lock = store.uses_local_lock
@@ -3064,9 +3350,19 @@ def create_app(
       return jsonify({"error": "another writer is active"}), 409
 
     try:
-      if _is_recent_duplicate(signature, time.monotonic()):
+      if not idempotency_key and _is_recent_duplicate(signature, time.monotonic()):
         return jsonify({"error": "duplicate match submission detected"}), 409
-      result = store.submit_match(team1, team2, score1, score2, source="phone_api")
+      actor = _managed_actor()
+      actor_subject = actor.subject if actor is not None else "legacy:shared-credential"
+      result = store.submit_match(
+        team1,
+        team2,
+        score1,
+        score2,
+        source="phone_api",
+        actor_subject=actor_subject,
+        idempotency_key=idempotency_key,
+      )
       _remember_match_signature(signature, time.monotonic())
     except ValueError as exc:
       return jsonify({"error": str(exc)}), 400
@@ -3078,14 +3374,101 @@ def create_app(
 
     return jsonify(result), 201
 
+  @app.get("/api/admin/matches")
+  def admin_matches() -> object:
+    denied = require_admin_access()
+    if denied is not None:
+      return denied
+
+    store, error_response = _resolve_write_store()
+    if error_response is not None:
+      return error_response
+    assert store is not None
+
+    limit = request.args.get("limit", default=30, type=int)
+    limit = max(1, min(limit, 100))
+    items = store.list_match_lifecycle(limit=limit, include_voided=True)
+    return jsonify({"count": len(items), "items": items})
+
+  def _change_match_lifecycle(match_id: str, target_status: str) -> object:
+    denied = require_admin_access()
+    if denied is not None:
+      return denied
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+      return jsonify({"error": "request body must be a JSON object"}), 400
+    reason = payload.get("reason")
+    if not isinstance(reason, str) or len(reason.strip()) < 3:
+      return jsonify({"error": "reason must contain at least 3 characters"}), 400
+    reason = reason.strip()
+    if len(reason) > 500:
+      return jsonify({"error": "reason must not exceed 500 characters"}), 400
+    expected_version = payload.get("expected_version")
+    if not isinstance(expected_version, int) or isinstance(expected_version, bool):
+      return jsonify({"error": "expected_version must be an integer"}), 400
+    request_id = request.headers.get("Idempotency-Key", "").strip()
+    if not request_id:
+      return jsonify({"error": "Idempotency-Key header is required"}), 400
+    if len(request_id) > 128:
+      return jsonify({"error": "idempotency key is too long"}), 400
+
+    store, error_response = _resolve_write_store()
+    if error_response is not None:
+      return error_response
+    assert store is not None
+    actor = _managed_actor()
+    assert actor is not None
+
+    uses_lock = store.uses_local_lock
+    if uses_lock and not _acquire_write_lock(data_dir, owner="admin-correction"):
+      return jsonify({"error": "another writer is active"}), 409
+    try:
+      result = store.change_match_status(
+        match_id=match_id,
+        target_status=target_status,
+        actor_subject=actor.subject,
+        reason=reason,
+        request_id=request_id,
+        expected_version=expected_version,
+      )
+    except KeyError:
+      return jsonify({"error": "match not found"}), 404
+    except LifecycleConflict as exc:
+      return jsonify({"error": str(exc)}), 409
+    except ReplayParityError as exc:
+      return jsonify({"error": str(exc)}), 409
+    finally:
+      if uses_lock:
+        _release_write_lock(data_dir)
+    return jsonify(result)
+
+  @app.post("/api/admin/matches/<match_id>/void")
+  def void_match(match_id: str) -> object:
+    return _change_match_lifecycle(match_id, "voided")
+
+  @app.post("/api/admin/matches/<match_id>/restore")
+  def restore_match(match_id: str) -> object:
+    return _change_match_lifecycle(match_id, "active")
+
   @app.get("/phone")
   def phone_view() -> str:
     store, error_response = _resolve_write_store()
     if error_response is not None:
-      return _render_phone_html([])
+      return _render_phone_html(
+        [],
+        auth_mode=auth_mode,
+        clerk_publishable_key=clerk_publishable_key,
+        clerk_frontend_api_url=clerk_frontend_api_url,
+      )
     assert store is not None
     rows = _load_leaderboard(store, limit=50)
-    return _render_phone_html(rows)
+    return _render_phone_html(
+      rows,
+      auth_mode=auth_mode,
+      clerk_publishable_key=clerk_publishable_key,
+      clerk_frontend_api_url=clerk_frontend_api_url,
+    )
 
   @app.get("/")
   def root() -> object:
@@ -3110,10 +3493,14 @@ def main() -> None:
     read_pin_hash=os.environ.get("READ_PIN_HASH"),
     write_pin_hash=os.environ.get("WRITE_PIN_HASH"),
     database_url=os.environ.get("DATABASE_URL"),
+    auth_mode=os.environ.get("FUSBALL_AUTH_MODE", "legacy"),
+    clerk_secret_key=os.environ.get("CLERK_SECRET_KEY"),
+    clerk_authorized_parties=os.environ.get("CLERK_AUTHORIZED_PARTIES"),
+    clerk_publishable_key=os.environ.get("CLERK_PUBLISHABLE_KEY"),
+    clerk_frontend_api_url=os.environ.get("CLERK_FRONTEND_API_URL"),
   )
   app.run(host="0.0.0.0", port=8080, debug=False)
 
 
 if __name__ == "__main__":
     main()
-

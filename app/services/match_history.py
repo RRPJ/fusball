@@ -2,23 +2,21 @@
 
 from __future__ import annotations
 
+import shelve
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-import shelve
 from typing import Mapping, Sequence
 from uuid import uuid4
 
 import trueskill
 
+from services.domain_models import MatchRecord, PlayerName, PlayerRating, RatingPayload
 from services.match_service import calculate_rating_update
-
-PlayerName = str
-PlayerRating = tuple
 
 HISTORY_DB_NAME = "match_history"
 
 
-def _rating_pair_dict(rating: PlayerRating) -> dict[str, float]:
+def _rating_pair_dict(rating: PlayerRating) -> RatingPayload:
     return {
         "offense_mu": float(rating[0].mu),
         "offense_sigma": float(rating[0].sigma),
@@ -42,6 +40,8 @@ def append_match_history(
     before_ratings: Mapping[PlayerName, PlayerRating],
     after_ratings: Mapping[PlayerName, PlayerRating],
     source: str,
+    actor_subject: str = "legacy:shared-credential",
+    idempotency_key: str | None = None,
 ) -> str:
     """Append one structured match history record and return its key."""
     path = Path(db_dir)
@@ -59,7 +59,8 @@ def append_match_history(
             }
         )
 
-    record = {
+    record: MatchRecord = {
+        "id": key,
         "timestamp": timestamp_iso,
         "source": source,
         "team1": list(team1),
@@ -68,7 +69,12 @@ def append_match_history(
         "score1": int(score1),
         "score2": int(score2),
         "players": players_payload,
+        "status": "active",
+        "version": 1,
+        "submitted_by": actor_subject,
     }
+    if idempotency_key:
+        record["idempotency_key"] = idempotency_key
 
     with shelve.open(str(path / HISTORY_DB_NAME)) as history:
         history[key] = record
@@ -76,18 +82,29 @@ def append_match_history(
     return key
 
 
-def _all_records(db_dir: str | Path) -> list[dict]:
+def _all_records(
+    db_dir: str | Path,
+    *,
+    include_voided: bool = False,
+) -> list[MatchRecord]:
     """Return all history records sorted by ISO timestamp key (ascending)."""
     path = Path(db_dir)
     if not any(path.glob(f"{HISTORY_DB_NAME}*")):
         return []
     with shelve.open(str(path / HISTORY_DB_NAME)) as history:
-        return [history[k] for k in sorted(history.keys())]
+        records = [history[k] for k in sorted(history.keys())]
+    if include_voided:
+        return records
+    return [record for record in records if record.get("status", "active") == "active"]
 
 
 def _level_from_rating_dict(rating: dict) -> float:
-    offense_level = float(rating.get("offense_mu", 25.0)) - 3.0 * float(rating.get("offense_sigma", 8.333))
-    defense_level = float(rating.get("defense_mu", 25.0)) - 3.0 * float(rating.get("defense_sigma", 8.333))
+    offense_level = float(rating.get("offense_mu", 25.0)) - 3.0 * float(
+        rating.get("offense_sigma", 8.333)
+    )
+    defense_level = float(rating.get("defense_mu", 25.0)) - 3.0 * float(
+        rating.get("defense_sigma", 8.333)
+    )
     return (offense_level + defense_level) / 2
 
 
@@ -98,7 +115,9 @@ def _adjusted_share(wins: int, losses: int, draws: int = 0) -> float:
     return (wins + (0.5 * draws)) / total
 
 
-def _format_player_summary(name: str, *, wins: int, losses: int, draws: int = 0) -> dict[str, object]:
+def _format_player_summary(
+    name: str, *, wins: int, losses: int, draws: int = 0
+) -> dict[str, object]:
     matches = wins + losses + draws
     return {
         "player": name,
@@ -150,10 +169,18 @@ def _recent_matches_from_records(records: Sequence[dict], player: str, limit: in
                 "team": _display_team_order(own_team),
                 "opponents": _display_team_order(opp_team),
                 "score_for": int(record.get("score1", 0) if on_team1 else record.get("score2", 0)),
-                "score_against": int(record.get("score2", 0) if on_team1 else record.get("score1", 0)),
+                "score_against": int(
+                    record.get("score2", 0) if on_team1 else record.get("score1", 0)
+                ),
                 "delta": {
-                    "offense": round(float(after.get("offense_mu", 0.0)) - float(before.get("offense_mu", 0.0)), 2),
-                    "defense": round(float(after.get("defense_mu", 0.0)) - float(before.get("defense_mu", 0.0)), 2),
+                    "offense": round(
+                        float(after.get("offense_mu", 0.0)) - float(before.get("offense_mu", 0.0)),
+                        2,
+                    ),
+                    "defense": round(
+                        float(after.get("defense_mu", 0.0)) - float(before.get("defense_mu", 0.0)),
+                        2,
+                    ),
                 },
             }
         )
@@ -163,7 +190,9 @@ def _recent_matches_from_records(records: Sequence[dict], player: str, limit: in
     return recent_matches
 
 
-def _partner_and_opponent_summaries(records: Sequence[dict], player: str) -> tuple[dict[str, object] | None, dict[str, object] | None]:
+def _partner_and_opponent_summaries(
+    records: Sequence[dict], player: str
+) -> tuple[dict[str, object] | None, dict[str, object] | None]:
     partner_results: dict[str, dict[str, int]] = {}
     opponent_results: dict[str, dict[str, int]] = {}
 
@@ -249,8 +278,12 @@ def query_player_profile_from_records(
     best_partner, toughest_opponent = _partner_and_opponent_summaries(scoped_records, player)
 
     trend = {
-        "offense": round(sum(float(match["delta"].get("offense", 0.0)) for match in latest_matches), 2),
-        "defense": round(sum(float(match["delta"].get("defense", 0.0)) for match in latest_matches), 2),
+        "offense": round(
+            sum(float(match["delta"].get("offense", 0.0)) for match in latest_matches), 2
+        ),
+        "defense": round(
+            sum(float(match["delta"].get("defense", 0.0)) for match in latest_matches), 2
+        ),
     }
 
     return {
@@ -270,7 +303,9 @@ def query_player_profile_from_records(
     }
 
 
-def query_player_stats_from_records(all_records: Sequence[dict], scoped_records: Sequence[dict]) -> dict[str, dict]:
+def query_player_stats_from_records(
+    all_records: Sequence[dict], scoped_records: Sequence[dict]
+) -> dict[str, dict]:
     player_matches: dict[str, list[dict]] = {}
     latest_level_after: dict[str, float] = {}
     scope_baseline_level: dict[str, float] = {}
@@ -284,11 +319,13 @@ def query_player_stats_from_records(all_records: Sequence[dict], scoped_records:
             entry = entries.get(name, {})
             after = entry.get("after", {})
             level = _level_from_rating_dict(after)
-            player_matches.setdefault(name, []).append({
-                "won": name in winner_team,
-                "timestamp": record.get("timestamp", ""),
-                "level_after": round(level, 2),
-            })
+            player_matches.setdefault(name, []).append(
+                {
+                    "won": name in winner_team,
+                    "timestamp": record.get("timestamp", ""),
+                    "level_after": round(level, 2),
+                }
+            )
             latest_level_after[name] = level
 
     player_matches = {}
@@ -297,10 +334,12 @@ def query_player_stats_from_records(all_records: Sequence[dict], scoped_records:
         all_names = [n.lower() for n in record.get("team1", []) + record.get("team2", [])]
 
         for name in all_names:
-            player_matches.setdefault(name, []).append({
-                "won": name in winner_team,
-                "timestamp": record.get("timestamp", ""),
-            })
+            player_matches.setdefault(name, []).append(
+                {
+                    "won": name in winner_team,
+                    "timestamp": record.get("timestamp", ""),
+                }
+            )
 
     for record in scoped_records:
         entries = {e["name"].lower(): e for e in record.get("players", [])}
@@ -338,7 +377,9 @@ def query_player_stats_from_records(all_records: Sequence[dict], scoped_records:
     return result
 
 
-def query_rating_snapshots_from_records(records: Sequence[dict], player: str, n: int = 10) -> list[dict]:
+def query_rating_snapshots_from_records(
+    records: Sequence[dict], player: str, n: int = 10
+) -> list[dict]:
     player = player.lower()
     snapshots = []
     for record in records:
@@ -349,12 +390,14 @@ def query_rating_snapshots_from_records(records: Sequence[dict], player: str, n:
         entry = entries.get(player)
         if not entry:
             continue
-        snapshots.append({
-            "timestamp": record.get("timestamp", ""),
-            "won": player in [nm.lower() for nm in record.get("winner", [])],
-            "before": entry.get("before", {}),
-            "after": entry.get("after", {}),
-        })
+        snapshots.append(
+            {
+                "timestamp": record.get("timestamp", ""),
+                "won": player in [nm.lower() for nm in record.get("winner", [])],
+                "before": entry.get("before", {}),
+                "after": entry.get("after", {}),
+            }
+        )
     return snapshots[-n:]
 
 
@@ -371,7 +414,9 @@ def _current_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _scope_window_utc(scope: str, now_utc: datetime | None = None) -> tuple[datetime, datetime] | None:
+def _scope_window_utc(
+    scope: str, now_utc: datetime | None = None
+) -> tuple[datetime, datetime] | None:
     if scope == "all":
         return None
 
@@ -403,14 +448,24 @@ def _scope_window_utc(scope: str, now_utc: datetime | None = None) -> tuple[date
     return start_local.astimezone(timezone.utc), now_utc
 
 
-def records_for_scope(db_dir: str | Path, scope: str, now_utc: datetime | None = None) -> list[dict]:
-    records = _all_records(db_dir)
+def records_for_scope(
+    db_dir: str | Path, scope: str, now_utc: datetime | None = None
+) -> list[MatchRecord]:
+    return records_in_scope(_all_records(db_dir), scope, now_utc)
+
+
+def records_in_scope(
+    records: Sequence[MatchRecord],
+    scope: str,
+    now_utc: datetime | None = None,
+) -> list[MatchRecord]:
+    """Filter already-loaded records using the shared local calendar windows."""
     window = _scope_window_utc(scope, now_utc)
     if window is None:
-        return records
+        return list(records)
 
     start_utc, end_utc = window
-    filtered: list[dict] = []
+    filtered: list[MatchRecord] = []
     for record in records:
         ts = _parse_timestamp_utc(record.get("timestamp", ""))
         if ts is None:
@@ -420,38 +475,48 @@ def records_for_scope(db_dir: str | Path, scope: str, now_utc: datetime | None =
     return filtered
 
 
+def replay_ratings_from_records(
+    records: Sequence[MatchRecord],
+    initial_ratings: Mapping[str, PlayerRating] | None = None,
+) -> dict[str, PlayerRating]:
+    """Replay ordered match records from defaults or a supplied rating baseline."""
+    active_players: set[str] = set()
+    for record in records:
+        if record.get("status", "active") != "active":
+            continue
+        active_players.update(name.lower() for name in record.get("team1", []))
+        active_players.update(name.lower() for name in record.get("team2", []))
+
+    ratings = dict(initial_ratings or {})
+    for name in sorted(active_players):
+        ratings.setdefault(name, (trueskill.Rating(), trueskill.Rating()))
+
+    for record in records:
+        if record.get("status", "active") != "active":
+            continue
+        team1 = [name.lower() for name in record.get("team1", [])]
+        team2 = [name.lower() for name in record.get("team2", [])]
+        if not team1 or not team2:
+            continue
+        if any(name not in ratings for name in team1 + team2):
+            continue
+
+        score1 = int(record.get("score1", 0))
+        score2 = int(record.get("score2", 0))
+        updated = calculate_rating_update(ratings, team1, team2, score1, score2)
+        for name in team1 + team2:
+            ratings[name] = updated[name]
+
+    return ratings
+
+
 def replay_scope_ratings(
     db_dir: str | Path,
     scope: str,
     now_utc: datetime | None = None,
 ) -> dict[str, PlayerRating]:
     """Replay ratings from fresh defaults using only matches in the selected scope."""
-    scoped_records = records_for_scope(db_dir, scope, now_utc)
-    active_players: set[str] = set()
-    for record in scoped_records:
-        active_players.update(name.lower() for name in record.get("team1", []))
-        active_players.update(name.lower() for name in record.get("team2", []))
-
-    ratings: dict[str, PlayerRating] = {
-        name: (trueskill.Rating(), trueskill.Rating())
-        for name in sorted(active_players)
-    }
-
-    for record in scoped_records:
-        team1 = [name.lower() for name in record.get("team1", [])]
-        team2 = [name.lower() for name in record.get("team2", [])]
-        score1 = int(record.get("score1", 0))
-        score2 = int(record.get("score2", 0))
-        if not team1 or not team2:
-            continue
-        if any(name not in ratings for name in team1 + team2):
-            continue
-
-        updated = calculate_rating_update(ratings, team1, team2, score1, score2)
-        for name in team1 + team2:
-            ratings[name] = updated[name]
-
-    return ratings
+    return replay_ratings_from_records(records_for_scope(db_dir, scope, now_utc))
 
 
 def query_h2h(db_dir: str | Path, p1: str, p2: str) -> dict:
@@ -497,7 +562,9 @@ def query_h2h(db_dir: str | Path, p1: str, p2: str) -> dict:
     }
 
 
-def query_team_h2h_from_records(records: Sequence[dict], team1: Sequence[str], team2: Sequence[str]) -> dict:
+def query_team_h2h_from_records(
+    records: Sequence[dict], team1: Sequence[str], team2: Sequence[str]
+) -> dict:
     team1_names = tuple(name.lower() for name in team1)
     team2_names = tuple(name.lower() for name in team2)
     team1_wins = team2_wins = draws = count = 0
@@ -561,7 +628,9 @@ def query_player_profile(
 
     all_records = _all_records(db_dir)
     scoped_records = records_for_scope(db_dir, scope)
-    return query_player_profile_from_records(all_records, scoped_records, player, recent_limit=recent_limit)
+    return query_player_profile_from_records(
+        all_records, scoped_records, player, recent_limit=recent_limit
+    )
 
 
 def query_rating_snapshots(db_dir: str | Path, player: str, n: int = 10) -> list[dict]:
