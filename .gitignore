@@ -53,6 +53,8 @@ coverage.xml
 # IDE artifacts (should never be committed)
 .project
 .pydevproject
+.vs/
+.vscode/
 
 # Local environment files
 .env
@@ -87,6 +89,7 @@ app/match_history
 app/match_history.bak
 app/match_history.dat
 app/match_history.dir
+sandbox/dev-data/
 
 # PyBuilder
 target/

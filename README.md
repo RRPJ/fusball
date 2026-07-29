@@ -28,7 +28,6 @@ Useful companion commands:
 
 - `status_phone_api_service.bat` shows watchdog, API, and log status.
 - `run_phone_api_dev.bat` starts the sandbox-backed development runtime.
-- `run_phone_api_prod.bat` delegates to the production service start flow.
 
 Direct local run is also supported:
 

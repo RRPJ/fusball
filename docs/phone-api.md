@@ -223,8 +223,6 @@ rankings from active history.
   - `start_phone_api_service.bat`
   - `stop_phone_api_service.bat`
   - `status_phone_api_service.bat`
-- Compatibility launcher:
-  - `run_phone_api_prod.bat` delegates to production service start behavior.
 - Development launcher:
   - `run_phone_api_dev.bat`
 - Dev launcher writes to `sandbox/dev-data`.
