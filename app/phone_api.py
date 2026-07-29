@@ -24,7 +24,12 @@ from blueprints.auth import create_auth_blueprint
 from blueprints.health import create_health_blueprint
 from blueprints.read import create_read_blueprint
 from blueprints.write import create_write_blueprint
-from services.auth import AuthenticationError, RequestAuthenticator, build_clerk_authenticator
+from services.auth import (
+  AuthenticationError,
+  RequestAuthenticator,
+  build_clerk_authenticator,
+  resolve_managed_display_names,
+)
 from services.leaderboard import load_leaderboard
 from services.phone_request_context import PhoneApiContext
 from services.phone_validation import reset_recent_match_signatures
@@ -286,6 +291,12 @@ def create_app(
       return jsonify({"error": "admin authorization required"}), 403
     return None
 
+  def resolve_display_names(subjects: list[str]) -> dict[str, str]:
+    return resolve_managed_display_names(
+      app.config.get("DATABASE_URL"),
+      subjects,
+    )
+
   ctx = PhoneApiContext(
     data_dir=data_dir,
     resolve_write_store=_resolve_write_store,
@@ -293,6 +304,7 @@ def create_app(
     require_read_access=require_read_access,
     require_write_access=require_write_access,
     require_admin_access=require_admin_access,
+    resolve_display_names=resolve_display_names,
     acquire_write_lock=lambda owner: _acquire_write_lock(data_dir, owner),
     release_write_lock=lambda: _release_write_lock(data_dir),
   )

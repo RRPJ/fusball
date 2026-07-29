@@ -947,6 +947,37 @@ class PhoneApiTests(unittest.TestCase):
             )
             self.assertEqual(response.status_code, 200)
 
+    def test_hybrid_phone_bootstrap_syncs_admin_visibility_on_session_changes(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+
+            class AnonymousAuthenticator:
+                def authenticate(self, request):
+                    return None
+
+            frontend_domain = "correct.clerk.accounts.dev"
+            encoded_domain = base64.urlsafe_b64encode(
+                f"{frontend_domain}$".encode("ascii")
+            ).decode("ascii").rstrip("=")
+            app = create_app(
+                db_dir=tmp_path,
+                auth_mode="hybrid",
+                authenticator=AnonymousAuthenticator(),
+                clerk_publishable_key=f"pk_test_{encoded_domain}",
+                clerk_frontend_api_url="https://incorrect.clerk.accounts.dev",
+            )
+            client = app.test_client()
+
+            html = client.get("/phone").get_data(as_text=True)
+            self.assertIn("const AUTH_MODE = 'hybrid';", html)
+            self.assertIn("id='clerkSignIn'", html)
+
+            js = client.get("/static/js/phone.js").get_data(as_text=True)
+            self.assertIn("async function refreshManagedIdentity", js)
+            self.assertIn("if (AUTH_MODE === 'clerk' || AUTH_MODE === 'hybrid')", js)
+            self.assertIn("Clerk.addListener(async ({ session }) => {", js)
+            self.assertIn("setAdminVisibility(false);", js)
+
     def test_strict_clerk_mode_wires_dedicated_login_flow(self) -> None:
         with TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
@@ -998,6 +1029,7 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("afterSignOutUrl: '/login'", js)
             self.assertIn("/api/admin/matches?limit=30", js)
             self.assertIn("expected_version: match.version", js)
+            self.assertIn("match.submitted_by_display_name", js)
             self.assertIn(
                 "names.length === 2 ? [names[1], names[0]] : names",
                 js,
@@ -1050,7 +1082,14 @@ class PhoneApiTests(unittest.TestCase):
                 players["alice"] = (trueskill.Rating(), trueskill.Rating())
                 players["bob"] = (trueskill.Rating(), trueskill.Rating())
             store = ShelveWriteStore(tmp_path)
-            submitted = store.submit_match(["alice"], ["bob"], 5, 3, source="test")
+            submitted = store.submit_match(
+                ["alice"],
+                ["bob"],
+                5,
+                3,
+                source="test",
+                actor_subject="user_reader",
+            )
 
             class StubAuthenticator:
                 def authenticate(self, request):
@@ -1066,66 +1105,71 @@ class PhoneApiTests(unittest.TestCase):
                 write_store=store,
             )
             client = app.test_client()
+            with patch(
+                "phone_api.resolve_managed_display_names",
+                return_value={"user_reader": "Reader"},
+            ):
+                reader_list = client.get(
+                    "/api/admin/matches",
+                    headers={"X-Test-Role": "reader"},
+                )
+                self.assertEqual(reader_list.status_code, 403)
 
-            reader_list = client.get(
-                "/api/admin/matches",
-                headers={"X-Test-Role": "reader"},
-            )
-            self.assertEqual(reader_list.status_code, 403)
+                admin_headers = {"X-Test-Role": "admin"}
+                matches = client.get("/api/admin/matches", headers=admin_headers)
+                self.assertEqual(matches.status_code, 200)
+                item = matches.get_json()["items"][0]
+                self.assertEqual(item["status"], "active")
+                self.assertEqual(item["version"], 1)
+                self.assertEqual(item["submitted_by"], "user_reader")
+                self.assertEqual(item["submitted_by_display_name"], "Reader")
+                vercel_encoded_match_id = submitted["match_id"].replace(":", "%253A")
 
-            admin_headers = {"X-Test-Role": "admin"}
-            matches = client.get("/api/admin/matches", headers=admin_headers)
-            self.assertEqual(matches.status_code, 200)
-            item = matches.get_json()["items"][0]
-            self.assertEqual(item["status"], "active")
-            self.assertEqual(item["version"], 1)
-            vercel_encoded_match_id = submitted["match_id"].replace(":", "%253A")
+                void_headers = {
+                    **admin_headers,
+                    "Idempotency-Key": "void-api-1",
+                }
+                (tmp_path / WRITE_LOCK_NAME).write_text("another-writer", encoding="utf-8")
+                locked = client.post(
+                    f"/api/admin/matches/{vercel_encoded_match_id}/void",
+                    headers=void_headers,
+                    json={"reason": "Incorrect score", "expected_version": 1},
+                )
+                self.assertEqual(locked.status_code, 409)
+                (tmp_path / WRITE_LOCK_NAME).unlink()
 
-            void_headers = {
-                **admin_headers,
-                "Idempotency-Key": "void-api-1",
-            }
-            (tmp_path / WRITE_LOCK_NAME).write_text("another-writer", encoding="utf-8")
-            locked = client.post(
-                f"/api/admin/matches/{vercel_encoded_match_id}/void",
-                headers=void_headers,
-                json={"reason": "Incorrect score", "expected_version": 1},
-            )
-            self.assertEqual(locked.status_code, 409)
-            (tmp_path / WRITE_LOCK_NAME).unlink()
+                voided = client.post(
+                    f"/api/admin/matches/{vercel_encoded_match_id}/void",
+                    headers=void_headers,
+                    json={"reason": "Incorrect score", "expected_version": 1},
+                )
+                self.assertEqual(voided.status_code, 200)
+                self.assertEqual(voided.get_json()["status"], "voided")
 
-            voided = client.post(
-                f"/api/admin/matches/{vercel_encoded_match_id}/void",
-                headers=void_headers,
-                json={"reason": "Incorrect score", "expected_version": 1},
-            )
-            self.assertEqual(voided.status_code, 200)
-            self.assertEqual(voided.get_json()["status"], "voided")
+                stale_restore = client.post(
+                    f"/api/admin/matches/{submitted['match_id']}/restore",
+                    headers={**admin_headers, "Idempotency-Key": "restore-stale"},
+                    json={"reason": "Restore result", "expected_version": 1},
+                )
+                self.assertEqual(stale_restore.status_code, 409)
 
-            stale_restore = client.post(
-                f"/api/admin/matches/{submitted['match_id']}/restore",
-                headers={**admin_headers, "Idempotency-Key": "restore-stale"},
-                json={"reason": "Restore result", "expected_version": 1},
-            )
-            self.assertEqual(stale_restore.status_code, 409)
+                restored = client.post(
+                    f"/api/admin/matches/{submitted['match_id']}/restore",
+                    headers={**admin_headers, "Idempotency-Key": "restore-api-1"},
+                    json={"reason": "Restore result", "expected_version": 2},
+                )
+                self.assertEqual(restored.status_code, 200)
+                self.assertEqual(restored.get_json()["status"], "active")
 
-            restored = client.post(
-                f"/api/admin/matches/{submitted['match_id']}/restore",
-                headers={**admin_headers, "Idempotency-Key": "restore-api-1"},
-                json={"reason": "Restore result", "expected_version": 2},
-            )
-            self.assertEqual(restored.status_code, 200)
-            self.assertEqual(restored.get_json()["status"], "active")
-
-            audited = client.get("/api/admin/matches", headers=admin_headers).get_json()
-            self.assertEqual(
-                [event["event_type"] for event in audited["items"][0]["events"]],
-                ["submit", "void", "restore"],
-            )
-            self.assertEqual(
-                audited["items"][0]["events"][-1]["actor_subject"],
-                "user_admin",
-            )
+                audited = client.get("/api/admin/matches", headers=admin_headers).get_json()
+                self.assertEqual(
+                    [event["event_type"] for event in audited["items"][0]["events"]],
+                    ["submit", "void", "restore"],
+                )
+                self.assertEqual(
+                    audited["items"][0]["events"][-1]["actor_subject"],
+                    "user_admin",
+                )
 
 
 class C3AnalyticsApiTests(unittest.TestCase):
