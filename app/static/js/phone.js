@@ -2077,7 +2077,8 @@
       if (AUTH_MODE === 'legacy') {
         return { proceed: true };
       }
-      document.getElementById('managedAuthPanel').style.display = '';
+      const managedAuthPanel = document.getElementById('managedAuthPanel');
+      managedAuthPanel.style.display = '';
       document.getElementById('legacyAuthPanel').style.display =
         AUTH_MODE === 'hybrid' ? '' : 'none';
       if (!window.Clerk) {
@@ -2085,12 +2086,25 @@
       }
       await Clerk.load({ ui: { ClerkUI: window.__internal_ClerkUICtor } });
       const status = document.getElementById('managedAuthStatus');
+      if (AUTH_MODE === 'clerk' && !Clerk.isSignedIn) {
+        const returnPath = `${window.location.pathname}${window.location.search}`;
+        window.location.replace(`/login?next=${encodeURIComponent(returnPath)}`);
+        return { proceed: false };
+      }
       if (Clerk.isSignedIn) {
-        Clerk.mountUserButton(document.getElementById('clerkUserButton'));
+        Clerk.mountUserButton(document.getElementById('clerkUserButton'), {
+          afterSignOutUrl: '/login',
+        });
         status.textContent = 'Signed in with managed identity.';
         if (AUTH_MODE === 'clerk') {
           appContent.style.display = '';
           stickyBar.style.display = '';
+          document.body.classList.remove('strict-auth-pending');
+          Clerk.addListener(({ session }) => {
+            if (!session) {
+              window.location.replace('/login?next=/phone');
+            }
+          });
         }
         const identityResponse = await apiFetch('/api/auth/me', {
           allowOffline: true,
@@ -2106,14 +2120,7 @@
         return { proceed: true };
       }
       Clerk.mountSignIn(document.getElementById('clerkSignIn'));
-      status.textContent = AUTH_MODE === 'hybrid'
-        ? 'Sign in, or use transition PINs below.'
-        : 'Sign in to use Fusball.';
-      if (AUTH_MODE === 'clerk') {
-        appContent.style.display = 'none';
-        stickyBar.style.display = 'none';
-        return { proceed: false };
-      }
+      status.textContent = 'Sign in, or use transition PINs below.';
       return { proceed: true };
     }
 
@@ -2124,8 +2131,7 @@
       } catch (error) {
         setStatus(error.message, 'bad');
         if (AUTH_MODE === 'clerk') {
-          appContent.style.display = 'none';
-          stickyBar.style.display = 'none';
+          window.location.replace('/login?next=/phone');
           return;
         }
       }

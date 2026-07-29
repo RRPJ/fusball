@@ -22,6 +22,50 @@
       padding: 12px;
       padding-bottom: 106px;
     }
+    body.strict-auth-pending .panel,
+    body.strict-auth-pending .sticky {
+      visibility: hidden;
+    }
+    body.login-page {
+      display: grid;
+      place-items: center;
+      padding: 20px 12px;
+    }
+    .login-shell {
+      width: min(460px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+    }
+    .login-header {
+      padding: 20px;
+    }
+    .login-header h1 {
+      margin-bottom: 6px;
+      font-size: 1.25rem;
+    }
+    .login-card {
+      min-height: 420px;
+      padding: 20px 12px 24px;
+      border-top: 1px solid var(--line);
+    }
+    .login-card h2 {
+      margin: 0 0 14px;
+      text-align: center;
+      font-size: 1rem;
+      color: var(--text);
+    }
+    .login-card > .muted,
+    .login-card > .status {
+      text-align: center;
+    }
+    .clerk-sign-in {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+    }
     .panel {
       width: min(760px, 100%);
       margin: 0 auto;

@@ -45,15 +45,23 @@ Hosted production should move from `hybrid` to `clerk` after the login UI and
 rollback checks are complete. Do not leave hybrid mode enabled indefinitely.
 
 Phone-page UX by mode:
-- `clerk`: operational app content is hidden (`display:none`) until Clerk
-  resolves a session, so the managed sign-in is what the operator sees at
-  page load rather than only after reaching the Confirm step.
+- `clerk`: `/phone` resolves the Clerk browser session before initializing the
+  application. Anonymous visitors are redirected to the dedicated `/login`
+  page, and successful sign-in returns them to `/phone`. Signing out returns
+  them to `/login`.
 - `hybrid`: managed login is shown prominently, with the PIN fallback and
   read-PIN behavior still available.
 - `legacy`: unchanged PIN/token UI.
 - In every mode, static assets (`/static/*`) and `GET /api/health` are
   unaffected by client-side gating, and every `/api/*` route still enforces
   authorization server-side regardless of what has rendered client-side.
+
+The login route accepts a local `next` path and defaults to `/phone`. External
+or otherwise unsafe destinations are rejected to prevent open redirects.
+
+To validate the final managed-auth experience before production rollout, set
+`FUSBALL_AUTH_MODE=clerk` only for the Vercel Preview environment and redeploy.
+Production can remain in `hybrid` during this check.
 
 Required hosted configuration:
 

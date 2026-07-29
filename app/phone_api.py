@@ -14,6 +14,7 @@ import base64
 import hashlib
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from flask import Flask, g, jsonify, redirect, render_template, request
 from werkzeug.security import check_password_hash
@@ -96,13 +97,28 @@ def _compute_asset_version(app: Flask) -> str:
   """
   static_folder = Path(app.static_folder) if app.static_folder else ROOT_DIR / "static"
   hasher = hashlib.sha256()
-  for relative_path in ("css/phone.css", "js/phone.js"):
+  for relative_path in ("css/phone.css", "js/login.js", "js/phone.js"):
     asset_path = static_folder / relative_path
     try:
       hasher.update(asset_path.read_bytes())
     except OSError:
       hasher.update(relative_path.encode("utf-8"))
   return hasher.hexdigest()[:12]
+
+
+def _safe_local_next(candidate: str | None) -> str:
+  if not candidate:
+    return "/phone"
+  parsed = urlsplit(candidate)
+  if (
+    parsed.scheme
+    or parsed.netloc
+    or not parsed.path.startswith("/")
+    or parsed.path.startswith("//")
+    or "\\" in candidate
+  ):
+    return "/phone"
+  return candidate
 
 
 def create_app(
@@ -306,6 +322,22 @@ def create_app(
       auth_mode=auth_mode,
       clerk_publishable_key=clerk_publishable_key,
       clerk_frontend_api_url=resolved_frontend_api_url,
+      asset_version=asset_version,
+    )
+
+  @app.get("/login")
+  def login_view() -> object:
+    if auth_mode != "clerk":
+      return redirect("/phone", code=302)
+    resolved_frontend_api_url = _clerk_frontend_api_origin(
+      clerk_publishable_key,
+      clerk_frontend_api_url,
+    )
+    return render_template(
+      "login.html",
+      clerk_publishable_key=clerk_publishable_key,
+      clerk_frontend_api_url=resolved_frontend_api_url,
+      login_next=_safe_local_next(request.args.get("next")),
       asset_version=asset_version,
     )
 

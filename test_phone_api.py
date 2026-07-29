@@ -947,7 +947,7 @@ class PhoneApiTests(unittest.TestCase):
             )
             self.assertEqual(response.status_code, 200)
 
-    def test_phone_page_wires_managed_session_and_hides_pins_in_strict_mode(self) -> None:
+    def test_strict_clerk_mode_wires_dedicated_login_flow(self) -> None:
         with TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
             with shelve.open(str(tmp_path / "playerdb")) as players:
@@ -979,9 +979,8 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("@clerk/clerk-js@6/dist/clerk.browser.js", html)
             self.assertNotIn("incorrect.clerk.accounts.dev", html)
             self.assertIn("id='adminMatchesSection'", html)
-            # Strict clerk mode hides operational content until Clerk signs in,
-            # and Match Corrections is a dedicated admin-only nav entry that
-            # stays hidden until /api/auth/me resolves an admin role.
+            self.assertIn("<body class='strict-auth-pending'>", html)
+            self.assertNotIn("id='clerkSignIn'", html)
             self.assertIn("id='appContent' style='display:none;'", html)
             self.assertIn("id='stickyBar' class='sticky' style='display:none;'", html)
             self.assertNotIn("Private-Player", html)
@@ -992,13 +991,57 @@ class PhoneApiTests(unittest.TestCase):
             js = client.get("/static/js/phone.js").get_data(as_text=True)
             self.assertIn("window.__internal_ClerkUICtor", js)
             self.assertIn("headers.set('Authorization', `Bearer ${managedToken}`);", js)
-            self.assertIn("AUTH_MODE === 'hybrid' ? '' : 'none'", js)
+            self.assertIn(
+                "window.location.replace(`/login?next=${encodeURIComponent(returnPath)}`)",
+                js,
+            )
+            self.assertIn("afterSignOutUrl: '/login'", js)
             self.assertIn("/api/admin/matches?limit=30", js)
             self.assertIn("expected_version: match.version", js)
             self.assertIn(
                 "names.length === 2 ? [names[1], names[0]] : names",
                 js,
             )
+
+            login_response = client.get("/login?next=/phone")
+            self.assertEqual(login_response.status_code, 200)
+            login_html = login_response.get_data(as_text=True)
+            self.assertIn("<body class='login-page'>", login_html)
+            self.assertIn("id='clerkSignIn' class='clerk-sign-in'", login_html)
+            self.assertIn('const LOGIN_NEXT = "/phone";', login_html)
+            self.assertIn(f"https://{frontend_domain}/npm/@clerk/ui@1", login_html)
+            self.assertIn("/static/js/login.js?v=", login_html)
+
+            login_js = client.get("/static/js/login.js").get_data(as_text=True)
+            self.assertIn("Clerk.mountSignIn", login_js)
+            self.assertIn("window.location.replace(LOGIN_NEXT)", login_js)
+            self.assertIn("fallbackRedirectUrl: LOGIN_NEXT", login_js)
+
+            unsafe_login_html = client.get(
+                "/login?next=https://example.com/stolen"
+            ).get_data(as_text=True)
+            self.assertIn('const LOGIN_NEXT = "/phone";', unsafe_login_html)
+            self.assertNotIn("example.com", unsafe_login_html)
+
+    def test_login_route_is_disabled_outside_strict_clerk_mode(self) -> None:
+        class AnonymousAuthenticator:
+            def authenticate(self, request):
+                return None
+
+        for auth_mode in ("legacy", "hybrid"):
+            with self.subTest(auth_mode=auth_mode):
+                with TemporaryDirectory() as tmpdir:
+                    app = create_app(
+                        db_dir=Path(tmpdir),
+                        operator_token=self.operator_token,
+                        auth_mode=auth_mode,
+                        authenticator=AnonymousAuthenticator(),
+                    )
+                    response = app.test_client().get(
+                        "/login", follow_redirects=False
+                    )
+                    self.assertEqual(response.status_code, 302)
+                    self.assertEqual(response.headers.get("Location"), "/phone")
 
     def test_admin_can_list_void_and_restore_match(self) -> None:
         with TemporaryDirectory() as tmpdir:

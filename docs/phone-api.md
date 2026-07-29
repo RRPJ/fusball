@@ -14,6 +14,7 @@ the full breakdown.
 
 - Default host/port: `http://<host>:8080`
 - Mobile page: `GET /phone`
+- Managed sign-in page: `GET /login` (strict `clerk` mode only)
 
 ## Phone Page Status UX
 
@@ -46,14 +47,16 @@ application-owned roles in Neon. See `docs/authentication.md`.
   `admin` is reserved for destructive administration such as match correction.
 - `FUSBALL_AUTH_MODE` controls rollout: `legacy`, `hybrid`, or `clerk`.
 
-Phone-page auth visibility:
-- Strict `clerk` mode hides the operational app UI behind `display:none` at
-  page load and shows the managed sign-in prominently, instead of only
-  surfacing auth at the Confirm step; the page still renders and static
-  assets/`GET /api/health` still load without a session.
+Phone-page auth navigation:
+- Strict `clerk` mode resolves Clerk before initializing operational UI. An
+  anonymous `/phone` visit redirects to `/login?next=/phone`; successful
+  sign-in redirects back to `/phone`, and sign-out returns to `/login`.
+- `/login` validates `next` as a local path and defaults unsafe destinations to
+  `/phone`.
+- Outside strict `clerk` mode, `/login` redirects to `/phone`.
 - `hybrid` mode shows managed login prominently while retaining the PIN
   fallback and existing read-PIN behavior.
-- This is presentation-only. Every `/api/*` route still enforces
+- Navigation is presentation-only. Every `/api/*` route still enforces
   authorization server-side regardless of what the client has rendered.
 
 The auth split introduces two headers for the API path:

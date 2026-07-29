@@ -6,7 +6,7 @@
   <title>Fusball Phone API</title>
   <link rel='stylesheet' href="{{ url_for('static', filename='css/phone.css') }}?v={{ asset_version }}" />
 </head>
-<body>
+<body{% if auth_mode == 'clerk' %} class='strict-auth-pending'{% endif %}>
   <main class='panel'>
     <header>
       <h1>Fusball Phone API</h1>
@@ -20,7 +20,9 @@
         <div id='liveStatusDetail' class='muted'>The page will show whether data is live, fetching, or using a cached snapshot.</div>
       </div>
       <div id='managedAuthPanel' class='review-card' style='margin-top:10px; display:none;'>
+        {% if auth_mode == 'hybrid' %}
         <div id='clerkSignIn'></div>
+        {% endif %}
         <div id='clerkUserButton'></div>
         <div id='managedAuthStatus' class='muted'></div>
       </div>
