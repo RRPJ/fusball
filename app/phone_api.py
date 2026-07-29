@@ -18,6 +18,7 @@ import re
 import time
 from pathlib import Path
 from string import capwords
+from urllib.parse import unquote
 
 from flask import Flask, g, jsonify, redirect, request
 from werkzeug.security import check_password_hash
@@ -3419,6 +3420,7 @@ def create_app(
     return jsonify({"count": len(items), "items": items})
 
   def _change_match_lifecycle(match_id: str, target_status: str) -> object:
+    match_id = unquote(match_id)
     denied = require_admin_access()
     if denied is not None:
       return denied

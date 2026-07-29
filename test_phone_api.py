@@ -970,6 +970,7 @@ class PhoneApiTests(unittest.TestCase):
             item = matches.get_json()["items"][0]
             self.assertEqual(item["status"], "active")
             self.assertEqual(item["version"], 1)
+            vercel_encoded_match_id = submitted["match_id"].replace(":", "%253A")
 
             void_headers = {
                 **admin_headers,
@@ -977,7 +978,7 @@ class PhoneApiTests(unittest.TestCase):
             }
             (tmp_path / WRITE_LOCK_NAME).write_text("another-writer", encoding="utf-8")
             locked = client.post(
-                f"/api/admin/matches/{submitted['match_id']}/void",
+                f"/api/admin/matches/{vercel_encoded_match_id}/void",
                 headers=void_headers,
                 json={"reason": "Incorrect score", "expected_version": 1},
             )
@@ -985,7 +986,7 @@ class PhoneApiTests(unittest.TestCase):
             (tmp_path / WRITE_LOCK_NAME).unlink()
 
             voided = client.post(
-                f"/api/admin/matches/{submitted['match_id']}/void",
+                f"/api/admin/matches/{vercel_encoded_match_id}/void",
                 headers=void_headers,
                 json={"reason": "Incorrect score", "expected_version": 1},
             )

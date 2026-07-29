@@ -214,6 +214,9 @@ using the incomplete local shelve history as an authority.
 - Move embedded UI into Flask templates and static assets with cache-safe
   versioning; preserve the current phone presentation and offense/defense
   display order.
+- Move Match Corrections into a dedicated admin-only area. It currently renders
+  beneath every Mode, Players, Score, and Confirm step, which is functional but
+  visually repetitive and confusing.
 - Split route groups into small blueprints for reads, match operations,
   administration, and authentication; keep `create_app` as the composition
   root used by both local mode and `api/index.py`.
