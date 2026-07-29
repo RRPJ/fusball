@@ -254,8 +254,6 @@ def _render_phone_html(
       frontend_api_url = html_module.escape(clerk_frontend_api_url.rstrip("/"), quote=True)
       clerk_scripts = f"""
   <script defer crossorigin="anonymous"
-    src="{frontend_api_url}/npm/@clerk/ui@1/dist/ui.browser.js"></script>
-  <script defer crossorigin="anonymous"
     data-clerk-publishable-key="{publishable_key}"
     src="{frontend_api_url}/npm/@clerk/clerk-js@6/dist/clerk.browser.js"></script>"""
 
@@ -2748,7 +2746,7 @@ def _render_phone_html(
       if (!window.Clerk) {
         throw new Error('Managed sign-in failed to load.');
       }
-      await Clerk.load({ ui: { ClerkUI: window.__internal_ClerkUICtor } });
+      await Clerk.load();
       const status = document.getElementById('managedAuthStatus');
       if (Clerk.isSignedIn) {
         Clerk.mountUserButton(document.getElementById('clerkUserButton'));

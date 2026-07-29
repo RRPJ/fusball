@@ -920,6 +920,8 @@ class PhoneApiTests(unittest.TestCase):
 
             self.assertIn("const AUTH_MODE = 'clerk';", html)
             self.assertIn("@clerk/clerk-js@6/dist/clerk.browser.js", html)
+            self.assertNotIn("@clerk/ui", html)
+            self.assertIn("await Clerk.load();", html)
             self.assertIn("headers.set('Authorization', `Bearer ${managedToken}`);", html)
             self.assertIn("AUTH_MODE === 'hybrid' ? '' : 'none'", html)
             self.assertIn("id='adminMatchesSection'", html)
