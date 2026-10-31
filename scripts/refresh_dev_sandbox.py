@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import argparse
-import shutil
 import shelve
+import shutil
 from pathlib import Path
 
 import trueskill
@@ -45,7 +45,6 @@ def seed_demo_players(target_dir: Path) -> None:
 
     with shelve.open(str(target_dir / "recentplayers")) as recent:
         recent["names"] = SEED_PLAYERS[:]
-
 
 
 def main() -> None:

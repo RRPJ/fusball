@@ -9,9 +9,7 @@ PlayerName = str
 PlayerRating = tuple
 
 
-def _write_player_lines(
-    log, name: PlayerName, before: PlayerRating, after: PlayerRating
-) -> None:
+def _write_player_lines(log, name: PlayerName, before: PlayerRating, after: PlayerRating) -> None:
     """Write before/after offensive and defensive rating lines for one player."""
     log.write(
         "                   : {}: offensive before: {}/{}  after: {}/{}\n".format(

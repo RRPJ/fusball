@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
+import sys as sys
 import urllib.error
 import urllib.request
 from typing import Any
@@ -61,7 +61,9 @@ def _expect(
         failures.append(f"{label}: expected {expected_status}, got {actual_status}")
 
 
-def _headers(read_pin: str | None = None, write_pin: str | None = None, token: str | None = None) -> dict[str, str]:
+def _headers(
+    read_pin: str | None = None, write_pin: str | None = None, token: str | None = None
+) -> dict[str, str]:
     out: dict[str, str] = {}
     if read_pin:
         out["X-Read-Pin"] = read_pin
@@ -75,10 +77,16 @@ def _headers(read_pin: str | None = None, write_pin: str | None = None, token: s
 def main() -> int:
     parser = argparse.ArgumentParser(description="Smoke-check phone API auth behavior")
     parser.add_argument("--base-url", default="http://127.0.0.1:8080", help="Phone API base URL")
-    parser.add_argument("--expect-auth", action="store_true", help="Assert split-auth matrix (401/403 paths)")
+    parser.add_argument(
+        "--expect-auth", action="store_true", help="Assert split-auth matrix (401/403 paths)"
+    )
     parser.add_argument("--read-pin", default=None, help="Read PIN for authenticated read checks")
-    parser.add_argument("--write-pin", default=None, help="Writer PIN for authenticated write checks")
-    parser.add_argument("--operator-token", default=None, help="Legacy operator token (fallback mode checks)")
+    parser.add_argument(
+        "--write-pin", default=None, help="Writer PIN for authenticated write checks"
+    )
+    parser.add_argument(
+        "--operator-token", default=None, help="Legacy operator token (fallback mode checks)"
+    )
     args = parser.parse_args()
 
     base = args.base_url.rstrip("/")

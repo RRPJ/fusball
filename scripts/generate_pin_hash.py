@@ -7,7 +7,9 @@ from werkzeug.security import generate_password_hash
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Generate hash values for phone API PIN authentication")
+    parser = argparse.ArgumentParser(
+        description="Generate hash values for phone API PIN authentication"
+    )
     parser.add_argument("--read-pin", help="Plain read PIN to hash")
     parser.add_argument("--write-pin", help="Plain writer PIN to hash")
     parser.add_argument(

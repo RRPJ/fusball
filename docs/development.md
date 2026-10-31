@@ -266,9 +266,15 @@ their database-backed cases are skipped.
 Lint and format:
 
 ```powershell
-ruff check app api test_*.py scripts
-black --check app api test_*.py scripts
+$tests = @(Get-ChildItem -File test_*.py | ForEach-Object { $_.Name })
+ruff check app api @tests scripts
+black --check app api @tests scripts
 ```
+
+PowerShell passes the expanded test file list explicitly, matching the glob
+expansion performed by the CI shell. On Linux/macOS, the equivalent commands
+are `ruff check app api test_*.py scripts` and
+`black --check app api test_*.py scripts`.
 
 Optional hooks:
 

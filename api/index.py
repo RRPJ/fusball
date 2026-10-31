@@ -11,22 +11,22 @@ APP_DIR = ROOT_DIR / "app"
 
 # Ensure modules from the shared app directory are importable on Vercel.
 if str(APP_DIR) not in sys.path:
-  sys.path.insert(0, str(APP_DIR))
+    sys.path.insert(0, str(APP_DIR))
 
-from phone_api import create_app
+from phone_api import create_app  # noqa: E402
 
 _db_dir = os.environ.get("FUSBALL_PHONE_API_DB_DIR")
 _db_path = Path(_db_dir).resolve() if _db_dir else APP_DIR
 
 app = create_app(
-  db_dir=_db_path,
-  operator_token=os.environ.get("FUSBALL_PHONE_API_TOKEN"),
-  read_pin_hash=os.environ.get("READ_PIN_HASH"),
-  write_pin_hash=os.environ.get("WRITE_PIN_HASH"),
-  database_url=os.environ.get("DATABASE_URL"),
-  auth_mode=os.environ.get("FUSBALL_AUTH_MODE", "legacy"),
-  clerk_secret_key=os.environ.get("CLERK_SECRET_KEY"),
-  clerk_authorized_parties=os.environ.get("CLERK_AUTHORIZED_PARTIES"),
-  clerk_publishable_key=os.environ.get("CLERK_PUBLISHABLE_KEY"),
-  clerk_frontend_api_url=os.environ.get("CLERK_FRONTEND_API_URL"),
+    db_dir=_db_path,
+    operator_token=os.environ.get("FUSBALL_PHONE_API_TOKEN"),
+    read_pin_hash=os.environ.get("READ_PIN_HASH"),
+    write_pin_hash=os.environ.get("WRITE_PIN_HASH"),
+    database_url=os.environ.get("DATABASE_URL"),
+    auth_mode=os.environ.get("FUSBALL_AUTH_MODE", "legacy"),
+    clerk_secret_key=os.environ.get("CLERK_SECRET_KEY"),
+    clerk_authorized_parties=os.environ.get("CLERK_AUTHORIZED_PARTIES"),
+    clerk_publishable_key=os.environ.get("CLERK_PUBLISHABLE_KEY"),
+    clerk_frontend_api_url=os.environ.get("CLERK_FRONTEND_API_URL"),
 )

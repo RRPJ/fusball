@@ -39,7 +39,7 @@ def check_database_access(db_dir: Path, log_file: Optional[Path] = None) -> bool
             else:
                 print(msg, file=sys.stderr)
             return False
-    
+
     return True
 
 
@@ -88,7 +88,10 @@ def run_diagnostics(db_dir: str | Path | None = None) -> bool:
         log_ok = check_log_destination(target_dir, log_file)
         log.write(f"  Result: {'OK' if log_ok else 'WARNINGS'}\n")
 
-        log.write(f"Diagnostics completed successfully at: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        log.write(
+            "Diagnostics completed successfully at: "
+            f"{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        )
         log.write(f"Log file: {log_file}\n")
 
     print(f"[startup] Diagnostics passed. Details logged to: {log_file}", file=sys.stderr)

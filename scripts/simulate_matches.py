@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import shelve
+import sys
 import time
 from pathlib import Path
 
@@ -9,8 +10,6 @@ import trueskill
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_DIR = ROOT / "app"
-
-import sys
 
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
@@ -87,10 +86,15 @@ def apply_match_result(
         playerdb[key] = value
 
 
-def append_log(work_dir: Path, team1: tuple[str, ...], team2: tuple[str, ...], score1: int, score2: int) -> None:
+def append_log(
+    work_dir: Path, team1: tuple[str, ...], team2: tuple[str, ...], score1: int, score2: int
+) -> None:
     logfile = work_dir / "logfile.log"
     with logfile.open("a", encoding="utf-8") as log:
-        log.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')}: simulated match {team1} vs {team2} => {score1}:{score2}\n")
+        log.write(
+            f"{time.strftime('%Y-%m-%d %H:%M:%S')}: simulated match "
+            f"{team1} vs {team2} => {score1}:{score2}\n"
+        )
 
 
 def print_top(playerdb: shelve.Shelf, count: int = 10) -> None:
@@ -98,7 +102,11 @@ def print_top(playerdb: shelve.Shelf, count: int = 10) -> None:
     print("Top players:")
     for idx, (name, rating) in enumerate(ranked[:count], start=1):
         level = round(playerLevel(rating), 2)
-        print(f"{idx:2d}. {name:10s} level={level:6.2f} off={rating[0].mu:.2f}/{rating[0].sigma:.2f} def={rating[1].mu:.2f}/{rating[1].sigma:.2f}")
+        print(
+            f"{idx:2d}. {name:10s} level={level:6.2f} "
+            f"off={rating[0].mu:.2f}/{rating[0].sigma:.2f} "
+            f"def={rating[1].mu:.2f}/{rating[1].sigma:.2f}"
+        )
 
 
 def print_data_files(work_dir: Path) -> None:
@@ -110,9 +118,15 @@ def print_data_files(work_dir: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Simulate matches and inspect resulting leaderboard/data files.")
-    parser.add_argument("--work-dir", default=str(APP_DIR), help="Directory containing app shelve files")
-    parser.add_argument("--matches", type=int, default=10, help="Number of simulation matches to run")
+    parser = argparse.ArgumentParser(
+        description="Simulate matches and inspect resulting leaderboard/data files."
+    )
+    parser.add_argument(
+        "--work-dir", default=str(APP_DIR), help="Directory containing app shelve files"
+    )
+    parser.add_argument(
+        "--matches", type=int, default=10, help="Number of simulation matches to run"
+    )
     args = parser.parse_args()
 
     work_dir = Path(args.work_dir).resolve()
