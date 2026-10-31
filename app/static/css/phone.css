@@ -87,6 +87,7 @@
       color: var(--accent);
     }
     .muted { color: var(--muted); font-size: 0.82rem; }
+    .public-phone-link { color: #f7b65f; }
     .progress {
       display: grid;
       grid-template-columns: repeat(4, 1fr);

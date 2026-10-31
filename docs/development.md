@@ -194,7 +194,8 @@ python scripts\smoke_phone_api_auth.py `
 For strict Clerk, validate through `/login` and `/phone`, then use
 `GET /api/auth/me` to confirm the active subject and role. Verify:
 
-- anonymous reads/writes are rejected;
+- anonymous public leaderboard, stats, and profiles work; other strict-mode
+  reads and writes are rejected;
 - `reader` cannot write;
 - `operator` can perform normal writes but not admin corrections;
 - `admin` can list and correct matches;
@@ -202,6 +203,17 @@ For strict Clerk, validate through `/login` and `/phone`, then use
 - PIN/token headers do not bypass strict mode.
 
 Perform mutating checks only against isolated preview/test data.
+
+On an isolated dev or preview deployment, check `/` anonymously and while
+signed in; exercise every metric and period, including bounded-only Improved,
+and verify profiles, lineups, scores, rating changes, and no H2H action. Check
+that the phone link signs in to `/phone`. In browser developer tools simulate
+offline and service failures with and without a saved selection: verify the
+stale metric/period, disabled alternatives, unavailable profiles, error message,
+and unavailable state without a snapshot. Inspect public JSON for absence of
+rating means and uncertainties, and verify protected reads and writes retain
+their policies. Check legacy and hybrid with read PINs where available.
+Preview observations are not evidence of production deployment.
 
 ## Backup And Restore Drill
 
