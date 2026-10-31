@@ -3,6 +3,9 @@
 Production is the Vercel-hosted Flask app with Neon-authoritative persistence
 and strict Clerk authentication. This guide also keeps the shelve and shared
 credential paths available for local development and rollback compatibility.
+For production-like development and manual testing, use Vercel Preview with
+isolated Neon and Clerk configurations. The future of shelve compatibility is
+discussed in `architecture.md`; it remains supported until explicitly retired.
 
 ## Supported Baseline
 

@@ -134,6 +134,20 @@ Local presence is intentionally an in-process set owned by the store instance
 and is lost when the server restarts. Shelve is supported for local
 development and compatibility; it is not a hosted failover for Neon.
 
+### Future Persistence Direction
+
+Development and manual testing can use Vercel Preview with an isolated Neon
+database and Clerk configuration, rather than relying on local shelve. When
+considering persistence refactors, evaluate retiring shelve before adding
+abstraction solely to share behavior between the shelve and Neon adapters.
+
+This is a direction to investigate, not a decision to remove shelve. Until a
+retirement is explicitly planned, its current runtime and test contracts
+remain supported. Any retirement plan must address local startup, automated
+tests, rollback compatibility, and preservation or migration of existing
+shelve data. In particular, the current importer does not preserve all local
+lifecycle state and audit provenance; see `docs/data-safety.md`.
+
 ## Write Consistency And Idempotency
 
 Neon rating/history writes use database transactions. Match submit and
