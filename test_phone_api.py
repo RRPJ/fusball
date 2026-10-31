@@ -930,6 +930,14 @@ class PhoneApiTests(unittest.TestCase):
             read_no_auth = client.get("/api/leaderboard")
             self.assertEqual(read_no_auth.status_code, 401)
             self.assertEqual(read_no_auth.get_json(), {"error": "authentication required"})
+            self.assertEqual(client.get("/api/leaderboard?include_player_id=1").status_code, 401)
+            identified = client.get(
+                "/api/leaderboard?include_player_id=1", headers={"X-Read-Pin": "read-1234"}
+            )
+            self.assertEqual(identified.status_code, 200)
+            self.assertEqual(
+                {row["player_id"] for row in identified.get_json()["items"]}, {"alice", "bob"}
+            )
 
             read_with_wrong_read_pin = client.get(
                 "/api/leaderboard", headers={"X-Read-Pin": "wrong-read"}

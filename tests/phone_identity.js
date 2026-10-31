@@ -1,3 +1,9 @@
+const phoneIdentityFetch = window.fetch;
+window.fetch = (url, options) => {
+  if (url.startsWith('/api/public/leaderboard?')) return Promise.resolve(new Response('{}', {status: 503}));
+  return phoneIdentityFetch(url, options);
+};
+
 window.addEventListener('load', async () => {
   const waitFor = async (predicate, message) => {
     for (let i = 0; i < 200; i++) {
@@ -54,8 +60,14 @@ window.addEventListener('load', async () => {
     }));
     await refreshLeaderboard();
     const cachedRow = body.querySelector('tr');
-    if (!cachedRow.textContent.includes('John Smith') || cachedRow.lastElementChild.textContent !== '—' ||
-        !cachedRow.querySelector('button').disabled) throw new Error('legacy snapshot identity');
+    if (!cachedRow.textContent.includes('John Smith') || cachedRow.lastElementChild.textContent !== '1' ||
+        cachedRow.querySelector('button').disabled) throw new Error('legacy snapshot behavior');
+    if (!document.getElementById('leaderboardFreshness').textContent.includes('identities unverified')) {
+      throw new Error('legacy snapshot warning');
+    }
+    clearOfflineMode();
+    cachedRow.querySelector('button').click();
+    await waitFor(() => cachedRow.nextElementSibling?.textContent.includes('1 straight wins'), 'legacy profile after reconnect');
     document.body.dataset.testResult = 'pass';
   } catch (error) {
     document.body.dataset.testResult = `fail: ${error.message}`;

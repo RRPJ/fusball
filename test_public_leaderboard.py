@@ -120,11 +120,22 @@ class PublicLeaderboardTests(unittest.TestCase):
         client = create_app(operator_token="test-token", write_store=Store()).test_client()
         public = client.get("/api/public/leaderboard").get_json()["items"]
         private = client.get("/api/leaderboard").get_json()["items"]
+        private_with_ids = client.get("/api/leaderboard?include_player_id=1").get_json()["items"]
         stats = client.get("/api/public/stats").get_json()
 
         self.assertEqual({row["name"] for row in public}, {"John Smith"})
         self.assertEqual({row["player_id"] for row in public}, {"john smith", "john  smith"})
         self.assertTrue(all("player_id" not in row for row in private))
+        self.assertEqual(
+            {row["player_id"] for row in private_with_ids}, {"john smith", "john  smith"}
+        )
+        self.assertEqual(
+            [
+                {key: value for key, value in row.items() if key != "player_id"}
+                for row in private_with_ids
+            ],
+            private,
+        )
         for row in public:
             identifier = row["player_id"]
             profile = client.get(f"/api/public/player/{identifier}/profile").get_json()
