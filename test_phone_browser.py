@@ -24,6 +24,84 @@ from services.phone_write_store import ShelveWriteStore  # noqa: E402
 
 
 class PhoneBrowserTests(unittest.TestCase):
+    def test_colliding_display_names_keep_separate_phone_profiles_and_stats(self) -> None:
+        import shelve
+
+        edge = Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
+        browser = (
+            str(edge)
+            if edge.is_file()
+            else shutil.which("chromium") or shutil.which("google-chrome")
+        )
+        if not browser:
+            self.skipTest("Chromium or Microsoft Edge is required")
+
+        class Store(ShelveWriteStore):
+            def leaderboard_ratings(self, scope):
+                return super().leaderboard_ratings("all")
+
+            def query_player_stats(self, scope="all"):
+                return {
+                    "john smith": {"streak": 1, "recent_form_5": "L", "improved": -1},
+                    "john  smith": {"streak": 3, "recent_form_5": "WW", "improved": 4},
+                    "undefined": {"streak": 17},
+                }
+
+            def query_player_profile(self, player, scope="all", recent_limit=5):
+                return {
+                    "player": player,
+                    "summary": {"streak": self.query_player_stats()[player]["streak"]},
+                }
+
+        with TemporaryDirectory(prefix=".phone-identity-test-", dir=ROOT) as directory:
+            db_dir = Path(directory)
+            with shelve.open(str(db_dir / "playerdb")) as players:
+                for name in ("john smith", "john  smith"):
+                    players[name] = (trueskill.Rating(), trueskill.Rating())
+            app = create_app(db_dir=db_dir, operator_token="test-token", write_store=Store(db_dir))
+
+            @app.after_request
+            def inject_browser_test(response):
+                if request.path == "/phone":
+                    script = (ROOT / "tests" / "phone_identity.js").read_text(encoding="utf-8")
+                    response.set_data(
+                        response.get_data(as_text=True).replace(
+                            "</body>", f"<script>{script}</script></body>"
+                        )
+                    )
+                return response
+
+            server = make_server("127.0.0.1", 0, app, threaded=True)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                result = subprocess.run(
+                    [
+                        browser,
+                        "--headless",
+                        "--disable-gpu",
+                        "--no-sandbox",
+                        "--disable-extensions",
+                        f"--user-data-dir={db_dir / 'browser'}",
+                        "--virtual-time-budget=15000",
+                        "--dump-dom",
+                        f"http://127.0.0.1:{server.server_port}/phone",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=60,
+                    env={**os.environ, "TEMP": directory, "TMP": directory, "TMPDIR": directory},
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                marker = re.search(r'data-test-result="([^"]+)"', result.stdout)
+                self.assertEqual(marker.group(1) if marker else "no result", "pass", result.stdout)
+            finally:
+                server.shutdown()
+                thread.join()
+                server.server_close()
+
     def test_managed_corrections_in_browser(self) -> None:
         import shelve
 

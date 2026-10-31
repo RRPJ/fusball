@@ -46,6 +46,13 @@ identifier for stats keys and profile paths; `name` remains the formatted
 display name. Existing `/api/leaderboard`, `/api/stats`, and
 `/api/player/<name>/profile` responses and authorization are unchanged.
 
+The phone first checks the protected leaderboard, then uses the public
+leaderboard's canonical identifiers for its standings, stats, and profile
+links. Both reads must succeed for a live refresh. Older phone snapshots
+without identifiers remain visible offline, but cannot supply player-specific
+stats or profile links; a successful refresh saves identifiers for future
+snapshots.
+
 Names, match lineups, opponents, scores, and rating changes are intentionally
 public in all authentication modes, even with a read PIN. Search-engine
 `noindex` directives on the page and public API are advisory, not privacy or

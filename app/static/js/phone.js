@@ -1138,8 +1138,8 @@
     }
 
     function leaderboardSortValue(row) {
-      const s = state.playerStats;
-      const k = row.name.toLowerCase();
+      const s = typeof row.player_id === 'string' ? state.playerStats : null;
+      const k = row.player_id;
       if (state.leaderboardSort === 'offense') return Number(row.offense_level || 0);
       if (state.leaderboardSort === 'defense') return Number(row.defense_level || 0);
       if (state.leaderboardSort === 'form') return s && s[k] ? Number(s[k].win_rate || 0) : 0;
@@ -1149,8 +1149,8 @@
     }
 
     function leaderboardMetric(row) {
-      const s = state.playerStats;
-      const k = row.name.toLowerCase();
+      const s = typeof row.player_id === 'string' ? state.playerStats : null;
+      const k = row.player_id;
       if (state.leaderboardSort === 'offense') return String(row.offense_level);
       if (state.leaderboardSort === 'defense') return String(row.defense_level);
       if (state.leaderboardSort === 'form') {
@@ -1271,7 +1271,7 @@
       });
       body.replaceChildren();
       ordered.forEach((row, idx) => {
-        const playerKey = row.name.toLowerCase();
+        const playerKey = row.player_id;
         const tr = document.createElement('tr');
         tr.className = 'lrow';
         const rank = document.createElement('td');
@@ -1282,7 +1282,11 @@
         button.className = 'profile-toggle';
         button.textContent = row.name;
         button.setAttribute('aria-expanded', 'false');
-        button.addEventListener('click', () => togglePlayerHistory(tr, playerKey));
+        if (typeof playerKey === 'string') {
+          button.addEventListener('click', () => togglePlayerHistory(tr, playerKey));
+        } else {
+          button.disabled = true;
+        }
         const sub = document.createElement('div');
         sub.className = 'sub';
         sub.textContent = `Off\u00a0${row.offense_level} \u00b7 Def\u00a0${row.defense_level}`;
@@ -1679,7 +1683,12 @@
       if (!response.ok) {
         throw new Error('Could not refresh leaderboard.');
       }
-      const payload = await response.json();
+      // The protected endpoint remains the access gate; public rows carry canonical IDs.
+      const identityResponse = await apiFetch('/api/public/leaderboard?limit=50&scope=' + encodeURIComponent(requestScope));
+      if (!identityResponse.ok) {
+        throw new Error('Could not refresh leaderboard.');
+      }
+      const payload = await identityResponse.json();
       if (requestVersion !== state.leaderboardRequestVersion || requestScope !== state.leaderboardFilter) {
         return;
       }
@@ -1713,8 +1722,8 @@
       const redOff = state.selected.red_offense;
       const blueOff = state.selected.blue_offense;
       if (!redOff || !blueOff || !state.leaderboardItems.length) return false;
-      const ri = state.leaderboardItems.find(r => r.name.toLowerCase() === redOff.toLowerCase());
-      const bi = state.leaderboardItems.find(r => r.name.toLowerCase() === blueOff.toLowerCase());
+      const ri = state.leaderboardItems.find(r => r.player_id === redOff.toLowerCase());
+      const bi = state.leaderboardItems.find(r => r.player_id === blueOff.toLowerCase());
       if (!ri || !bi) return false;
       const redPos = Number(ri.position);
       const bluePos = Number(bi.position);
