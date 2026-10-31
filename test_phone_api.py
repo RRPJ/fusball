@@ -127,7 +127,7 @@ class PhoneApiTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
 
             html = response.get_data(as_text=True)
-            self.assertIn("Fusball Phone API", html)
+            self.assertIn("Record a match", html)
             self.assertIn("Leaderboard", html)
             self.assertIn("Alice", html)
             self.assertIn("id='liveStatusCard' class='live-status review-card'", html)
@@ -1160,7 +1160,7 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("@clerk/clerk-js@6/dist/clerk.browser.js", html)
             self.assertNotIn("incorrect.clerk.accounts.dev", html)
             self.assertIn("id='adminMatchesSection'", html)
-            self.assertIn("<body class='strict-auth-pending'>", html)
+            self.assertIn("<body class='phone-page strict-auth-pending'>", html)
             self.assertNotIn("id='clerkSignIn'", html)
             self.assertIn("id='appContent' style='display:none;'", html)
             self.assertIn("id='stickyBar' class='sticky' style='display:none;'", html)

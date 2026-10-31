@@ -1,0 +1,108 @@
+body.phone-page {
+  --bg: #eee3ca;
+  --bg-2: #dfcdaa;
+  --accent: #80500f;
+  --text: #30251d;
+  --muted: #625244;
+  --panel: #f9f2e3;
+  --line: #b6a384;
+  --ok: #276046;
+  --bad: #973b31;
+  background: linear-gradient(150deg, var(--bg), var(--bg-2));
+  padding: 12px 12px 150px;
+}
+
+.phone-page .panel {
+  border: 2px solid #735b41;
+  border-radius: 6px;
+  box-shadow: 0 8px 25px rgba(66, 42, 23, .18);
+}
+.phone-page header { padding: 12px 12px 14px; }
+.phone-masthead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 3px 10px;
+  font: 700 1rem Georgia, serif;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.phone-masthead a {
+  color: #694313;
+  padding: 12px 0;
+  font: 700 .78rem "Segoe UI", sans-serif;
+  text-transform: none;
+}
+.phone-headline {
+  padding: 19px;
+  border: 1px solid #a68a55;
+  outline: 1px solid #423326;
+  outline-offset: -5px;
+  background: #30251e;
+  color: #f8edda;
+}
+.phone-headline h1 {
+  margin: 6px 0;
+  color: #fff6e5;
+  font: 700 clamp(1.7rem, 6vw, 2.4rem) Georgia, serif;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.phone-headline p { margin: 0; color: #e3d3b8; font-size: .9rem; }
+.phone-kicker { color: #edcc8f; font-size: .7rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.phone-page .section { padding: 18px 14px; }
+.phone-page .section h2 { color: #443222; font: 700 1.1rem Georgia, serif; letter-spacing: 0; text-transform: none; }
+.phone-page .progress { gap: 4px; margin-top: 12px; }
+.phone-page .progress button {
+  min-width: 0;
+  min-height: 44px;
+  color: #5e4d3e;
+  background: #eee1cb;
+  border: 1px solid #b6a384;
+  border-radius: 4px;
+  font-size: .78rem;
+  cursor: pointer;
+}
+.phone-page .progress button.active { color: #fff8e9; background: #5a402b; border-color: #5a402b; }
+.phone-page .progress button:disabled { opacity: .58; cursor: not-allowed; }
+.phone-page .btn, .phone-page .token {
+  background: #fffaf0;
+  color: var(--text);
+  border-color: #a48f70;
+  border-radius: 5px;
+}
+.phone-page .btn.active { color: #4a2d0b; background: #efdbac; border-color: #825818; box-shadow: inset 0 0 0 1px #825818; }
+.phone-page .btn.primary { color: #fffaf0; background: #6b481d; border-color: #6b481d; }
+.phone-page .btn:disabled { opacity: .55; }
+.phone-page .btn.score.red-team.active { background: #923d35; color: #fff; }
+.phone-page .btn.score.blue-team.active { background: #315a82; color: #fff; }
+.phone-page .slot { flex: 1 1 145px; }
+.phone-page .player-item.present-row { grid-template-columns: minmax(0, 1fr) 44px; }
+.phone-page .player-item .btn.demote { width: 44px; color: #853b31; }
+.phone-page .btn.sort { min-height: 44px; }
+.phone-page .review-card, .phone-page .h2h-pair, .phone-page .profile-card, .phone-page .trend-pill {
+  background: #f1e5d0;
+  border-color: #c2ad8b;
+  border-radius: 5px;
+}
+.phone-page .profile-title, .phone-page .profile-card .value { color: var(--text); }
+.phone-page .expand-panel { background: #f1e5d0; }
+.phone-page .status-chip { color: #625244; background: #f9f2e3; }
+.phone-page .status-chip.ok { color: #276046; }
+.phone-page .status-chip.bad { color: #853b31; }
+.phone-page .status-chip.fetching { color: #744607; }
+.phone-page .offline-banner { color: #853b31; }
+.phone-page .sticky {
+  background: #30251e;
+  border-top: 2px solid #a78349;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+}
+.phone-page .summary { color: #f0dfc4; }
+.phone-page .sticky .status { color: #f0dfc4; margin: 0 0 6px; min-height: 0; }
+.phone-page .sticky .status:empty { display: none; }
+.phone-page .sticky .status.ok { color: #a7e0b5; }
+.phone-page .sticky .status.bad { color: #ffcebd; }
+.phone-page .sticky .btn:not(.primary) { background: #f4e8d4; }
+.phone-page :focus-visible { outline: 3px solid #b46c0c; outline-offset: 3px; }
+.phone-page .sticky :focus-visible, .phone-headline :focus-visible { outline-color: #f5ca75; }

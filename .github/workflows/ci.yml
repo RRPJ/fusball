@@ -50,7 +50,7 @@ jobs:
       - name: Run smoke and regression suites
         run: |
           python scripts/smoke_check.py
-          python -m unittest test_public_leaderboard.py test_phone_api.py test_match_flow.py test_integration.py test_neon_store.py test_neon_migrations.py test_neon_data_safety.py test_auth.py
+          python -m unittest test_public_leaderboard.py test_phone_browser.py test_phone_api.py test_match_flow.py test_integration.py test_neon_store.py test_neon_migrations.py test_neon_data_safety.py test_auth.py
 
   postgres-integration:
     runs-on: ubuntu-latest
