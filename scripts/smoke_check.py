@@ -32,21 +32,13 @@ def _assert_history_matches_current_ratings(tmpdir: str) -> None:
     team2 = ["carol", "dave"]
 
     with shelve.open(db_path) as db:
-        before_ratings = {
-            name: db[name]
-            for team in (team1, team2)
-            for name in team
-        }
+        before_ratings = {name: db[name] for team in (team1, team2) for name in team}
 
         updated = calculate_rating_update(db, team1, team2, 5, 3)
         for name in team1 + team2:
             db[name] = updated[name]
 
-        after_ratings = {
-            name: db[name]
-            for team in (team1, team2)
-            for name in team
-        }
+        after_ratings = {name: db[name] for team in (team1, team2) for name in team}
 
     record_key = append_match_history(
         tmp_path,

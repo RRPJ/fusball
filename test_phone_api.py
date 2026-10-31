@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import base64
-from datetime import datetime, timedelta, timezone
 import re
 import shelve
 import sys
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -58,9 +58,18 @@ class PhoneApiTests(unittest.TestCase):
             tmp_path = Path(tmpdir)
             db_path = str(tmp_path / "playerdb")
             with shelve.open(db_path) as players:
-                players["alice"] = (trueskill.Rating(mu=35, sigma=6), trueskill.Rating(mu=34, sigma=6))
-                players["bob"] = (trueskill.Rating(mu=30, sigma=7), trueskill.Rating(mu=29, sigma=7))
-                players["carol"] = (trueskill.Rating(mu=27, sigma=8), trueskill.Rating(mu=26, sigma=8))
+                players["alice"] = (
+                    trueskill.Rating(mu=35, sigma=6),
+                    trueskill.Rating(mu=34, sigma=6),
+                )
+                players["bob"] = (
+                    trueskill.Rating(mu=30, sigma=7),
+                    trueskill.Rating(mu=29, sigma=7),
+                )
+                players["carol"] = (
+                    trueskill.Rating(mu=27, sigma=8),
+                    trueskill.Rating(mu=26, sigma=8),
+                )
 
             app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
             client = app.test_client()
@@ -80,9 +89,18 @@ class PhoneApiTests(unittest.TestCase):
             tmp_path = Path(tmpdir)
             db_path = str(tmp_path / "playerdb")
             with shelve.open(db_path) as players:
-                players["alice"] = (trueskill.Rating(mu=19.4, sigma=6.0), trueskill.Rating(mu=19.4, sigma=6.0))
-                players["bob"] = (trueskill.Rating(mu=18.6, sigma=6.0), trueskill.Rating(mu=18.6, sigma=6.0))
-                players["carol"] = (trueskill.Rating(mu=17.4, sigma=6.0), trueskill.Rating(mu=17.4, sigma=6.0))
+                players["alice"] = (
+                    trueskill.Rating(mu=19.4, sigma=6.0),
+                    trueskill.Rating(mu=19.4, sigma=6.0),
+                )
+                players["bob"] = (
+                    trueskill.Rating(mu=18.6, sigma=6.0),
+                    trueskill.Rating(mu=18.6, sigma=6.0),
+                )
+                players["carol"] = (
+                    trueskill.Rating(mu=17.4, sigma=6.0),
+                    trueskill.Rating(mu=17.4, sigma=6.0),
+                )
 
             app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
             client = app.test_client()
@@ -114,7 +132,10 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("Alice", html)
             self.assertIn("id='liveStatusCard' class='live-status review-card'", html)
             self.assertIn("id='leaderboardFreshness' class='muted'", html)
-            self.assertIn("The page will show whether data is live, fetching, or using a cached snapshot.", html)
+            self.assertIn(
+                "The page will show whether data is live, fetching, or using a cached snapshot.",
+                html,
+            )
 
     def test_phone_page_uses_unnumbered_progress_buttons_and_mode_only_leaderboard(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -139,7 +160,9 @@ class PhoneApiTests(unittest.TestCase):
             self.assertNotIn("4 Confirm", html)
             self.assertIn("id='leaderboardSection' class='section active'>", html)
             self.assertLess(html.index(">All</button>"), html.index(">This quarter</button>"))
-            self.assertLess(html.index(">This quarter</button>"), html.index(">This month</button>"))
+            self.assertLess(
+                html.index(">This quarter</button>"), html.index(">This month</button>")
+            )
             self.assertLess(html.index(">This month</button>"), html.index(">This week</button>"))
 
             # The phone UI's JS logic now lives in a versioned static asset
@@ -343,8 +366,14 @@ class PhoneApiTests(unittest.TestCase):
             tmp_path = Path(tmpdir)
             db_path = str(tmp_path / "playerdb")
             with shelve.open(db_path) as players:
-                players["alice"] = (trueskill.Rating(mu=30, sigma=6), trueskill.Rating(mu=30, sigma=6))
-                players["bob"] = (trueskill.Rating(mu=30, sigma=6), trueskill.Rating(mu=30, sigma=6))
+                players["alice"] = (
+                    trueskill.Rating(mu=30, sigma=6),
+                    trueskill.Rating(mu=30, sigma=6),
+                )
+                players["bob"] = (
+                    trueskill.Rating(mu=30, sigma=6),
+                    trueskill.Rating(mu=30, sigma=6),
+                )
 
             with shelve.open(db_path) as players:
                 before_alice = players["alice"]
@@ -498,7 +527,12 @@ class PhoneApiTests(unittest.TestCase):
             payload = lineup_resp.get_json()
             assert payload is not None
             selected = payload["selected"]
-            chosen = {selected["red_defense"], selected["red_offense"], selected["blue_defense"], selected["blue_offense"]}
+            chosen = {
+                selected["red_defense"],
+                selected["red_offense"],
+                selected["blue_defense"],
+                selected["blue_offense"],
+            }
             self.assertEqual(len(chosen), 4)
             self.assertTrue(chosen.issubset({"alice", "bob", "carol", "dave"}))
 
@@ -507,10 +541,22 @@ class PhoneApiTests(unittest.TestCase):
             tmp_path = Path(tmpdir)
             db_path = str(tmp_path / "playerdb")
             with shelve.open(db_path) as players:
-                players["alice"] = (trueskill.Rating(mu=38, sigma=4), trueskill.Rating(mu=28, sigma=4))
-                players["bob"] = (trueskill.Rating(mu=30, sigma=4), trueskill.Rating(mu=36, sigma=4))
-                players["carol"] = (trueskill.Rating(mu=34, sigma=4), trueskill.Rating(mu=30, sigma=4))
-                players["dave"] = (trueskill.Rating(mu=26, sigma=4), trueskill.Rating(mu=34, sigma=4))
+                players["alice"] = (
+                    trueskill.Rating(mu=38, sigma=4),
+                    trueskill.Rating(mu=28, sigma=4),
+                )
+                players["bob"] = (
+                    trueskill.Rating(mu=30, sigma=4),
+                    trueskill.Rating(mu=36, sigma=4),
+                )
+                players["carol"] = (
+                    trueskill.Rating(mu=34, sigma=4),
+                    trueskill.Rating(mu=30, sigma=4),
+                )
+                players["dave"] = (
+                    trueskill.Rating(mu=26, sigma=4),
+                    trueskill.Rating(mu=34, sigma=4),
+                )
                 expected = best_balanced_lineup(
                     players,
                     defense_a="alice",
@@ -539,7 +585,12 @@ class PhoneApiTests(unittest.TestCase):
             assert payload is not None
             selected = payload["selected"]
             self.assertEqual(
-                [selected["red_defense"], selected["red_offense"], selected["blue_offense"], selected["blue_defense"]],
+                [
+                    selected["red_defense"],
+                    selected["red_offense"],
+                    selected["blue_offense"],
+                    selected["blue_defense"],
+                ],
                 expected,
             )
 
@@ -608,7 +659,10 @@ class PhoneApiTests(unittest.TestCase):
 
                 def __init__(self) -> None:
                     self._ratings = {
-                        "alice": (trueskill.Rating(mu=35, sigma=6), trueskill.Rating(mu=33, sigma=6)),
+                        "alice": (
+                            trueskill.Rating(mu=35, sigma=6),
+                            trueskill.Rating(mu=33, sigma=6),
+                        ),
                         "bob": (trueskill.Rating(mu=30, sigma=7), trueskill.Rating(mu=29, sigma=7)),
                     }
 
@@ -629,10 +683,20 @@ class PhoneApiTests(unittest.TestCase):
                 def add_player(self, player_name: str):
                     raise NotImplementedError
 
-                def submit_match(self, team1: list[str], team2: list[str], score1: int, score2: int, source: str, **kwargs):
+                def submit_match(
+                    self,
+                    team1: list[str],
+                    team2: list[str],
+                    score1: int,
+                    score2: int,
+                    source: str,
+                    **kwargs,
+                ):
                     raise NotImplementedError
 
-            app = create_app(db_dir=tmp_path, operator_token=self.operator_token, write_store=StubStore())
+            app = create_app(
+                db_dir=tmp_path, operator_token=self.operator_token, write_store=StubStore()
+            )
             client = app.test_client()
 
             leaderboard = client.get("/api/leaderboard?limit=2")
@@ -667,7 +731,10 @@ class PhoneApiTests(unittest.TestCase):
 
                 def get_player_ratings(self, names: list[str]):
                     ratings = {
-                        "alice": (trueskill.Rating(mu=35, sigma=6), trueskill.Rating(mu=33, sigma=6)),
+                        "alice": (
+                            trueskill.Rating(mu=35, sigma=6),
+                            trueskill.Rating(mu=33, sigma=6),
+                        ),
                         "bob": (trueskill.Rating(mu=30, sigma=7), trueskill.Rating(mu=29, sigma=7)),
                     }
                     return {name: ratings[name] for name in names if name in ratings}
@@ -681,7 +748,15 @@ class PhoneApiTests(unittest.TestCase):
                 def add_player(self, player_name: str):
                     raise NotImplementedError
 
-                def submit_match(self, team1: list[str], team2: list[str], score1: int, score2: int, source: str, **kwargs):
+                def submit_match(
+                    self,
+                    team1: list[str],
+                    team2: list[str],
+                    score1: int,
+                    score2: int,
+                    source: str,
+                    **kwargs,
+                ):
                     raise NotImplementedError
 
                 def query_h2h(self, p1: str, p2: str):
@@ -720,7 +795,9 @@ class PhoneApiTests(unittest.TestCase):
                         }
                     }
 
-                def query_player_profile(self, player: str, scope: str = "all", recent_limit: int = 5):
+                def query_player_profile(
+                    self, player: str, scope: str = "all", recent_limit: int = 5
+                ):
                     return {
                         "player": player,
                         "summary": {
@@ -759,12 +836,24 @@ class PhoneApiTests(unittest.TestCase):
                         {
                             "timestamp": "2026-04-01T12:00:00.000000Z",
                             "won": True,
-                            "before": {"offense_mu": 25.0, "offense_sigma": 8.333, "defense_mu": 25.0, "defense_sigma": 8.333},
-                            "after": {"offense_mu": 30.0, "offense_sigma": 8.0, "defense_mu": 30.0, "defense_sigma": 8.0},
+                            "before": {
+                                "offense_mu": 25.0,
+                                "offense_sigma": 8.333,
+                                "defense_mu": 25.0,
+                                "defense_sigma": 8.333,
+                            },
+                            "after": {
+                                "offense_mu": 30.0,
+                                "offense_sigma": 8.0,
+                                "defense_mu": 30.0,
+                                "defense_sigma": 8.0,
+                            },
                         }
                     ][:n]
 
-            app = create_app(db_dir=tmp_path, operator_token=self.operator_token, write_store=StubStore())
+            app = create_app(
+                db_dir=tmp_path, operator_token=self.operator_token, write_store=StubStore()
+            )
             client = app.test_client()
 
             h2h = client.get("/api/h2h?p1=alice&p2=bob")
@@ -833,27 +922,37 @@ class PhoneApiTests(unittest.TestCase):
             self.assertNotIn("offense_mu", public.get_json()["items"][0])
             self.assertIn(
                 "offense_mu",
-                client.get(
-                    "/api/leaderboard", headers={"X-Read-Pin": "read-1234"}
-                ).get_json()["items"][0],
+                client.get("/api/leaderboard", headers={"X-Read-Pin": "read-1234"}).get_json()[
+                    "items"
+                ][0],
             )
 
             read_no_auth = client.get("/api/leaderboard")
             self.assertEqual(read_no_auth.status_code, 401)
             self.assertEqual(read_no_auth.get_json(), {"error": "authentication required"})
 
-            read_with_wrong_read_pin = client.get("/api/leaderboard", headers={"X-Read-Pin": "wrong-read"})
+            read_with_wrong_read_pin = client.get(
+                "/api/leaderboard", headers={"X-Read-Pin": "wrong-read"}
+            )
             self.assertEqual(read_with_wrong_read_pin.status_code, 401)
-            self.assertEqual(read_with_wrong_read_pin.get_json(), {"error": "incorrect reader or writer PIN"})
+            self.assertEqual(
+                read_with_wrong_read_pin.get_json(), {"error": "incorrect reader or writer PIN"}
+            )
 
-            read_with_wrong_write_pin = client.get("/api/leaderboard", headers={"X-Write-Pin": "wrong-write"})
+            read_with_wrong_write_pin = client.get(
+                "/api/leaderboard", headers={"X-Write-Pin": "wrong-write"}
+            )
             self.assertEqual(read_with_wrong_write_pin.status_code, 401)
-            self.assertEqual(read_with_wrong_write_pin.get_json(), {"error": "incorrect reader or writer PIN"})
+            self.assertEqual(
+                read_with_wrong_write_pin.get_json(), {"error": "incorrect reader or writer PIN"}
+            )
 
             read_with_read_pin = client.get("/api/leaderboard", headers={"X-Read-Pin": "read-1234"})
             self.assertEqual(read_with_read_pin.status_code, 200)
 
-            read_with_writer_pin = client.get("/api/leaderboard", headers={"X-Write-Pin": "write-5678"})
+            read_with_writer_pin = client.get(
+                "/api/leaderboard", headers={"X-Write-Pin": "write-5678"}
+            )
             self.assertEqual(read_with_writer_pin.status_code, 200)
 
             write_no_auth = client.post(
@@ -869,7 +968,9 @@ class PhoneApiTests(unittest.TestCase):
                 headers={"X-Read-Pin": "read-1234"},
             )
             self.assertEqual(write_with_read_pin.status_code, 403)
-            self.assertEqual(write_with_read_pin.get_json(), {"error": "writer authorization required"})
+            self.assertEqual(
+                write_with_read_pin.get_json(), {"error": "writer authorization required"}
+            )
 
             write_with_wrong_writer_pin = client.post(
                 "/api/matches",
@@ -877,7 +978,9 @@ class PhoneApiTests(unittest.TestCase):
                 headers={"X-Write-Pin": "wrong-write"},
             )
             self.assertEqual(write_with_wrong_writer_pin.status_code, 403)
-            self.assertEqual(write_with_wrong_writer_pin.get_json(), {"error": "incorrect writer PIN"})
+            self.assertEqual(
+                write_with_wrong_writer_pin.get_json(), {"error": "incorrect writer PIN"}
+            )
 
             write_with_writer_pin = client.post(
                 "/api/matches",
@@ -999,9 +1102,11 @@ class PhoneApiTests(unittest.TestCase):
                     return None
 
             frontend_domain = "correct.clerk.accounts.dev"
-            encoded_domain = base64.urlsafe_b64encode(
-                f"{frontend_domain}$".encode("ascii")
-            ).decode("ascii").rstrip("=")
+            encoded_domain = (
+                base64.urlsafe_b64encode(f"{frontend_domain}$".encode("ascii"))
+                .decode("ascii")
+                .rstrip("=")
+            )
             app = create_app(
                 db_dir=tmp_path,
                 auth_mode="hybrid",
@@ -1035,9 +1140,11 @@ class PhoneApiTests(unittest.TestCase):
                     return None
 
             frontend_domain = "correct.clerk.accounts.dev"
-            encoded_domain = base64.urlsafe_b64encode(
-                f"{frontend_domain}$".encode("ascii")
-            ).decode("ascii").rstrip("=")
+            encoded_domain = (
+                base64.urlsafe_b64encode(f"{frontend_domain}$".encode("ascii"))
+                .decode("ascii")
+                .rstrip("=")
+            )
             app = create_app(
                 db_dir=tmp_path,
                 auth_mode="clerk",
@@ -1092,9 +1199,9 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("window.location.replace(LOGIN_NEXT)", login_js)
             self.assertIn("fallbackRedirectUrl: LOGIN_NEXT", login_js)
 
-            unsafe_login_html = client.get(
-                "/login?next=https://example.com/stolen"
-            ).get_data(as_text=True)
+            unsafe_login_html = client.get("/login?next=https://example.com/stolen").get_data(
+                as_text=True
+            )
             self.assertIn('const LOGIN_NEXT = "/phone";', unsafe_login_html)
             self.assertNotIn("example.com", unsafe_login_html)
 
@@ -1112,9 +1219,7 @@ class PhoneApiTests(unittest.TestCase):
                         auth_mode=auth_mode,
                         authenticator=AnonymousAuthenticator(),
                     )
-                    response = app.test_client().get(
-                        "/login", follow_redirects=False
-                    )
+                    response = app.test_client().get("/login", follow_redirects=False)
                     self.assertEqual(response.status_code, 302)
                     self.assertEqual(response.headers.get("Location"), "/phone")
 
@@ -1232,7 +1337,7 @@ class C3AnalyticsApiTests(unittest.TestCase):
         key = f"{timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}_test"
         with shelve.open(str(tmpdir / "match_history")) as history:
             history[key] = {
-                "timestamp": timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
+                "timestamp": timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
                 "source": "test",
                 "team1": team1,
                 "team2": team2,
@@ -1258,7 +1363,9 @@ class C3AnalyticsApiTests(unittest.TestCase):
                 players[n] = updated[n]
             after = {n: players[n] for n in ["alice", "bob"]}
 
-        append_match_history(tmpdir, ["alice"], ["bob"], ["alice"], 5, 3, before, after, source="test")
+        append_match_history(
+            tmpdir, ["alice"], ["bob"], ["alice"], 5, 3, before, after, source="test"
+        )
 
         return create_app(db_dir=tmpdir, operator_token=self.operator_token)
 
@@ -1333,7 +1440,10 @@ class C3AnalyticsApiTests(unittest.TestCase):
             db_path = str(tmp_path / "playerdb")
             with shelve.open(db_path) as players:
                 for name in ["alice", "bob", "carol", "dave"]:
-                    players[name] = (trueskill.Rating(mu=25, sigma=8.333), trueskill.Rating(mu=25, sigma=8.333))
+                    players[name] = (
+                        trueskill.Rating(mu=25, sigma=8.333),
+                        trueskill.Rating(mu=25, sigma=8.333),
+                    )
 
             app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
             client = app.test_client()
@@ -1341,12 +1451,22 @@ class C3AnalyticsApiTests(unittest.TestCase):
             match_responses = [
                 client.post(
                     "/api/matches",
-                    json={"team1": ["alice", "bob"], "team2": ["carol", "dave"], "score1": 5, "score2": 3},
+                    json={
+                        "team1": ["alice", "bob"],
+                        "team2": ["carol", "dave"],
+                        "score1": 5,
+                        "score2": 3,
+                    },
                     headers={"X-Operator-Token": self.operator_token},
                 ),
                 client.post(
                     "/api/matches",
-                    json={"team1": ["alice", "bob"], "team2": ["carol", "dave"], "score1": 3, "score2": 5},
+                    json={
+                        "team1": ["alice", "bob"],
+                        "team2": ["carol", "dave"],
+                        "score1": 3,
+                        "score2": 5,
+                    },
                     headers={"X-Operator-Token": self.operator_token},
                 ),
                 client.post(
@@ -1390,7 +1510,9 @@ class C3AnalyticsApiTests(unittest.TestCase):
             in_scope_ts = (start_quarter_local + timedelta(days=10)).astimezone(timezone.utc)
             out_scope_ts = (start_quarter_local - timedelta(days=1)).astimezone(timezone.utc)
 
-            def player_entry(name: str, off_before: float, off_after: float, def_before: float, def_after: float) -> dict:
+            def player_entry(
+                name: str, off_before: float, off_after: float, def_before: float, def_after: float
+            ) -> dict:
                 return {
                     "name": name,
                     "before": {
@@ -1467,7 +1589,15 @@ class C3AnalyticsApiTests(unittest.TestCase):
     def test_team_h2h_is_order_sensitive_for_doubles(self) -> None:
         with TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
-            self._write_history_record(tmp_path, datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc), ["alice", "bob"], ["carol", "dave"], ["alice", "bob"], 5, 3)
+            self._write_history_record(
+                tmp_path,
+                datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc),
+                ["alice", "bob"],
+                ["carol", "dave"],
+                ["alice", "bob"],
+                5,
+                3,
+            )
             app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
             client = app.test_client()
 
@@ -1507,15 +1637,29 @@ class C3AnalyticsApiTests(unittest.TestCase):
             )
             start_month_local = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             start_week = start_week_local.astimezone(timezone.utc)
-            this_quarter_ts = (start_quarter_local + ((local_now - start_quarter_local) / 3)).astimezone(timezone.utc)
+            this_quarter_ts = (
+                start_quarter_local + ((local_now - start_quarter_local) / 3)
+            ).astimezone(timezone.utc)
             week_base_local = max(start_week_local, start_month_local)
-            this_week_ts = (week_base_local + ((local_now - week_base_local) / 2)).astimezone(timezone.utc)
-            this_month_ts = (start_month_local + ((local_now - start_month_local) / 4)).astimezone(timezone.utc)
-            previous_quarter_ts = (start_quarter_local - timedelta(hours=1)).astimezone(timezone.utc)
+            this_week_ts = (week_base_local + ((local_now - week_base_local) / 2)).astimezone(
+                timezone.utc
+            )
+            this_month_ts = (start_month_local + ((local_now - start_month_local) / 4)).astimezone(
+                timezone.utc
+            )
+            previous_quarter_ts = (start_quarter_local - timedelta(hours=1)).astimezone(
+                timezone.utc
+            )
 
-            self._write_history_record(tmp_path, previous_quarter_ts, ["alice"], ["bob"], ["alice"], 5, 3)
-            self._write_history_record(tmp_path, this_quarter_ts, ["gina"], ["hank"], ["gina"], 5, 4)
-            self._write_history_record(tmp_path, this_month_ts, ["carol"], ["dave"], ["carol"], 5, 2)
+            self._write_history_record(
+                tmp_path, previous_quarter_ts, ["alice"], ["bob"], ["alice"], 5, 3
+            )
+            self._write_history_record(
+                tmp_path, this_quarter_ts, ["gina"], ["hank"], ["gina"], 5, 4
+            )
+            self._write_history_record(
+                tmp_path, this_month_ts, ["carol"], ["dave"], ["carol"], 5, 2
+            )
             self._write_history_record(tmp_path, this_week_ts, ["eve"], ["frank"], ["eve"], 5, 1)
 
             with patch("services.match_history._current_utc", return_value=now):
@@ -1590,51 +1734,67 @@ class C3AnalyticsApiTests(unittest.TestCase):
                 microsecond=0,
             )
             start_month_local = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            this_quarter_ts = (start_quarter_local + ((local_now - start_quarter_local) / 3)).astimezone(timezone.utc)
+            this_quarter_ts = (
+                start_quarter_local + ((local_now - start_quarter_local) / 3)
+            ).astimezone(timezone.utc)
             week_base_local = max(start_week_local, start_month_local)
-            this_month_ts = (start_month_local + ((local_now - start_month_local) / 4)).astimezone(timezone.utc)
-            this_week_ts = (week_base_local + ((local_now - week_base_local) / 2)).astimezone(timezone.utc)
+            this_month_ts = (start_month_local + ((local_now - start_month_local) / 4)).astimezone(
+                timezone.utc
+            )
+            this_week_ts = (week_base_local + ((local_now - week_base_local) / 2)).astimezone(
+                timezone.utc
+            )
 
-            self._write_history_record(tmp_path, this_quarter_ts, ["gina"], ["hank"], ["gina"], 5, 4)
-            self._write_history_record(tmp_path, this_month_ts, ["carol"], ["dave"], ["carol"], 5, 2)
+            self._write_history_record(
+                tmp_path, this_quarter_ts, ["gina"], ["hank"], ["gina"], 5, 4
+            )
+            self._write_history_record(
+                tmp_path, this_month_ts, ["carol"], ["dave"], ["carol"], 5, 2
+            )
             self._write_history_record(tmp_path, this_week_ts, ["eve"], ["frank"], ["eve"], 5, 1)
 
-            expected_quarter = playerLevel(calculate_rating_update(
-                {
-                    "gina": (trueskill.Rating(), trueskill.Rating()),
-                    "hank": (trueskill.Rating(), trueskill.Rating()),
-                    "carol": (trueskill.Rating(), trueskill.Rating()),
-                    "dave": (trueskill.Rating(), trueskill.Rating()),
-                    "eve": (trueskill.Rating(), trueskill.Rating()),
-                    "frank": (trueskill.Rating(), trueskill.Rating()),
-                },
-                ["gina"],
-                ["hank"],
-                5,
-                4,
-            )["gina"])
-            expected_month = playerLevel(calculate_rating_update(
-                {
-                    "carol": (trueskill.Rating(), trueskill.Rating()),
-                    "dave": (trueskill.Rating(), trueskill.Rating()),
-                    "eve": (trueskill.Rating(), trueskill.Rating()),
-                    "frank": (trueskill.Rating(), trueskill.Rating()),
-                },
-                ["carol"],
-                ["dave"],
-                5,
-                2,
-            )["carol"])
-            expected_week = playerLevel(calculate_rating_update(
-                {
-                    "eve": (trueskill.Rating(), trueskill.Rating()),
-                    "frank": (trueskill.Rating(), trueskill.Rating()),
-                },
-                ["eve"],
-                ["frank"],
-                5,
-                1,
-            )["eve"])
+            expected_quarter = playerLevel(
+                calculate_rating_update(
+                    {
+                        "gina": (trueskill.Rating(), trueskill.Rating()),
+                        "hank": (trueskill.Rating(), trueskill.Rating()),
+                        "carol": (trueskill.Rating(), trueskill.Rating()),
+                        "dave": (trueskill.Rating(), trueskill.Rating()),
+                        "eve": (trueskill.Rating(), trueskill.Rating()),
+                        "frank": (trueskill.Rating(), trueskill.Rating()),
+                    },
+                    ["gina"],
+                    ["hank"],
+                    5,
+                    4,
+                )["gina"]
+            )
+            expected_month = playerLevel(
+                calculate_rating_update(
+                    {
+                        "carol": (trueskill.Rating(), trueskill.Rating()),
+                        "dave": (trueskill.Rating(), trueskill.Rating()),
+                        "eve": (trueskill.Rating(), trueskill.Rating()),
+                        "frank": (trueskill.Rating(), trueskill.Rating()),
+                    },
+                    ["carol"],
+                    ["dave"],
+                    5,
+                    2,
+                )["carol"]
+            )
+            expected_week = playerLevel(
+                calculate_rating_update(
+                    {
+                        "eve": (trueskill.Rating(), trueskill.Rating()),
+                        "frank": (trueskill.Rating(), trueskill.Rating()),
+                    },
+                    ["eve"],
+                    ["frank"],
+                    5,
+                    1,
+                )["eve"]
+            )
 
             app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
             client = app.test_client()
@@ -1644,14 +1804,18 @@ class C3AnalyticsApiTests(unittest.TestCase):
             quarter_payload = quarter_resp.get_json()
             assert quarter_payload is not None
             quarter_items = {item["name"].lower(): item for item in quarter_payload["items"]}
-            self.assertAlmostEqual(quarter_items["gina"]["level"], round(expected_quarter, 2), places=2)
+            self.assertAlmostEqual(
+                quarter_items["gina"]["level"], round(expected_quarter, 2), places=2
+            )
 
             month_resp = client.get("/api/leaderboard?scope=this_month")
             self.assertEqual(month_resp.status_code, 200)
             month_payload = month_resp.get_json()
             assert month_payload is not None
             month_items = {item["name"].lower(): item for item in month_payload["items"]}
-            self.assertAlmostEqual(month_items["carol"]["level"], round(expected_month, 2), places=2)
+            self.assertAlmostEqual(
+                month_items["carol"]["level"], round(expected_month, 2), places=2
+            )
 
             week_resp = client.get("/api/leaderboard?scope=this_week")
             self.assertEqual(week_resp.status_code, 200)
@@ -1681,12 +1845,18 @@ class C3AnalyticsApiTests(unittest.TestCase):
             )
             start_month_local = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             start_week = start_week_local.astimezone(timezone.utc)
-            start_month = start_month_local.astimezone(timezone.utc)
+            start_month_local.astimezone(timezone.utc)
 
-            pre_scope_ts = (min(start_month_local, start_week_local) - timedelta(hours=1)).astimezone(timezone.utc)
+            pre_scope_ts = (
+                min(start_month_local, start_week_local) - timedelta(hours=1)
+            ).astimezone(timezone.utc)
             week_base_local = max(start_week_local, start_month_local)
-            month_match_ts = (start_month_local + ((local_now - start_month_local) / 4)).astimezone(timezone.utc)
-            week_match_ts = (week_base_local + ((local_now - week_base_local) / 2)).astimezone(timezone.utc)
+            month_match_ts = (start_month_local + ((local_now - start_month_local) / 4)).astimezone(
+                timezone.utc
+            )
+            week_match_ts = (week_base_local + ((local_now - week_base_local) / 2)).astimezone(
+                timezone.utc
+            )
 
             # A pre-scope match moves all-time level to 7.0.
             self._write_history_record(
@@ -1700,8 +1870,18 @@ class C3AnalyticsApiTests(unittest.TestCase):
                 players=[
                     {
                         "name": "alice",
-                        "before": {"offense_mu": 25.0, "offense_sigma": 8.333, "defense_mu": 25.0, "defense_sigma": 8.333},
-                        "after": {"offense_mu": 31.0, "offense_sigma": 8.0, "defense_mu": 31.0, "defense_sigma": 8.0},
+                        "before": {
+                            "offense_mu": 25.0,
+                            "offense_sigma": 8.333,
+                            "defense_mu": 25.0,
+                            "defense_sigma": 8.333,
+                        },
+                        "after": {
+                            "offense_mu": 31.0,
+                            "offense_sigma": 8.0,
+                            "defense_mu": 31.0,
+                            "defense_sigma": 8.0,
+                        },
                     }
                 ],
             )
@@ -1718,8 +1898,18 @@ class C3AnalyticsApiTests(unittest.TestCase):
                 players=[
                     {
                         "name": "alice",
-                        "before": {"offense_mu": 31.0, "offense_sigma": 8.0, "defense_mu": 31.0, "defense_sigma": 8.0},
-                        "after": {"offense_mu": 35.0, "offense_sigma": 7.5, "defense_mu": 35.0, "defense_sigma": 7.5},
+                        "before": {
+                            "offense_mu": 31.0,
+                            "offense_sigma": 8.0,
+                            "defense_mu": 31.0,
+                            "defense_sigma": 8.0,
+                        },
+                        "after": {
+                            "offense_mu": 35.0,
+                            "offense_sigma": 7.5,
+                            "defense_mu": 35.0,
+                            "defense_sigma": 7.5,
+                        },
                     }
                 ],
             )
@@ -1736,8 +1926,18 @@ class C3AnalyticsApiTests(unittest.TestCase):
                 players=[
                     {
                         "name": "alice",
-                        "before": {"offense_mu": 35.0, "offense_sigma": 7.5, "defense_mu": 35.0, "defense_sigma": 7.5},
-                        "after": {"offense_mu": 37.0, "offense_sigma": 7.0, "defense_mu": 37.0, "defense_sigma": 7.0},
+                        "before": {
+                            "offense_mu": 35.0,
+                            "offense_sigma": 7.5,
+                            "defense_mu": 35.0,
+                            "defense_sigma": 7.5,
+                        },
+                        "after": {
+                            "offense_mu": 37.0,
+                            "offense_sigma": 7.0,
+                            "defense_mu": 37.0,
+                            "defense_sigma": 7.0,
+                        },
                     }
                 ],
             )
@@ -1763,7 +1963,9 @@ class C3AnalyticsApiTests(unittest.TestCase):
                 week_payload = week_stats.get_json()
                 assert week_payload is not None
                 expected_week_improved = 9.0 if month_match_ts >= start_week else 3.5
-                self.assertAlmostEqual(week_payload["alice"]["improved"], expected_week_improved, places=2)
+                self.assertAlmostEqual(
+                    week_payload["alice"]["improved"], expected_week_improved, places=2
+                )
 
     def test_stats_scope_uses_only_scoped_matches_for_form_and_streak(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -1778,8 +1980,12 @@ class C3AnalyticsApiTests(unittest.TestCase):
             )
             start_month_local = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-            pre_scope_ts = (min(start_month_local, start_week_local) - timedelta(hours=1)).astimezone(timezone.utc)
-            week_match_ts = (max(start_week_local, start_month_local) + timedelta(hours=12)).astimezone(timezone.utc)
+            pre_scope_ts = (
+                min(start_month_local, start_week_local) - timedelta(hours=1)
+            ).astimezone(timezone.utc)
+            week_match_ts = (
+                max(start_week_local, start_month_local) + timedelta(hours=12)
+            ).astimezone(timezone.utc)
 
             self._write_history_record(tmp_path, pre_scope_ts, ["alice"], ["bob"], ["alice"], 5, 3)
             self._write_history_record(tmp_path, week_match_ts, ["alice"], ["bob"], ["alice"], 5, 1)

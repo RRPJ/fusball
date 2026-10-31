@@ -107,29 +107,53 @@ def best_balanced_lineup(
 
     p = players  # short alias for readability in the options table below
     options = [
-        ([offense_a, defense_a, offense_b, defense_b],
-         [(p[defense_a][0], p[offense_a][1]), (p[offense_b][0], p[defense_b][1])]),
-        ([offense_a, defense_a, defense_b, offense_b],
-         [(p[defense_a][0], p[offense_a][1]), (p[defense_b][0], p[offense_b][1])]),
-        ([defense_a, offense_a, offense_b, defense_b],
-         [(p[offense_a][0], p[defense_a][1]), (p[offense_b][0], p[defense_b][1])]),
-        ([defense_a, offense_a, defense_b, offense_b],
-         [(p[offense_a][0], p[defense_a][1]), (p[defense_b][0], p[offense_b][1])]),
-        ([offense_b, defense_a, offense_a, defense_b],
-         [(p[defense_a][0], p[offense_b][1]), (p[offense_a][0], p[defense_b][1])]),
-        ([offense_b, defense_a, defense_b, offense_a],
-         [(p[defense_a][0], p[offense_b][1]), (p[defense_b][0], p[offense_a][1])]),
-        ([defense_a, offense_b, offense_a, defense_b],
-         [(p[offense_b][0], p[defense_a][1]), (p[offense_a][0], p[defense_b][1])]),
-        ([defense_a, offense_b, defense_b, offense_a],
-         [(p[offense_b][0], p[defense_a][1]), (p[defense_b][0], p[offense_a][1])]),
-        ([defense_b, defense_a, offense_a, offense_b],
-         [(p[defense_a][0], p[defense_b][1]), (p[offense_a][0], p[offense_b][1])]),
-        ([defense_b, defense_a, offense_b, offense_a],
-         [(p[defense_a][0], p[defense_b][1]), (p[offense_b][0], p[offense_a][1])]),
-        ([defense_a, defense_b, offense_a, offense_b],
-         [(p[defense_b][0], p[defense_a][1]), (p[offense_a][0], p[offense_b][1])]),
-        ([defense_a, defense_b, offense_b, offense_a],
-         [(p[defense_b][0], p[defense_a][1]), (p[offense_b][0], p[offense_a][1])]),
+        (
+            [offense_a, defense_a, offense_b, defense_b],
+            [(p[defense_a][0], p[offense_a][1]), (p[offense_b][0], p[defense_b][1])],
+        ),
+        (
+            [offense_a, defense_a, defense_b, offense_b],
+            [(p[defense_a][0], p[offense_a][1]), (p[defense_b][0], p[offense_b][1])],
+        ),
+        (
+            [defense_a, offense_a, offense_b, defense_b],
+            [(p[offense_a][0], p[defense_a][1]), (p[offense_b][0], p[defense_b][1])],
+        ),
+        (
+            [defense_a, offense_a, defense_b, offense_b],
+            [(p[offense_a][0], p[defense_a][1]), (p[defense_b][0], p[offense_b][1])],
+        ),
+        (
+            [offense_b, defense_a, offense_a, defense_b],
+            [(p[defense_a][0], p[offense_b][1]), (p[offense_a][0], p[defense_b][1])],
+        ),
+        (
+            [offense_b, defense_a, defense_b, offense_a],
+            [(p[defense_a][0], p[offense_b][1]), (p[defense_b][0], p[offense_a][1])],
+        ),
+        (
+            [defense_a, offense_b, offense_a, defense_b],
+            [(p[offense_b][0], p[defense_a][1]), (p[offense_a][0], p[defense_b][1])],
+        ),
+        (
+            [defense_a, offense_b, defense_b, offense_a],
+            [(p[offense_b][0], p[defense_a][1]), (p[defense_b][0], p[offense_a][1])],
+        ),
+        (
+            [defense_b, defense_a, offense_a, offense_b],
+            [(p[defense_a][0], p[defense_b][1]), (p[offense_a][0], p[offense_b][1])],
+        ),
+        (
+            [defense_b, defense_a, offense_b, offense_a],
+            [(p[defense_a][0], p[defense_b][1]), (p[offense_b][0], p[offense_a][1])],
+        ),
+        (
+            [defense_a, defense_b, offense_a, offense_b],
+            [(p[defense_b][0], p[defense_a][1]), (p[offense_a][0], p[offense_b][1])],
+        ),
+        (
+            [defense_a, defense_b, offense_b, offense_a],
+            [(p[defense_b][0], p[defense_a][1]), (p[offense_b][0], p[offense_a][1])],
+        ),
     ]
     return max(options, key=lambda option: trueskill.quality(option[1]))[0]
