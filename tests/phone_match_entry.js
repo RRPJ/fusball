@@ -17,6 +17,9 @@ window.fetch = async (url, options = {}) => {
         headers: { 'Content-Type': 'application/json' },
       });
     }
+    if (url === '/api/players' && options.method === 'POST') {
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
   }
   return originalFetch(url, options);
 };
@@ -94,9 +97,52 @@ window.addEventListener('load', async () => {
     const aliceRow = [...byId('leaderboardBody').querySelectorAll('tr')]
       .find(row => row.textContent.includes('Alice'));
     assert(aliceRow, 'refreshed standings missing player');
-    aliceRow.click();
+    const profileButton = [...aliceRow.querySelectorAll('button')]
+      .find(button => button.textContent.includes('Alice'));
+    assert(profileButton, 'player profile must have a keyboard-accessible control');
+    profileButton.focus();
+    assert(document.activeElement === profileButton, 'player profile control must be focusable');
+    assert(getComputedStyle(profileButton).outlineStyle !== 'none', 'profile focus must be visible');
+    profileButton.click();
     const matches = browserTestMode === 'doubles' ? '2 matches' : '1 match';
     await waitFor(() => byId('leaderboardBody').textContent.includes(matches), 'updated player profile missing match');
+    assert(byId('adminNavBtn').getClientRects().length === 0, 'legacy operator must not see corrections');
+    const newName = browserTestMode === 'singles' ? 'Alicia' : 'Alison';
+    byId('newPlayerName').value = '';
+    byId('addPlayerBtn').click();
+    assert(byId('addPlayerStatus').textContent.includes('Enter a player name'), 'empty player validation missing');
+    byId('newPlayerName').value = newName;
+    byId('addPlayerBtn').click();
+    assert(byId('addPlayerStatus').textContent.includes('Adding player'), 'add progress missing');
+    assert(byId('addPlayerBtn').disabled, 'add button must prevent duplicate submissions');
+    await waitFor(() => byId('addPlayerStatus').textContent.includes(`Added ${newName}`), 'add success missing');
+    await waitFor(() => byId('leaderboardBody').textContent.includes(newName), 'added player missing from standings');
+    await waitFor(() => !byId('addPlayerBtn').disabled, 'add button did not recover');
+    const newPlayerButton = [...byId('leaderboardBody').querySelectorAll('button')]
+      .find(button => button.textContent === newName);
+    newPlayerButton.click();
+    await waitFor(() => byId('leaderboardBody').textContent.includes('0 matches'), 'new player profile missing');
+    assert(newPlayerButton.getAttribute('aria-expanded') === 'true', 'profile expansion not announced');
+    assert(newPlayerButton.closest('tr').nextElementSibling.textContent.includes(newName), 'wrong player profile');
+    newPlayerButton.click();
+    assert(newPlayerButton.getAttribute('aria-expanded') === 'false', 'profile collapse not announced');
+    for (const [id, label] of [['sortAtkBtn', 'Offense'], ['sortDefBtn', 'Defense'], ['sortFormBtn', 'Form'], ['sortStreakBtn', 'Streak'], ['sortTotalBtn', 'Total']]) {
+      byId(id).click();
+      assert(byId('lbMetricHeader').textContent === label, `${label} selection missing`);
+      assert(byId(id).getAttribute('aria-pressed') === 'true', `${label} selection not announced`);
+    }
+    for (const id of ['filterThisQuarterBtn', 'filterThisMonthBtn', 'filterThisWeekBtn', 'filterAllBtn']) {
+      byId(id).click();
+      assert(byId(id).getAttribute('aria-pressed') === 'true', 'period selection not announced');
+    }
+    byId('filterThisMonthBtn').click();
+    byId('sortImprovedBtn').click();
+    assert(byId('lbMetricHeader').textContent === 'Improved', 'improved selection missing');
+    byId('filterAllBtn').click();
+    assert(byId('sortImprovedBtn').disabled, 'improved must be unavailable for all time');
+    byId('newPlayerName').value = newName;
+    byId('addPlayerBtn').click();
+    await waitFor(() => byId('addPlayerStatus').classList.contains('bad'), 'duplicate player failure missing');
     offline = true;
     await waitFor(() => document.body.classList.contains('offline'), 'offline state not shown');
     assert(byId('offlineBanner').getClientRects().length > 0, 'offline banner not visible');
