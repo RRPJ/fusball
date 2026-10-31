@@ -4,7 +4,8 @@
 
 ### Issue tracker
 
-Issues and specs are tracked in GitHub Issues. See `docs/agents/issue-tracker.md`.
+Issues and specs are tracked in GitHub Issues. For implementation, merge,
+verification, rollout, and closure, follow `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
@@ -45,6 +46,7 @@ Use the single-context glossary and ADR layout. See `docs/agents/domain.md`.
 3. Make the smallest localized edit across the correct blueprint/template/static/service boundary.
 4. Run targeted checks, escalating to the full matrix for cross-cutting changes.
 5. Update docs when behavior, operations, configuration, migration, or recovery expectations change.
+6. Report branch, target merge status, checks, and outstanding verification or rollout; apply the issue delivery gate before closure.
 
 ## Verification Baseline
 

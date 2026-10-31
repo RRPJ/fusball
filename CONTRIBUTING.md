@@ -12,6 +12,7 @@ Never point local experiments, Vercel Preview, migration tests, or restore drill
 ## Communication Expectation
 
 - Explain what changed, why, validation performed, and known trade-offs.
+- For issue work, report the branch, target merge status, and outstanding verification or rollout. Follow the [issue delivery and closure gate](docs/agents/issue-tracker.md#implementation-and-spec-issue-delivery) for PR and non-PR workflows.
 - Describe production behavior as Vercel + Neon + strict Clerk; label shelve and legacy PIN/token paths as local or rollback compatibility.
 - Update maintainers' documentation when configuration, auth, write, migration, deployment, or recovery behavior changes.
 
