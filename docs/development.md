@@ -65,17 +65,6 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\run_phone_api_dev.ps1 `
 `sandbox/dev-data`. If no split PIN hashes are present, the launcher can fall
 back to `FUSBALL_PHONE_API_TOKEN`.
 
-The Windows service/watchdog files are historical local wrappers:
-
-- `start_phone_api_service.bat`
-- `stop_phone_api_service.bat`
-- `status_phone_api_service.bat`
-
-They target local shelve data under `app/`, but their watchdog still probes
-the legacy `/health` path instead of the current `/api/health` readiness
-endpoint. Use the direct launcher or `run_phone_api_dev.bat` until the wrapper
-is updated; these files are not the Vercel production workflow.
-
 ## Cloud-Like Local Workflow
 
 Use a disposable Neon database and a Clerk test/development instance. Never
@@ -232,6 +221,18 @@ against the restored database. Store the encrypted artifact outside the
 repository.
 
 ## Regression And Style Checks
+
+Run the smallest relevant checks for the change, escalating to the full
+regression matrix for cross-cutting changes:
+
+| Change | Minimum useful verification |
+| --- | --- |
+| Phone routes, templates, or static assets | `python -m unittest test_phone_api.py test_auth.py` |
+| Match/ranking behavior | `python -m unittest test_match_flow.py` |
+| Shared persistence/services | `python scripts/smoke_check.py` and `python -m unittest test_integration.py` |
+| Neon store or transactions | `python -m unittest test_neon_store.py` with PostgreSQL integration when applicable |
+| Neon migrations/data safety | `python -m unittest test_neon_migrations.py test_neon_data_safety.py` plus migration discovery and integrity checks against an explicitly selected non-production database |
+| Full regression | CI smoke and regression tests, Ruff, and Black below |
 
 The CI regression matrix runs:
 

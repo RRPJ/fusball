@@ -49,11 +49,7 @@ Without a writer PIN hash or operator token, this direct launch allows open
 legacy reads but returns `503` for writes.
 
 For an isolated shelve sandbox with prompted compatibility credentials, use
-`run_phone_api_dev.bat`. The `start_phone_api_service.bat`,
-`stop_phone_api_service.bat`, and `status_phone_api_service.bat` files are
-historical local wrappers, not hosted production operation. Their watchdog
-still probes the legacy `/health` path rather than `/api/health`; use the
-direct or development launcher until that wrapper is updated.
+`run_phone_api_dev.bat`.
 
 See `docs/development.md` for local PIN setup, cloud-like Clerk/Neon testing,
 Vercel environment mapping, migrations, and verification commands.
