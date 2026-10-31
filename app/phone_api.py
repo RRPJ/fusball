@@ -103,6 +103,7 @@ def _compute_asset_version(app: Flask) -> str:
     for relative_path in (
         "css/phone.css",
         "css/phone-gazette.css",
+        "css/public.css",
         "js/login.js",
         "js/phone.js",
         "js/public.js",
