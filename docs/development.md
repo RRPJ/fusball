@@ -242,7 +242,7 @@ regression matrix for cross-cutting changes:
 
 | Change | Minimum useful verification |
 | --- | --- |
-| Phone routes, templates, or static assets | `python -m unittest test_public_leaderboard.py test_phone_api.py test_auth.py` |
+| Phone routes, templates, or static assets | `python -m unittest test_public_leaderboard.py test_phone_browser.py test_phone_api.py test_auth.py` |
 | Match/ranking behavior | `python -m unittest test_match_flow.py` |
 | Shared persistence/services | `python scripts/smoke_check.py` and `python -m unittest test_integration.py` |
 | Neon store or transactions | `python -m unittest test_neon_store.py` with PostgreSQL integration when applicable |
@@ -253,12 +253,14 @@ The CI regression matrix runs:
 
 ```powershell
 python scripts\smoke_check.py
-python -m unittest test_public_leaderboard.py test_phone_api.py test_match_flow.py test_integration.py `
+python -m unittest test_public_leaderboard.py test_phone_browser.py test_phone_api.py test_match_flow.py test_integration.py `
   test_neon_store.py test_neon_migrations.py test_neon_data_safety.py test_auth.py
 ```
 
-The public leaderboard browser regression uses Chromium, Google Chrome, or
-Microsoft Edge when available and is skipped if none is installed.
+The public leaderboard and phone match-entry browser regressions use Chromium,
+Google Chrome, or Microsoft Edge when available and are skipped if none is
+installed. The phone test runs against an isolated local store; it also
+simulates failed and conflicting submissions without changing the production API.
 
 The PostgreSQL transaction tests require `TEST_DATABASE_URL`; without it,
 their database-backed cases are skipped.

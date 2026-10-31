@@ -3,14 +3,19 @@
 <head>
   <meta charset='utf-8' />
   <meta name='viewport' content='width=device-width, initial-scale=1' />
-  <title>Fusball Phone API</title>
+  <title>Match entry | Fusball</title>
   <link rel='stylesheet' href="{{ url_for('static', filename='css/phone.css') }}?v={{ asset_version }}" />
+  <link rel='stylesheet' href="{{ url_for('static', filename='css/phone-gazette.css') }}?v={{ asset_version }}" />
 </head>
-<body{% if auth_mode == 'clerk' %} class='strict-auth-pending'{% endif %}>
+<body class='phone-page{% if auth_mode == 'clerk' %} strict-auth-pending{% endif %}'>
   <main class='panel'>
     <header>
-      <h1>Fusball Phone API</h1>
-      <div class='muted'>Button-driven setup, score, confirm, submit</div>
+      <div class='phone-masthead'><span>Fusball</span><a href='/'>Hiscores &amp; standings</a></div>
+      <div class='phone-headline'>
+        <div class='phone-kicker'>The Matchday Gazette &bull; Table-side edition</div>
+        <h1>Record a match</h1>
+        <p>Set the lineup, enter the score, and give the result its headline.</p>
+      </div>
       <div id='offlineBanner' class='offline-banner' style='display:none;'>API offline. Showing leaderboard snapshot only.</div>
       <div id='liveStatusCard' class='live-status review-card' aria-live='polite'>
         <div class='live-status-row'>
@@ -26,12 +31,12 @@
         <div id='clerkUserButton'></div>
         <div id='managedAuthStatus' class='muted'></div>
       </div>
-      <div class='progress'>
+      <nav class='progress' aria-label='Match entry steps'>
           <button id='stepBtn1' type='button' class='active'>Mode</button>
           <button id='stepBtn2' type='button'>Players</button>
           <button id='stepBtn3' type='button'>Score</button>
           <button id='stepBtn4' type='button'>Confirm</button>
-      </div>
+      </nav>
       <button id='adminNavBtn' class='btn small' type='button' style='display:none; margin-top:8px;'>Admin</button>
     </header>
 
@@ -87,7 +92,6 @@
         <div id='scoreBlue' class='row'></div>
       </div>
       <div id='scoreHint' class='muted' style='margin-top:10px;'></div>
-      <div id='statusText' class='status'></div>
     </section>
 
     <section id='step4' class='section'>
@@ -149,6 +153,7 @@
   <div id='stickyBar' class='sticky'{% if auth_mode == 'clerk' %} style='display:none;'{% endif %}>
     <div class='sticky-wrap'>
       <div id='summaryText' class='summary'>No lineup selected.</div>
+      <div id='statusText' class='status' role='status' aria-live='polite'></div>
       <div class='row'>
         <button id='backBtn' class='btn small' type='button'>Back</button>
         <button id='nextBtn' class='btn primary' type='button'>Next</button>

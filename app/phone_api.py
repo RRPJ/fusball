@@ -100,7 +100,13 @@ def _compute_asset_version(app: Flask) -> str:
     """
     static_folder = Path(app.static_folder) if app.static_folder else ROOT_DIR / "static"
     hasher = hashlib.sha256()
-    for relative_path in ("css/phone.css", "js/login.js", "js/phone.js", "js/public.js"):
+    for relative_path in (
+        "css/phone.css",
+        "css/phone-gazette.css",
+        "js/login.js",
+        "js/phone.js",
+        "js/public.js",
+    ):
         asset_path = static_folder / relative_path
         try:
             hasher.update(asset_path.read_bytes())
