@@ -1,5 +1,19 @@
 # Copilot Instructions For This Repository
 
+## Agent skills
+
+### Issue tracker
+
+Issues and specs are tracked in GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the canonical triage labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use the single-context glossary and ADR layout. See `docs/agents/domain.md`.
+
 ## Mission
 
 - Preserve gameplay, ranking, phone API, and recovery behavior while modernizing safely.
