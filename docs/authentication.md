@@ -18,7 +18,17 @@ This separates identity from application policy. A user can be disabled or
 have their role changed without rotating a credential shared by every
 operator.
 
-Static assets and `GET /api/health` remain public. The `/phone` client hides
+The home page, static assets, `GET /api/health`, and the dedicated
+`/api/public/` leaderboard, stats, and profile endpoints are public in every
+mode, including installations with read PINs. These endpoints expose names,
+standings, match participants, scores, and rating changes, but not internal
+rating means or uncertainties. No-index directives are advisory, not access
+controls. Separate history, H2H, presence, odds, and other existing reads
+retain their previous policies; in compatibility modes without configured read
+protection those reads were already anonymous. Writes and administration
+retain their existing authorization.
+
+The `/phone` client hides
 operational content until Clerk resolves, but that UI gate is not the security
 boundary: every protected `/api/*` route authorizes the request server-side.
 Anonymous strict-mode visits are sent to `/login`, and the login `next` value
@@ -115,8 +125,9 @@ environment ready, record:
    environment.
 3. Clerk authorized-party configuration for the exact origin.
 4. Successful sign-in and `GET /api/auth/me` results for each provisioned role.
-5. Negative checks: anonymous access rejected, reader writes rejected, disabled
-   users rejected, and legacy headers rejected in strict mode.
+5. Verify anonymous public standings and profiles; verify protected reads and
+   writes reject anonymous users, reader writes are rejected, disabled users
+   are rejected, and legacy headers are rejected in strict mode.
 6. Operator write and admin correction checks against isolated preview data.
 
 Do not publish session tokens, Clerk secrets, database URLs, or screenshots

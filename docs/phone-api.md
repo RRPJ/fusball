@@ -21,7 +21,7 @@ The code defaults to `legacy` auth mode for compatibility. Production must set
 
 ## Browser Routes
 
-- `GET /` redirects to `/phone`.
+- `GET /` renders the public leaderboard for anonymous and signed-in visitors.
 - `GET /phone` renders the operator UI.
 - `GET /login` renders the Clerk sign-in page only in strict `clerk` mode. In
   other modes it redirects to `/phone`.
@@ -32,6 +32,37 @@ JavaScript resolves the session and redirects an anonymous visitor to
 `/login?next=/phone`. The `/login` route accepts only a local `next` path and
 falls back to `/phone` for unsafe values. This browser flow is not an
 authorization boundary; API routes enforce access server-side.
+
+## Public Leaderboard
+
+The public page uses `GET /api/public/leaderboard`, `GET /api/public/stats`,
+and `GET /api/public/player/<name>/profile`. They accept the same `scope`,
+`limit`, and `recent_limit` parameters as their corresponding existing read
+endpoints, with the same ordering, limits, and error responses. Stats exposes
+only win rate, streak, improved, and recent form. The leaderboard and profile
+responses allowlist public presentation fields and omit internal rating means
+and uncertainties. Public leaderboard rows include `player_id`, the canonical
+identifier for stats keys and profile paths; `name` remains the formatted
+display name. Existing `/api/leaderboard`, `/api/stats`, and
+`/api/player/<name>/profile` responses and authorization are unchanged.
+
+Names, match lineups, opponents, scores, and rating changes are intentionally
+public in all authentication modes, even with a read PIN. Search-engine
+`noindex` directives on the page and public API are advisory, not privacy or
+access controls. Separate history and head-to-head APIs, presence, odds,
+other reads, and all writes keep their previous authorization. In legacy and
+hybrid configurations without read protection, other reads were already
+anonymous.
+
+The page stores the last successful selection in browser local storage. A
+snapshot saved before canonical identifiers were added is not reused; a
+successful refresh creates a new snapshot. A network or service failure
+displays that exact metric and period as stale,
+disables alternative selections, and requires a connection for profiles. A
+service failure also displays an error; without a snapshot the leaderboard is
+explicitly unavailable. Retry or reconnect to refresh. Cached profiles are
+never displayed. The strict-mode phone link opens `/login?next=/phone`;
+compatibility modes link to `/phone`.
 
 ## Authentication
 

@@ -13,9 +13,45 @@ from services.phone_request_context import PhoneApiContext
 def create_read_blueprint(ctx: PhoneApiContext) -> Blueprint:
     bp = Blueprint("read", __name__)
 
+    def public_request() -> bool:
+        return request.path.startswith("/api/public/")
+
+    def pick(value: dict, keys: tuple[str, ...]) -> dict:
+        return {key: value[key] for key in keys if key in value}
+
+    def public_profile(profile: dict) -> dict:
+        result = pick(profile, ("player",))
+        result["summary"] = pick(
+            profile.get("summary", {}),
+            ("games", "wins", "win_rate", "streak", "recent_form_5", "last_match"),
+        )
+        result["trend"] = pick(profile.get("trend", {}), ("offense", "defense"))
+        for key in ("best_partner", "toughest_opponent"):
+            item = profile.get(key)
+            result[key] = (
+                pick(item, ("player", "wins", "losses", "draws", "matches")) if item else None
+            )
+        result["recent_matches"] = [
+            {
+                **pick(match, ("timestamp", "won", "score_for", "score_against")),
+                "team": [name for name in match.get("team", []) if isinstance(name, str)],
+                "opponents": [name for name in match.get("opponents", []) if isinstance(name, str)],
+                "delta": pick(match.get("delta", {}), ("offense", "defense")),
+            }
+            for match in profile.get("recent_matches", [])
+        ]
+        return result
+
+    @bp.after_request
+    def noindex_public(response):
+        if public_request():
+            response.headers["X-Robots-Tag"] = "noindex, nofollow"
+        return response
+
+    @bp.get("/api/public/leaderboard")
     @bp.get("/api/leaderboard")
     def leaderboard() -> object:
-        denied = ctx.require_read_access()
+        denied = None if public_request() else ctx.require_read_access()
         if denied is not None:
             return denied
 
@@ -29,7 +65,23 @@ def create_read_blueprint(ctx: PhoneApiContext) -> Blueprint:
             return error_response
         assert store is not None
 
-        rows = load_leaderboard(store, limit, scope=scope)
+        rows = load_leaderboard(store, limit, scope=scope, include_player_id=public_request())
+        if public_request():
+            rows = [
+                pick(
+                    row,
+                    (
+                        "position",
+                        "name",
+                        "player_id",
+                        "rank",
+                        "level",
+                        "offense_level",
+                        "defense_level",
+                    ),
+                )
+                for row in rows
+            ]
         return jsonify({"count": len(rows), "items": rows})
 
     @bp.get("/api/players")
@@ -100,9 +152,10 @@ def create_read_blueprint(ctx: PhoneApiContext) -> Blueprint:
         assert store is not None
         return jsonify(store.query_team_h2h(team1, team2))
 
+    @bp.get("/api/public/stats")
     @bp.get("/api/stats")
     def player_stats() -> object:
-        denied = ctx.require_read_access()
+        denied = None if public_request() else ctx.require_read_access()
         if denied is not None:
             return denied
 
@@ -116,7 +169,13 @@ def create_read_blueprint(ctx: PhoneApiContext) -> Blueprint:
         assert store is not None
 
         try:
-            return jsonify(store.query_player_stats(scope=scope))
+            stats = store.query_player_stats(scope=scope)
+            if public_request():
+                stats = {
+                    name: pick(item, ("win_rate", "streak", "improved", "recent_form_5"))
+                    for name, item in stats.items()
+                }
+            return jsonify(stats)
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
 
@@ -137,9 +196,10 @@ def create_read_blueprint(ctx: PhoneApiContext) -> Blueprint:
         snapshots = store.query_rating_snapshots(name, n)
         return jsonify({"player": name, "count": len(snapshots), "snapshots": snapshots})
 
+    @bp.get("/api/public/player/<name>/profile")
     @bp.get("/api/player/<name>/profile")
     def player_profile(name: str) -> object:
-        denied = ctx.require_read_access()
+        denied = None if public_request() else ctx.require_read_access()
         if denied is not None:
             return denied
 
@@ -156,7 +216,8 @@ def create_read_blueprint(ctx: PhoneApiContext) -> Blueprint:
         assert store is not None
 
         try:
-            return jsonify(store.query_player_profile(name, scope=scope, recent_limit=recent_limit))
+            profile = store.query_player_profile(name, scope=scope, recent_limit=recent_limit)
+            return jsonify(public_profile(profile) if public_request() else profile)
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
 

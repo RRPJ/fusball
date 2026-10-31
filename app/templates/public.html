@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Leaderboard | Fusball</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/phone.css') }}?v={{ asset_version }}">
+</head>
+<body>
+  <main class="panel">
+    <header>
+      <h1>Fusball Leaderboard</h1>
+      <p class="muted">Public standings and player profiles</p>
+      <a class="public-phone-link" href="{{ '/login?next=/phone' if auth_mode == 'clerk' else '/phone' }}">Open phone app{% if auth_mode == 'clerk' %} / sign in{% endif %}</a>
+    </header>
+    <section class="section active">
+      <div id="status" class="muted" role="status" aria-live="polite">Loading standings...</div>
+      <div class="row sort-row" id="metrics" aria-label="Metric">
+        <button class="btn sort" data-metric="total">Total</button>
+        <button class="btn sort" data-metric="offense">Offense</button>
+        <button class="btn sort" data-metric="defense">Defense</button>
+        <button class="btn sort" data-metric="form">Form</button>
+        <button class="btn sort" data-metric="streak">Streak</button>
+        <button class="btn sort" data-metric="improved">Improved</button>
+      </div>
+      <div class="row filter-row" id="periods" aria-label="Time period">
+        <button class="btn sort" data-scope="all">All</button>
+        <button class="btn sort" data-scope="this_quarter">This quarter</button>
+        <button class="btn sort" data-scope="this_month">This month</button>
+        <button class="btn sort" data-scope="this_week">This week</button>
+      </div>
+      <div id="hint" class="muted"></div>
+      <table aria-label="Leaderboard">
+        <thead><tr><th>#</th><th>Player</th><th id="metricHeader">Total</th></tr></thead>
+        <tbody id="leaderboardBody"><tr><td colspan="3">Loading standings...</td></tr></tbody>
+      </table>
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='js/public.js') }}?v={{ asset_version }}" defer></script>
+</body>
+</html>

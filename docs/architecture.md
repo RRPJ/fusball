@@ -39,6 +39,8 @@ configuration.
 
 The phone UI is not embedded in Python:
 
+- `app/templates/public.html` and `app/static/js/public.js` render the public
+  leaderboard and profiles at `/`.
 - `app/templates/phone.html` renders `/phone`.
 - `app/templates/login.html` renders `/login` in strict Clerk mode.
 - `app/static/css/phone.css` contains the UI styles.
@@ -85,12 +87,15 @@ Auth modes are:
   managed actor resolves.
 - `clerk`: Clerk-only; legacy credential headers are ignored.
 
-`/phone`, `/login`, and static assets are browser resources rather than
+`/`, `/phone`, `/login`, and static assets are browser resources rather than
 authorization boundaries. In strict mode `/phone` initially renders the Clerk
 bootstrap state; client JavaScript redirects an anonymous visitor to
 `/login?next=/phone`. `/login` accepts only a safe local `next` path. All API
-authorization is enforced again on the server. `GET /api/health` remains
-public.
+authorization is enforced again on the server. `GET /api/health` and the
+allowlisted `/api/public/` leaderboard, statistics, and profile reads are public
+in every auth mode, even with PINs. The existing read endpoints retain their
+contracts and policies. Other compatibility-mode reads can already be public
+when no read protection is configured.
 
 Admin routes always require a managed actor with the `admin` role; a legacy
 shared credential does not grant match-correction access.

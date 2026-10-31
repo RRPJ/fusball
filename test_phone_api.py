@@ -262,14 +262,15 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("function openPlayerH2H(playerKey, otherPlayerKey)", js)
             self.assertIn("setMode('singles');", js)
 
-    def test_root_redirects_to_phone(self) -> None:
+    def test_root_presents_public_leaderboard(self) -> None:
         with TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
             app = create_app(db_dir=tmp_path, operator_token=self.operator_token)
             client = app.test_client()
             response = client.get("/", follow_redirects=False)
-            self.assertEqual(response.status_code, 302)
-            self.assertEqual(response.headers.get("Location"), "/phone")
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("Leaderboard", response.get_data(as_text=True))
+            self.assertIn("noindex", response.get_data(as_text=True))
 
     def test_phone_page_includes_quip_catalog_with_variety(self) -> None:
         with TemporaryDirectory() as tmpdir:
@@ -715,6 +716,7 @@ class PhoneApiTests(unittest.TestCase):
                             "improved": 0.0,
                             "recent_form_5": "WL",
                             "last_match": "2026-04-01T12:00:00.000000Z",
+                            "offense_mu": 25,
                         }
                     }
 
@@ -729,7 +731,7 @@ class PhoneApiTests(unittest.TestCase):
                             "recent_form_5": "WL",
                             "last_match": "2026-04-01T12:00:00.000000Z",
                         },
-                        "trend": {"offense": 1.5, "defense": -0.5},
+                        "trend": {"offense": 1.5, "defense": -0.5, "defense_sigma": 8},
                         "best_partner": None,
                         "toughest_opponent": {
                             "player": "Bob",
@@ -791,6 +793,19 @@ class PhoneApiTests(unittest.TestCase):
             self.assertEqual(profile_payload["summary"]["games"], 2)
             self.assertEqual(len(profile_payload["recent_matches"]), 1)
 
+            public_profile = client.get(
+                "/api/public/player/alice/profile?scope=this_month&recent_limit=1"
+            )
+            self.assertEqual(public_profile.status_code, 200)
+            self.assertIn("noindex", public_profile.headers["X-Robots-Tag"])
+            public_payload = public_profile.get_json()
+            self.assertEqual(public_payload["recent_matches"][0]["team"], ["Alice"])
+            self.assertNotIn("defense_sigma", public_payload["trend"])
+            self.assertNotIn("win_share", public_payload["toughest_opponent"])
+            public_stats = client.get("/api/public/stats").get_json()
+            self.assertNotIn("offense_mu", public_stats["alice"])
+            self.assertEqual(client.get("/api/public/stats?scope=invalid").status_code, 400)
+
             team_h2h = client.get("/api/team-h2h?team1=alice,bob&team2=carol,dave")
             self.assertEqual(team_h2h.status_code, 200)
             team_h2h_payload = team_h2h.get_json()
@@ -811,6 +826,17 @@ class PhoneApiTests(unittest.TestCase):
                 write_pin_hash=generate_password_hash("write-5678"),
             )
             client = app.test_client()
+
+            public = client.get("/api/public/leaderboard")
+            self.assertEqual(public.status_code, 200)
+            self.assertEqual(public.get_json()["items"][0]["name"], "Alice")
+            self.assertNotIn("offense_mu", public.get_json()["items"][0])
+            self.assertIn(
+                "offense_mu",
+                client.get(
+                    "/api/leaderboard", headers={"X-Read-Pin": "read-1234"}
+                ).get_json()["items"][0],
+            )
 
             read_no_auth = client.get("/api/leaderboard")
             self.assertEqual(read_no_auth.status_code, 401)
@@ -883,6 +909,16 @@ class PhoneApiTests(unittest.TestCase):
             )
             client = app.test_client()
 
+            self.assertIn("/login?next=/phone", client.get("/").get_data(as_text=True))
+            for path in (
+                "/api/public/leaderboard",
+                "/api/public/stats",
+                "/api/public/player/alice/profile",
+            ):
+                self.assertEqual(client.get(path).status_code, 200)
+            self.assertEqual(client.get("/api/player/alice/history").status_code, 401)
+            self.assertEqual(client.get("/api/h2h?p1=alice&p2=bob").status_code, 401)
+            self.assertEqual(client.get("/api/presence").status_code, 401)
             self.assertEqual(client.get("/api/leaderboard").status_code, 401)
             legacy_read = client.get(
                 "/api/leaderboard",
@@ -941,6 +977,13 @@ class PhoneApiTests(unittest.TestCase):
                 authenticator=AnonymousAuthenticator(),
             )
             client = app.test_client()
+            for path in (
+                "/api/public/leaderboard",
+                "/api/public/stats",
+                "/api/public/player/alice/profile",
+            ):
+                self.assertEqual(client.get(path).status_code, 200)
+            self.assertEqual(client.get("/api/players").status_code, 401)
             response = client.get(
                 "/api/leaderboard",
                 headers={"X-Read-Pin": "read-1234"},

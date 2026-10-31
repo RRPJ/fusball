@@ -22,7 +22,8 @@ standard.
 
 ## What It Does
 
-- Serves the phone UI at `/phone` and managed sign-in at `/login`
+- Serves a public leaderboard and player profiles at `/`, the phone UI at
+  `/phone`, and managed sign-in at `/login`
 - Exposes health, leaderboard, player, presence, odds, stats, history, match,
   and correction endpoints under `/api/*`
 - Uses Neon transactions for hosted mutations; rating and lifecycle writes add
@@ -42,7 +43,14 @@ python app\phone_api.py
 
 Open:
 
+- Public leaderboard: `http://127.0.0.1:8080/`
 - Phone UI: `http://127.0.0.1:8080/phone`
+
+The public leaderboard and profiles expose player names, standings, match
+participants, scores, and rating changes in every auth mode, even with a
+reader PIN. No-index requests are advisory, not access controls. The phone
+workflow and other read and write policies remain unchanged; compatibility
+installs without read protection already allow other anonymous reads.
 - Health/readiness: `http://127.0.0.1:8080/api/health`
 
 Without a writer PIN hash or operator token, this direct launch allows open
