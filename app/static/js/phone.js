@@ -1179,7 +1179,12 @@
       const ids = ['sortTotalBtn','sortAtkBtn','sortDefBtn','sortFormBtn','sortStreakBtn','sortImprovedBtn'];
       const modes = ['total','offense','defense','form','streak','improved'];
       const headers = ['Total','Offense','Defense','Form','Streak','Improved'];
-      ids.forEach((id, i) => document.getElementById(id).classList.toggle('active', modes[i] === mode));
+      ids.forEach((id, i) => {
+        const selected = modes[i] === mode;
+        const button = document.getElementById(id);
+        button.classList.toggle('active', selected);
+        button.setAttribute('aria-pressed', String(selected));
+      });
       const hdr = document.getElementById('lbMetricHeader');
       if (hdr) hdr.textContent = headers[modes.indexOf(mode)] || 'Total';
       const hint = document.getElementById('metricHint');
@@ -1229,6 +1234,11 @@
       document.getElementById('filterThisQuarterBtn').classList.toggle('active', f === 'this_quarter');
       document.getElementById('filterThisMonthBtn').classList.toggle('active', f === 'this_month');
       document.getElementById('filterThisWeekBtn').classList.toggle('active', f === 'this_week');
+      [['filterAllBtn', 'all'], ['filterThisQuarterBtn', 'this_quarter'],
+       ['filterThisMonthBtn', 'this_month'], ['filterThisWeekBtn', 'this_week']].forEach(([id, scope]) => {
+        const button = document.getElementById(id);
+        button.setAttribute('aria-pressed', String(f === scope));
+      });
 
       const improvedBtn = document.getElementById('sortImprovedBtn');
       improvedBtn.disabled = f === 'all';
@@ -1259,12 +1269,29 @@
         if (diff !== 0) return diff;
         return Number(a.position || 999) - Number(b.position || 999);
       });
-      body.innerHTML = ordered.map((row, idx) => {
+      body.replaceChildren();
+      ordered.forEach((row, idx) => {
         const playerKey = row.name.toLowerCase();
-        const metric = leaderboardMetric(row);
-        const rank = idx + 1;
-        return `<tr class='lrow' onclick='togglePlayerHistory(this, "${playerKey}")'><td>${rank}</td><td><div>${row.name}</div><div class="sub">Off\u00a0${row.offense_level} \u00b7 Def\u00a0${row.defense_level}</div></td><td>${metric}</td></tr>`;
-      }).join('');
+        const tr = document.createElement('tr');
+        tr.className = 'lrow';
+        const rank = document.createElement('td');
+        rank.textContent = idx + 1;
+        const player = document.createElement('td');
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'profile-toggle';
+        button.textContent = row.name;
+        button.setAttribute('aria-expanded', 'false');
+        button.addEventListener('click', () => togglePlayerHistory(tr, playerKey));
+        const sub = document.createElement('div');
+        sub.className = 'sub';
+        sub.textContent = `Off\u00a0${row.offense_level} \u00b7 Def\u00a0${row.defense_level}`;
+        player.append(button, sub);
+        const metric = document.createElement('td');
+        metric.innerHTML = leaderboardMetric(row);
+        tr.append(rank, player, metric);
+        body.appendChild(tr);
+      });
     }
 
     function formatSignedDelta(value) {
@@ -1361,9 +1388,12 @@
       const nextEl = rowEl.nextElementSibling;
       if (nextEl && nextEl.classList.contains('expand-row')) {
         nextEl.remove();
-        if (state.expandedPlayer === playerKey) { state.expandedPlayer = null; return; }
+        rowEl.querySelector('.profile-toggle').setAttribute('aria-expanded', 'false');
+        if (state.expandedPlayer === playerKey) state.expandedPlayer = null;
+        return;
       }
       state.expandedPlayer = playerKey;
+      rowEl.querySelector('.profile-toggle').setAttribute('aria-expanded', 'true');
       const tr = document.createElement('tr');
       tr.className = 'expand-row';
       const td = document.createElement('td');
@@ -1880,6 +1910,8 @@
     }
 
     async function addPlayer() {
+      const button = document.getElementById('addPlayerBtn');
+      if (button.disabled) return;
       const writePin = AUTH_MODE === 'clerk' || (window.Clerk && Clerk.session)
         ? 'managed-session'
         : ensureWritePin();
@@ -1895,28 +1927,33 @@
         return;
       }
 
-      setAddPlayerStatus('Adding player...');
-      const response = await apiFetch('/api/players', {
-        method: 'POST',
-        trackKey: 'players',
-        trackLabel: 'player add',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name }),
-      });
+      button.disabled = true;
+      try {
+        setAddPlayerStatus('Adding player...');
+        const response = await apiFetch('/api/players', {
+          method: 'POST',
+          trackKey: 'players',
+          trackLabel: 'player add',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ name }),
+        });
 
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setAddPlayerStatus(result.error || 'Could not add player.', 'bad');
-        return;
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          setAddPlayerStatus(result.error || 'Could not add player.', 'bad');
+          return;
+        }
+
+        input.value = '';
+        setAddPlayerStatus(`Added ${result.name}.`, 'ok');
+        await loadPlayers();
+        await refreshPresence();
+        await refreshLeaderboard();
+      } finally {
+        button.disabled = false;
       }
-
-      input.value = '';
-      setAddPlayerStatus(`Added ${result.name}.`, 'ok');
-      await loadPlayers();
-      await refreshPresence();
-      await refreshLeaderboard();
     }
 
     function storedTeamDisplay(team) {
@@ -1964,7 +2001,7 @@
       element.className = `status ${kind}`.trim();
     }
 
-    async function loadAdminMatches() {
+    async function loadAdminMatches(showStatus = true) {
       const response = await apiFetch('/api/admin/matches?limit=30', {
         trackKey: 'admin-matches',
         trackLabel: 'admin matches',
@@ -1975,7 +2012,7 @@
       }
       state.adminMatches = payload.items || [];
       renderAdminMatches();
-      setAdminMatchesStatus(`${state.adminMatches.length} matches loaded.`, 'ok');
+      if (showStatus) setAdminMatchesStatus(`${state.adminMatches.length} matches loaded.`, 'ok');
     }
 
     async function changeAdminMatchStatus(match) {
@@ -2011,7 +2048,7 @@
       state.playerStatsScope = null;
       state.expandedPlayer = null;
       await Promise.all([
-        loadAdminMatches(),
+        loadAdminMatches(false),
         refreshLeaderboard(),
         fetchLeaderboardStats(),
         loadPlayers(),

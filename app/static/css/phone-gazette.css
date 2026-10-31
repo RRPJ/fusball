@@ -81,6 +81,74 @@ body.phone-page {
 .phone-page .player-item.present-row { grid-template-columns: minmax(0, 1fr) 44px; }
 .phone-page .player-item .btn.demote { width: 44px; color: #853b31; }
 .phone-page .btn.sort { min-height: 44px; }
+.gazette-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 12px;
+  border-bottom: 2px solid #735b41;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+}
+.phone-page .gazette-section-heading h2 {
+  margin: 3px 0 0;
+  font-size: 1.4rem;
+}
+.gazette-eyebrow, .gazette-filter-label, .gazette-heading-note {
+  color: #695037;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.gazette-heading-note { text-align: right; }
+.gazette-filter-label { margin-top: 16px; }
+.phone-page .sort-row, .phone-page .filter-row { margin: 6px 0 10px; }
+.phone-page #leaderboardSection table { margin-top: 12px; table-layout: fixed; }
+.phone-page #leaderboardSection th { background: #e7d8bd; color: #59412c; }
+.phone-page #leaderboardSection th:first-child { width: 48px; }
+.phone-page #leaderboardSection th:last-child { width: 24%; }
+.phone-page #leaderboardSection td { overflow-wrap: anywhere; }
+.phone-page #leaderboardSection .expand-panel { padding: 14px; }
+.phone-page .gazette-support-card {
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid #b6a384;
+  outline: 1px solid #dfcfb4;
+  outline-offset: -5px;
+  background: #f1e5d0;
+}
+.gazette-support-card h3 {
+  margin: 0 0 8px;
+  color: #443222;
+  font: 700 1rem Georgia, serif;
+}
+.gazette-support-card label { color: #625244; font-size: .82rem; }
+.gazette-support-card .token { flex: 1 1 200px; width: auto; min-width: 0; }
+.phone-page #adminMatchesList .review-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+.phone-page #adminMatchesList .review-card strong { overflow-wrap: anywhere; }
+.phone-page #adminMatchesList .btn { justify-self: start; }
+.phone-page .profile-header { border-bottom: 1px solid #c2ad8b; padding-bottom: 10px; }
+.phone-page .profile-title { font: 700 1.1rem Georgia, serif; }
+.phone-page .recent-match { border-color: #c2ad8b; }
+.phone-page .lrow { cursor: auto; }
+.phone-page .profile-toggle {
+  min-height: 44px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: #56370e;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
 .phone-page .review-card, .phone-page .h2h-pair, .phone-page .profile-card, .phone-page .trend-pill {
   background: #f1e5d0;
   border-color: #c2ad8b;
