@@ -43,7 +43,8 @@ The phone UI is not embedded in Python:
   leaderboard and profiles at `/`.
 - `app/templates/phone.html` renders `/phone`.
 - `app/templates/login.html` renders `/login` in strict Clerk mode.
-- `app/static/css/phone.css` contains the UI styles.
+- `app/static/css/public.css` styles the public leaderboard and profiles;
+  `app/static/css/phone.css` styles the phone and sign-in interfaces.
 - `app/static/js/phone.js` contains phone workflow and API behavior.
 - `app/static/js/login.js` contains the Clerk sign-in flow.
 
