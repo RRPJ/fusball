@@ -412,11 +412,7 @@ Vercel Production should use production Neon and strict Clerk. Vercel Preview
 should use isolated preview Neon and Clerk configuration. `vercel.json` sends
 all routes to `api/index.py`.
 
-`run_phone_api_dev.bat` is the local shelve development launcher. The Windows
-`start_phone_api_service.bat`, `stop_phone_api_service.bat`, and
-`status_phone_api_service.bat` files are historical local wrappers whose
-watchdog still probes `/health` instead of `/api/health`; do not use them as
-the hosted production lifecycle or as a current readiness-managed launcher.
+`run_phone_api_dev.bat` is the local shelve development launcher.
 
 ## See Also
 
