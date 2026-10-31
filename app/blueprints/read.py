@@ -65,10 +65,21 @@ def create_read_blueprint(ctx: PhoneApiContext) -> Blueprint:
             return error_response
         assert store is not None
 
-        rows = load_leaderboard(store, limit, scope=scope)
+        rows = load_leaderboard(store, limit, scope=scope, include_player_id=public_request())
         if public_request():
             rows = [
-                pick(row, ("position", "name", "rank", "level", "offense_level", "defense_level"))
+                pick(
+                    row,
+                    (
+                        "position",
+                        "name",
+                        "player_id",
+                        "rank",
+                        "level",
+                        "offense_level",
+                        "defense_level",
+                    ),
+                )
                 for row in rows
             ]
         return jsonify({"count": len(rows), "items": rows})

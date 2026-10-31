@@ -1,5 +1,5 @@
 (() => {
-  const cacheKey = 'fusball_public_leaderboard_snapshot_v1';
+  const cacheKey = 'fusball_public_leaderboard_snapshot_v2';
   const labels = {total: 'Total', offense: 'Offense', defense: 'Defense', form: 'Form', streak: 'Streak', improved: 'Improved'};
   const periods = {all: 'All time', this_quarter: 'This quarter', this_month: 'This month', this_week: 'This week'};
   const metricButtons = [...document.querySelectorAll('[data-metric]')];
@@ -35,7 +35,7 @@
     document.getElementById('hint').textContent = metric === 'improved' ? 'Improved: delta on all-time leaderboard baseline.' : '';
   }
   function sortValue(row, stats) {
-    const data = stats[row.name.toLowerCase()] || {};
+    const data = stats[row.player_id] || {};
     if (metric === 'offense') return Number(row.offense_level || 0);
     if (metric === 'defense') return Number(row.defense_level || 0);
     if (metric === 'form') return Number(data.win_rate || 0);
@@ -44,7 +44,7 @@
     return Number(row.level || 0);
   }
   function metricValue(row, stats) {
-    const data = stats[row.name.toLowerCase()];
+    const data = stats[row.player_id];
     if (statsRequired(metric) && !data) return '—';
     if (metric === 'form') return esc(data.recent_form_5);
     if (metric === 'streak') return esc(data.streak);
@@ -59,7 +59,7 @@
     }
     const rows = [...snapshot.items].sort((a, b) => sortValue(b, snapshot.stats) - sortValue(a, snapshot.stats) || Number(a.position || 999) - Number(b.position || 999));
     body.innerHTML = rows.length ? rows.map((row, i) =>
-      `<tr><td>${i + 1}</td><td><button class="btn small profile-link" type="button" ${stale ? 'disabled' : ''} data-player="${esc(row.name)}">${esc(row.name)}</button><div class="sub">Off&nbsp;${esc(row.offense_level)} · Def&nbsp;${esc(row.defense_level)}</div></td><td>${metricValue(row, snapshot.stats)}</td></tr>`
+      `<tr><td>${i + 1}</td><td><button class="btn small profile-link" type="button" ${stale ? 'disabled' : ''} data-player="${esc(row.player_id)}">${esc(row.name)}</button><div class="sub">Off&nbsp;${esc(row.offense_level)} · Def&nbsp;${esc(row.defense_level)}</div></td><td>${metricValue(row, snapshot.stats)}</td></tr>`
     ).join('') : '<tr><td colspan="3">No players found.</td></tr>';
     body.querySelectorAll('.profile-link').forEach(button => button.addEventListener('click', () => openProfile(button)));
   }

@@ -12,7 +12,7 @@ from services.store_contracts import BaseWriteStore
 
 
 def load_leaderboard(
-    store: BaseWriteStore, limit: int = 50, scope: str = "all"
+    store: BaseWriteStore, limit: int = 50, scope: str = "all", *, include_player_id: bool = False
 ) -> list[dict[str, object]]:
     ratings = store.leaderboard_ratings(scope)
     if not ratings:
@@ -27,6 +27,7 @@ def load_leaderboard(
             {
                 "position": index,
                 "name": capwords(name),
+                **({"player_id": name} if include_player_id else {}),
                 "rank": labels[name],
                 "level": round(playerLevel(rating), 2),
                 "offense_level": round(trueskill.expose(rating[0]), 2),

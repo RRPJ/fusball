@@ -41,7 +41,9 @@ and `GET /api/public/player/<name>/profile`. They accept the same `scope`,
 endpoints, with the same ordering, limits, and error responses. Stats exposes
 only win rate, streak, improved, and recent form. The leaderboard and profile
 responses allowlist public presentation fields and omit internal rating means
-and uncertainties. Existing `/api/leaderboard`, `/api/stats`, and
+and uncertainties. Public leaderboard rows include `player_id`, the canonical
+identifier for stats keys and profile paths; `name` remains the formatted
+display name. Existing `/api/leaderboard`, `/api/stats`, and
 `/api/player/<name>/profile` responses and authorization are unchanged.
 
 Names, match lineups, opponents, scores, and rating changes are intentionally
@@ -53,7 +55,9 @@ hybrid configurations without read protection, other reads were already
 anonymous.
 
 The page stores the last successful selection in browser local storage. A
-network or service failure displays that exact metric and period as stale,
+snapshot saved before canonical identifiers were added is not reused; a
+successful refresh creates a new snapshot. A network or service failure
+displays that exact metric and period as stale,
 disables alternative selections, and requires a connection for profiles. A
 service failure also displays an error; without a snapshot the leaderboard is
 explicitly unavailable. Retry or reconnect to refresh. Cached profiles are
