@@ -43,8 +43,18 @@ only win rate, streak, improved, and recent form. The leaderboard and profile
 responses allowlist public presentation fields and omit internal rating means
 and uncertainties. Public leaderboard rows include `player_id`, the canonical
 identifier for stats keys and profile paths; `name` remains the formatted
-display name. Existing `/api/leaderboard`, `/api/stats`, and
-`/api/player/<name>/profile` responses and authorization are unchanged.
+display name. The protected `/api/leaderboard` retains its existing default
+response and authorization; `include_player_id=1` opts in to the additional
+`player_id` field. The phone uses this option for its single protected
+leaderboard refresh. `/api/stats` and `/api/player/<name>/profile` responses
+and authorization are unchanged.
+
+Older phone snapshots without identifiers remain usable under the previous
+rules, including name-derived stats and profile links after reconnecting.
+Because their formatted names can have lost distinguishing whitespace, these
+lookups cannot reliably distinguish all players. The phone warns that their
+identities are unverified until a successful refresh replaces the snapshot
+with canonical identifiers.
 
 Names, match lineups, opponents, scores, and rating changes are intentionally
 public in all authentication modes, even with a read PIN. Search-engine

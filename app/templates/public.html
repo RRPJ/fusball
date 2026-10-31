@@ -5,38 +5,55 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>Leaderboard | Fusball</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/phone.css') }}?v={{ asset_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/public.css') }}?v={{ asset_version }}">
 </head>
 <body>
-  <main class="panel">
-    <header>
-      <h1>Fusball Leaderboard</h1>
-      <p class="muted">Public standings and player profiles</p>
+  <div class="page">
+    <header class="masthead">
+      <a class="brand" href="/" aria-label="Fusball leaderboard home"><span class="brand-mark" aria-hidden="true">F</span><span>Fusball <small>Matchday Gazette</small></span></a>
+      <nav aria-label="Main navigation">
+        <a class="current-page" href="/" aria-current="page">Leaderboard</a>
       <a class="public-phone-link" href="{{ '/login?next=/phone' if auth_mode == 'clerk' else '/phone' }}">Open phone app{% if auth_mode == 'clerk' %} / sign in{% endif %}</a>
+      </nav>
     </header>
-    <section class="section active">
+    <main>
+    <section class="hero" aria-labelledby="page-title">
+      <p class="eyebrow">The matchday gazette <span aria-hidden="true">✦</span> Hiscores</p>
+      <h1 id="page-title">The leaderboard</h1>
+      <p>Every match has a story. Explore the standings and get to know the players behind them.</p>
+      <span class="hero-note">Standings &amp; player profiles</span>
+    </section>
+    <section class="standings" aria-labelledby="standings-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">The rankings</p><h2 id="standings-title">Hiscores <span> / Leaderboard</span></h2></div>
+        <p>Choose a metric and time period to compare players.</p>
+      </div>
       <div id="status" class="muted" role="status" aria-live="polite">Loading standings...</div>
-      <div class="row sort-row" id="metrics" aria-label="Metric">
-        <button class="btn sort" data-metric="total">Total</button>
+      <div class="filter-label" id="metric-label">Metric <span>· Total level combines offense and defense</span></div>
+      <div class="row sort-row" id="metrics" role="group" aria-labelledby="metric-label">
+        <button class="btn sort" data-metric="total">Total level</button>
         <button class="btn sort" data-metric="offense">Offense</button>
         <button class="btn sort" data-metric="defense">Defense</button>
         <button class="btn sort" data-metric="form">Form</button>
         <button class="btn sort" data-metric="streak">Streak</button>
         <button class="btn sort" data-metric="improved">Improved</button>
       </div>
-      <div class="row filter-row" id="periods" aria-label="Time period">
+      <div class="filter-label" id="period-label">Time period</div>
+      <div class="row filter-row" id="periods" role="group" aria-labelledby="period-label">
         <button class="btn sort" data-scope="all">All</button>
         <button class="btn sort" data-scope="this_quarter">This quarter</button>
         <button class="btn sort" data-scope="this_month">This month</button>
         <button class="btn sort" data-scope="this_week">This week</button>
       </div>
       <div id="hint" class="muted"></div>
-      <table aria-label="Leaderboard">
+      <div class="table-wrap"><table aria-label="Leaderboard">
         <thead><tr><th>#</th><th>Player</th><th id="metricHeader">Total</th></tr></thead>
         <tbody id="leaderboardBody"><tr><td colspan="3">Loading standings...</td></tr></tbody>
-      </table>
+      </table></div>
     </section>
-  </main>
+    </main>
+    <footer>Fusball <span aria-hidden="true">✦</span> The matchday gazette</footer>
+  </div>
   <script src="{{ url_for('static', filename='js/public.js') }}?v={{ asset_version }}" defer></script>
 </body>
 </html>

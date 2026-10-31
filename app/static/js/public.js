@@ -25,10 +25,12 @@
   function controls() {
     metricButtons.forEach(button => {
       button.classList.toggle('active', button.dataset.metric === metric);
+      button.setAttribute('aria-pressed', String(button.dataset.metric === metric));
       button.disabled = stale || (button.dataset.metric === 'improved' && scope === 'all');
     });
     periodButtons.forEach(button => {
       button.classList.toggle('active', button.dataset.scope === scope);
+      button.setAttribute('aria-pressed', String(button.dataset.scope === scope));
       button.disabled = stale;
     });
     document.getElementById('metricHeader').textContent = labels[metric];

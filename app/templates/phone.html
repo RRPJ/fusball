@@ -3,14 +3,19 @@
 <head>
   <meta charset='utf-8' />
   <meta name='viewport' content='width=device-width, initial-scale=1' />
-  <title>Fusball Phone API</title>
+  <title>Match entry | Fusball</title>
   <link rel='stylesheet' href="{{ url_for('static', filename='css/phone.css') }}?v={{ asset_version }}" />
+  <link rel='stylesheet' href="{{ url_for('static', filename='css/phone-gazette.css') }}?v={{ asset_version }}" />
 </head>
-<body{% if auth_mode == 'clerk' %} class='strict-auth-pending'{% endif %}>
+<body class='phone-page{% if auth_mode == 'clerk' %} strict-auth-pending{% endif %}'>
   <main class='panel'>
     <header>
-      <h1>Fusball Phone API</h1>
-      <div class='muted'>Button-driven setup, score, confirm, submit</div>
+      <div class='phone-masthead'><span>Fusball</span><a href='/'>Hiscores &amp; standings</a></div>
+      <div class='phone-headline'>
+        <div class='phone-kicker'>The Matchday Gazette &bull; Table-side edition</div>
+        <h1>Record a match</h1>
+        <p>Set the lineup, enter the score, and give the result its headline.</p>
+      </div>
       <div id='offlineBanner' class='offline-banner' style='display:none;'>API offline. Showing leaderboard snapshot only.</div>
       <div id='liveStatusCard' class='live-status review-card' aria-live='polite'>
         <div class='live-status-row'>
@@ -26,12 +31,12 @@
         <div id='clerkUserButton'></div>
         <div id='managedAuthStatus' class='muted'></div>
       </div>
-      <div class='progress'>
+      <nav class='progress' aria-label='Match entry steps'>
           <button id='stepBtn1' type='button' class='active'>Mode</button>
           <button id='stepBtn2' type='button'>Players</button>
           <button id='stepBtn3' type='button'>Score</button>
           <button id='stepBtn4' type='button'>Confirm</button>
-      </div>
+      </nav>
       <button id='adminNavBtn' class='btn small' type='button' style='display:none; margin-top:8px;'>Admin</button>
     </header>
 
@@ -87,7 +92,6 @@
         <div id='scoreBlue' class='row'></div>
       </div>
       <div id='scoreHint' class='muted' style='margin-top:10px;'></div>
-      <div id='statusText' class='status'></div>
     </section>
 
     <section id='step4' class='section'>
@@ -104,17 +108,22 @@
     </section>
 
     <section id='leaderboardSection' class='section active'>
-      <h2>Leaderboard</h2>
-      <div id='leaderboardFreshness' class='muted'>Live standings refresh after successful submit and when you change filters.</div>
-      <div class='row sort-row'>
-        <button id='sortTotalBtn' class='btn sort active' type='button'>Total</button>
-        <button id='sortAtkBtn' class='btn sort' type='button'>Offense</button>
-        <button id='sortDefBtn' class='btn sort' type='button'>Defense</button>
-        <button id='sortFormBtn' class='btn sort' type='button'>Form</button>
-        <button id='sortStreakBtn' class='btn sort' type='button'>Streak</button>
-        <button id='sortImprovedBtn' class='btn sort' type='button'>Improved</button>
+      <div class='gazette-section-heading'>
+        <div><div class='gazette-eyebrow'>The table-side edition</div><h2>Hiscores &amp; standings</h2></div>
+        <span class='gazette-heading-note'>Leaderboard</span>
       </div>
-      <div class='row filter-row'>
+      <div id='leaderboardFreshness' class='muted' aria-live='polite'>Live standings refresh after successful submit and when you change filters.</div>
+      <div class='gazette-filter-label' id='metricLabel'>Compare by</div>
+      <div class='row sort-row' role='group' aria-labelledby='metricLabel'>
+        <button id='sortTotalBtn' class='btn sort active' type='button' aria-pressed='true'>Total</button>
+        <button id='sortAtkBtn' class='btn sort' type='button' aria-pressed='false'>Offense</button>
+        <button id='sortDefBtn' class='btn sort' type='button' aria-pressed='false'>Defense</button>
+        <button id='sortFormBtn' class='btn sort' type='button' aria-pressed='false'>Form</button>
+        <button id='sortStreakBtn' class='btn sort' type='button' aria-pressed='false'>Streak</button>
+        <button id='sortImprovedBtn' class='btn sort' type='button' aria-pressed='false'>Improved</button>
+      </div>
+      <div class='gazette-filter-label' id='periodLabel'>Time period</div>
+      <div class='row filter-row' role='group' aria-labelledby='periodLabel'>
         <button id='filterAllBtn' class='btn sort active' type='button'>All</button>
         <button id='filterThisQuarterBtn' class='btn sort' type='button'>This quarter</button>
         <button id='filterThisMonthBtn' class='btn sort' type='button'>This month</button>
@@ -127,20 +136,24 @@
         </thead>
         <tbody id='leaderboardBody'>{% for row in rows %}<tr><td>{{ row.position }}</td><td><div>{{ row.name }}</div><div class='sub'>Off&nbsp;{{ row.offense_level }} &middot; Def&nbsp;{{ row.defense_level }}</div></td><td>{{ row.level }}</td></tr>{% else %}<tr><td colspan='3'>No players found.</td></tr>{% endfor %}</tbody>
       </table>
-      <div class='add-player'>
-        <div class='muted'>Add player</div>
+      <div class='add-player gazette-support-card'>
+        <h3>Welcome a player</h3>
+        <label for='newPlayerName'>New player name</label>
         <div class='row' style='margin-top:6px;'>
           <input id='newPlayerName' class='token' type='text' placeholder='New player name' maxlength='30' />
           <button id='addPlayerBtn' class='btn small' type='button'>Add Player</button>
         </div>
-        <div id='addPlayerStatus' class='status'></div>
+        <div id='addPlayerStatus' class='status' role='status' aria-live='polite'></div>
       </div>
     </section>
 
     <section id='adminMatchesSection' class='section'>
-      <h2>Match Corrections</h2>
-      <div class='muted'>Admin only. Voiding or restoring a match recalculates rankings.</div>
-      <div id='adminMatchesStatus' class='status'></div>
+      <div class='gazette-section-heading'>
+        <div><div class='gazette-eyebrow'>The record room</div><h2>Match Corrections</h2></div>
+        <span class='gazette-heading-note'>Admin only</span>
+      </div>
+      <div class='muted'>Voiding or restoring a match recalculates rankings. A reason is required and recorded in the audit history.</div>
+      <div id='adminMatchesStatus' class='status' role='status' aria-live='polite'></div>
       <div id='adminMatchesList' style='display:grid; gap:8px; margin-top:10px;'></div>
     </section>
     </div>
@@ -149,6 +162,7 @@
   <div id='stickyBar' class='sticky'{% if auth_mode == 'clerk' %} style='display:none;'{% endif %}>
     <div class='sticky-wrap'>
       <div id='summaryText' class='summary'>No lineup selected.</div>
+      <div id='statusText' class='status' role='status' aria-live='polite'></div>
       <div class='row'>
         <button id='backBtn' class='btn small' type='button'>Back</button>
         <button id='nextBtn' class='btn primary' type='button'>Next</button>

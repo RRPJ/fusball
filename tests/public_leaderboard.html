@@ -1,8 +1,10 @@
 <!doctype html>
 <html>
 <body>
-  <button data-metric="total"></button><button data-metric="streak"></button>
-  <button data-scope="all"></button>
+  <button data-metric="total"></button><button data-metric="offense"></button><button data-metric="defense"></button>
+  <button data-metric="form"></button><button data-metric="streak"></button><button data-metric="improved"></button>
+  <button data-scope="all"></button><button data-scope="this_quarter"></button>
+  <button data-scope="this_month"></button><button data-scope="this_week"></button>
   <div id="metricHeader"></div><div id="hint"></div><div id="status"></div>
   <table><tbody id="leaderboardBody"></tbody></table>
   <script>
@@ -10,16 +12,24 @@
       {position: 1, name: 'John Smith', player_id: 'john smith', level: 10, offense_level: 10, defense_level: 10},
       {position: 2, name: 'John Smith', player_id: 'john  smith', level: 9, offense_level: 9, defense_level: 9}
     ];
-    const stats = {'john smith': {streak: 1}, 'john  smith': {streak: 3}};
-    let profileUrl = '';
+    const stats = {
+      'john smith': {streak: 1, win_rate: 0.2, recent_form_5: 'L', improved: 1},
+      'john  smith': {streak: 3, win_rate: 0.8, recent_form_5: 'WWW', improved: 3}
+    };
+    let profileUrl = '', lastUrl = '', failure = false, empty = false;
+    localStorage.removeItem('fusball_public_leaderboard_snapshot_v2');
     window.fetch = async url => {
+      lastUrl = url;
+      if (failure) return {ok: false, status: 503};
       let data;
-      if (url.startsWith('/api/public/leaderboard')) data = {items};
+      if (url.startsWith('/api/public/leaderboard')) data = {items: empty ? [] : items};
       else if (url.startsWith('/api/public/stats')) data = stats;
       else {
         profileUrl = url;
         const player = decodeURIComponent(url.split('/')[4]);
-        data = {player, summary: {games: 3, wins: 3, streak: stats[player]?.streak}, recent_matches: []};
+        data = {player, summary: {games: 3, wins: 3, streak: stats[player]?.streak},
+          recent_matches: [{won: true, timestamp: '2026-01-02', score_for: 10, score_against: 7,
+            team: [player], opponents: ['opponent'], delta: {offense: 1, defense: -1}}]};
       }
       return {ok: true, json: async () => data};
     };
@@ -30,8 +40,37 @@
     (async () => {
       try {
         await wait();
+        if (!document.getElementById('status').textContent.includes('Live leaderboard: Total, All time') ||
+            !document.querySelector('[data-metric="improved"]').disabled) throw new Error('initial live state');
+        for (const [choice, expected] of [['offense', '10'], ['defense', '10'], ['form', 'WWW']]) {
+          document.querySelector(`[data-metric="${choice}"]`).click();
+          await wait();
+          if (document.querySelector('#leaderboardBody tr td:last-child').textContent !== expected) {
+            throw new Error(`incorrect ${choice} metric`);
+          }
+        }
+        for (const period of ['this_quarter', 'this_month', 'this_week']) {
+          document.querySelector(`[data-scope="${period}"]`).click();
+          await wait();
+          if (!lastUrl.includes(`scope=${period}`) ||
+              document.querySelector(`[data-scope="${period}"]`).getAttribute('aria-pressed') !== 'true') {
+            throw new Error(`incorrect ${period} selection`);
+          }
+        }
+        document.querySelector('[data-metric="improved"]').click();
+        await wait();
+        if (document.querySelector('#leaderboardBody tr td:last-child').textContent !== '+3') throw new Error('incorrect improved metric');
+        document.querySelector('[data-scope="all"]').click();
+        await wait();
+        if (document.querySelector('[data-metric="total"]').getAttribute('aria-pressed') !== 'true' ||
+            !document.querySelector('[data-metric="improved"]').disabled) throw new Error('all-time improved fallback');
         document.querySelector('[data-metric="streak"]').click();
         await wait();
+        if (document.querySelector('[data-metric="streak"]').getAttribute('aria-pressed') !== 'true' ||
+            document.querySelector('[data-metric="total"]').getAttribute('aria-pressed') !== 'false' ||
+            document.querySelector('[data-scope="all"]').getAttribute('aria-pressed') !== 'true') {
+          throw new Error('selected filters are not communicated');
+        }
         const rows = [...document.querySelectorAll('#leaderboardBody tr')];
         if (rows.length !== 2 || rows[0].querySelector('button').dataset.player !== 'john  smith' ||
             rows[0].lastElementChild.textContent !== '3' || rows[1].lastElementChild.textContent !== '1') {
@@ -40,16 +79,40 @@
         rows[0].querySelector('button').click();
         await wait();
         if (!profileUrl.includes('/john%20%20smith/profile') ||
-            !document.querySelector('.profile-panel')?.textContent.includes('3 straight wins')) {
+            !document.querySelector('.profile-panel')?.textContent.includes('3 straight wins') ||
+            !document.querySelector('.profile-panel')?.textContent.includes('10-7') ||
+            !document.querySelector('.profile-panel')?.textContent.includes('opponent')) {
           throw new Error('incorrect player profile');
         }
         window.dispatchEvent(new Event('offline'));
         const staleRows = [...document.querySelectorAll('#leaderboardBody tr')];
         if (staleRows[0].lastElementChild.textContent !== '3' ||
             staleRows[1].lastElementChild.textContent !== '1' ||
-            !staleRows.every(row => row.querySelector('button').disabled)) {
+            !staleRows.every(row => row.querySelector('button').disabled) ||
+            !document.getElementById('status').textContent.includes('Stale saved leaderboard: Streak, All time') ||
+            !document.querySelector('[data-scope="this_week"]').disabled) {
           throw new Error('incorrect stale leaderboard');
         }
+        failure = true;
+        [...document.querySelectorAll('button')].find(button => button.textContent === 'Retry connection').click();
+        await wait();
+        if (!document.getElementById('status').textContent.includes('Service error (503)') ||
+            !document.getElementById('status').textContent.includes('Stale saved leaderboard')) throw new Error('service failure state');
+        failure = false;
+        [...document.querySelectorAll('button')].find(button => button.textContent === 'Retry connection').click();
+        await wait();
+        if (!document.getElementById('status').textContent.includes('Live leaderboard') ||
+            document.querySelector('[data-scope="this_week"]').disabled) throw new Error('retry did not restore live state');
+        empty = true;
+        document.querySelector('[data-scope="this_week"]').click();
+        await wait();
+        if (!document.getElementById('leaderboardBody').textContent.includes('No players found')) throw new Error('empty state');
+        localStorage.removeItem('fusball_public_leaderboard_snapshot_v2');
+        failure = true;
+        [...document.querySelectorAll('button')].find(button => button.textContent === 'Retry connection').click();
+        await wait();
+        if (!document.getElementById('status').textContent.includes('no saved snapshot') ||
+            !document.getElementById('leaderboardBody').textContent.includes('Leaderboard unavailable')) throw new Error('failure without snapshot');
         document.body.dataset.testResult = 'pass';
       } catch (error) {
         document.body.dataset.testResult = `fail: ${error.message}`;

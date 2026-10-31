@@ -127,7 +127,7 @@ class PhoneApiTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
 
             html = response.get_data(as_text=True)
-            self.assertIn("Fusball Phone API", html)
+            self.assertIn("Record a match", html)
             self.assertIn("Leaderboard", html)
             self.assertIn("Alice", html)
             self.assertIn("id='liveStatusCard' class='live-status review-card'", html)
@@ -930,6 +930,14 @@ class PhoneApiTests(unittest.TestCase):
             read_no_auth = client.get("/api/leaderboard")
             self.assertEqual(read_no_auth.status_code, 401)
             self.assertEqual(read_no_auth.get_json(), {"error": "authentication required"})
+            self.assertEqual(client.get("/api/leaderboard?include_player_id=1").status_code, 401)
+            identified = client.get(
+                "/api/leaderboard?include_player_id=1", headers={"X-Read-Pin": "read-1234"}
+            )
+            self.assertEqual(identified.status_code, 200)
+            self.assertEqual(
+                {row["player_id"] for row in identified.get_json()["items"]}, {"alice", "bob"}
+            )
 
             read_with_wrong_read_pin = client.get(
                 "/api/leaderboard", headers={"X-Read-Pin": "wrong-read"}
@@ -1160,7 +1168,7 @@ class PhoneApiTests(unittest.TestCase):
             self.assertIn("@clerk/clerk-js@6/dist/clerk.browser.js", html)
             self.assertNotIn("incorrect.clerk.accounts.dev", html)
             self.assertIn("id='adminMatchesSection'", html)
-            self.assertIn("<body class='strict-auth-pending'>", html)
+            self.assertIn("<body class='phone-page strict-auth-pending'>", html)
             self.assertNotIn("id='clerkSignIn'", html)
             self.assertIn("id='appContent' style='display:none;'", html)
             self.assertIn("id='stickyBar' class='sticky' style='display:none;'", html)
