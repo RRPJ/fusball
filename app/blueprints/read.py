@@ -65,7 +65,8 @@ def create_read_blueprint(ctx: PhoneApiContext) -> Blueprint:
             return error_response
         assert store is not None
 
-        rows = load_leaderboard(store, limit, scope=scope, include_player_id=public_request())
+        include_player_id = public_request() or request.args.get("include_player_id") == "1"
+        rows = load_leaderboard(store, limit, scope=scope, include_player_id=include_player_id)
         if public_request():
             rows = [
                 pick(

@@ -222,6 +222,10 @@
         node.textContent = `Fetching ${scopeLabel} standings... ${formatElapsed(meta.inFlightAt)} elapsed.`;
         return;
       }
+      if (state.leaderboardSource === 'cache' && state.leaderboardItems.some(row => typeof row.player_id !== 'string')) {
+        node.textContent = 'Older snapshot: player identities unverified. Stats and profiles may be incorrect for similarly named players. Refresh standings when online.';
+        return;
+      }
       if (state.offline) {
         if (state.leaderboardCacheAt) {
           node.textContent = `Snapshot mode. Showing cached leaderboard from ${formatAge(state.leaderboardCacheAt)} until the API is reachable again.`;
@@ -1137,9 +1141,13 @@
       setStatus('Lineup auto-balanced for best match quality.', 'ok');
     }
 
+    function leaderboardPlayerKey(row) {
+      return typeof row.player_id === 'string' ? row.player_id : row.name.toLowerCase();
+    }
+
     function leaderboardSortValue(row) {
-      const s = typeof row.player_id === 'string' ? state.playerStats : null;
-      const k = row.player_id;
+      const s = state.playerStats;
+      const k = leaderboardPlayerKey(row);
       if (state.leaderboardSort === 'offense') return Number(row.offense_level || 0);
       if (state.leaderboardSort === 'defense') return Number(row.defense_level || 0);
       if (state.leaderboardSort === 'form') return s && s[k] ? Number(s[k].win_rate || 0) : 0;
@@ -1149,8 +1157,8 @@
     }
 
     function leaderboardMetric(row) {
-      const s = typeof row.player_id === 'string' ? state.playerStats : null;
-      const k = row.player_id;
+      const s = state.playerStats;
+      const k = leaderboardPlayerKey(row);
       if (state.leaderboardSort === 'offense') return String(row.offense_level);
       if (state.leaderboardSort === 'defense') return String(row.defense_level);
       if (state.leaderboardSort === 'form') {
@@ -1271,7 +1279,7 @@
       });
       body.replaceChildren();
       ordered.forEach((row, idx) => {
-        const playerKey = row.player_id;
+        const playerKey = leaderboardPlayerKey(row);
         const tr = document.createElement('tr');
         tr.className = 'lrow';
         const rank = document.createElement('td');
@@ -1282,11 +1290,7 @@
         button.className = 'profile-toggle';
         button.textContent = row.name;
         button.setAttribute('aria-expanded', 'false');
-        if (typeof playerKey === 'string') {
-          button.addEventListener('click', () => togglePlayerHistory(tr, playerKey));
-        } else {
-          button.disabled = true;
-        }
+        button.addEventListener('click', () => togglePlayerHistory(tr, playerKey));
         const sub = document.createElement('div');
         sub.className = 'sub';
         sub.textContent = `Off\u00a0${row.offense_level} \u00b7 Def\u00a0${row.defense_level}`;
@@ -1676,19 +1680,14 @@
       const requestVersion = state.leaderboardRequestVersion + 1;
       const requestScope = state.leaderboardFilter;
       state.leaderboardRequestVersion = requestVersion;
-      const response = await apiFetch('/api/leaderboard?limit=50&scope=' + encodeURIComponent(state.leaderboardFilter), {
+      const response = await apiFetch('/api/leaderboard?limit=50&include_player_id=1&scope=' + encodeURIComponent(requestScope), {
         trackKey: 'leaderboard',
         trackLabel: 'leaderboard',
       });
       if (!response.ok) {
         throw new Error('Could not refresh leaderboard.');
       }
-      // The protected endpoint remains the access gate; public rows carry canonical IDs.
-      const identityResponse = await apiFetch('/api/public/leaderboard?limit=50&scope=' + encodeURIComponent(requestScope));
-      if (!identityResponse.ok) {
-        throw new Error('Could not refresh leaderboard.');
-      }
-      const payload = await identityResponse.json();
+      const payload = await response.json();
       if (requestVersion !== state.leaderboardRequestVersion || requestScope !== state.leaderboardFilter) {
         return;
       }
@@ -1722,8 +1721,8 @@
       const redOff = state.selected.red_offense;
       const blueOff = state.selected.blue_offense;
       if (!redOff || !blueOff || !state.leaderboardItems.length) return false;
-      const ri = state.leaderboardItems.find(r => r.player_id === redOff.toLowerCase());
-      const bi = state.leaderboardItems.find(r => r.player_id === blueOff.toLowerCase());
+      const ri = state.leaderboardItems.find(r => leaderboardPlayerKey(r) === redOff.toLowerCase());
+      const bi = state.leaderboardItems.find(r => leaderboardPlayerKey(r) === blueOff.toLowerCase());
       if (!ri || !bi) return false;
       const redPos = Number(ri.position);
       const bluePos = Number(bi.position);
